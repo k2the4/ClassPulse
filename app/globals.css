@@ -1,0 +1,3 @@
+@tailwind base; @tailwind components; @tailwind utilities;
+@layer base { * { @apply border-slate-200; } body { @apply bg-slate-50 text-slate-900; } input,select { @apply w-full rounded-lg border bg-white px-3 py-2 text-sm; } }
+@layer components { .card { @apply rounded-xl border bg-white p-5 shadow-sm; } .btn { @apply inline-flex items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50; } .btn-secondary { @apply inline-flex items-center justify-center rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50; } .label { @apply mb-1 block text-sm font-medium; } }

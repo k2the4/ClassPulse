@@ -1,0 +1,2 @@
+import { redirect } from 'next/navigation'; import { currentProfile } from '@/lib/server'; import { Shell } from '@/components/shell'; import { QuickClassForm } from '@/components/quick-class-form';
+export default async function NewClass(){const profile=await currentProfile();if(!profile)redirect('/login');if(profile.approval_status!=='approved')redirect('/pending');return <Shell profile={profile}><QuickClassForm/></Shell>}

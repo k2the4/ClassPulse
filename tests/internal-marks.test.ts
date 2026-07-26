@@ -1,0 +1,2 @@
+import { describe, expect, it } from 'vitest'; import { moderatedInternal, weightedInternal } from '@/lib/internal-marks';
+describe('internal marks', () => { it('calculates a weighted score and respects cap', () => { const score = weightedInternal({ assignment: 20, presentation: 20, attendance: 20, midsem1: 20, midsem2: 20 }, { assignment_weight: 20, presentation_weight: 20, attendance_weight: 20, midsem_1_weight: 20, midsem_2_weight: 20 }); expect(score).toBe(20); expect(moderatedInternal(50)).toBe(40); }); });

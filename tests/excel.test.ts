@@ -1,0 +1,2 @@
+import { describe, expect, it } from 'vitest'; import { validateRows } from '@/lib/excel';
+describe('attendance validation', () => { it('reports impossible attendance and duplicate enrollments', () => { const errors = validateRows('attendance', [{ 'Enrollment Number': 'ABC1234', 'Student Name': 'A', LH: 4, LA: 5 }, { 'Enrollment Number': 'ABC1234', 'Student Name': 'B', LH: 4, LA: 3 }]); expect(errors).toHaveLength(2); }); });
