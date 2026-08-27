@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+
 export function StatCard({ label, value, positive }: { label: string; value: string | number; positive?: boolean }) {
   return (
     <div className="analysis-stat-card">
@@ -30,20 +33,25 @@ export function GradeBadge({ grade }: { grade: string }) {
 }
 
 export function RawDataButton({ sheetId }: { sheetId: string | null }) {
-  if (!sheetId) return null;
-  return (
-    <>
-      <a href={`https://docs.google.com/spreadsheets/d/${sheetId}/edit`} target="_blank" rel="noopener noreferrer" className="analysis-raw-button"><span>Raw Data</span><span aria-hidden="true">↗</span></a>
-      <style jsx global>{`
-        .analysis-top-actions > .analysis-raw-button {
-          top: 270px !important;
-        }
-        @media (max-width: 1100px) {
-          .analysis-top-actions > .analysis-raw-button {
-            top: auto !important;
-          }
-        }
-      `}</style>
-    </>
+  const [sidebar, setSidebar] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setSidebar(document.querySelector<HTMLElement>(".analysis-sidebar"));
+  }, []);
+
+  if (!sidebar) return null;
+
+  return createPortal(
+    <a
+      href={sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : undefined}
+      target={sheetId ? "_blank" : undefined}
+      rel={sheetId ? "noopener noreferrer" : undefined}
+      aria-disabled={!sheetId}
+      className={`analysis-side-raw-button${sheetId ? "" : " is-loading"}`}
+    >
+      <span aria-hidden="true">↓</span>
+      <span>Raw Data</span>
+    </a>,
+    sidebar
   );
 }
