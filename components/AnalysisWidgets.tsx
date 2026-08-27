@@ -8,15 +8,22 @@ export function StatCard({
   positive?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p
-        className={`text-xl font-semibold mt-1 ${
-          positive === undefined ? "text-gray-900" : positive ? "text-green-600" : "text-red-600"
-        }`}
-      >
-        {value}
-      </p>
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm transition-transform hover:-translate-y-0.5">
+      <p className="text-[11px] uppercase tracking-[0.12em] text-gray-400">{label}</p>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <p
+          className={`text-2xl font-semibold tracking-tight ${
+            positive === undefined ? "text-gray-900" : positive ? "text-emerald-600" : "text-red-600"
+          }`}
+        >
+          {value}
+        </p>
+        {positive !== undefined && (
+          <span className={`text-xs font-medium ${positive ? "text-emerald-600" : "text-red-500"}`}>
+            {positive ? "Improving" : "Needs attention"}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -31,15 +38,16 @@ export function RankedList({
   positive: boolean;
 }) {
   return (
-    <div>
-      <p className="text-xs text-gray-400 mb-1">{title}</p>
-      <ol className="text-sm space-y-1">
+    <div className="rounded-xl border border-gray-100 bg-white/70 p-4">
+      <p className="text-xs font-medium uppercase tracking-[0.08em] text-gray-400 mb-3">{title}</p>
+      <ol className="text-sm space-y-2">
         {items.map((it, i) => (
-          <li key={it.name} className="flex justify-between">
-            <span>
-              {i + 1}. {it.name}
+          <li key={it.name} className="flex items-center justify-between gap-3">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">{i + 1}</span>
+              <span className="truncate">{it.name}</span>
             </span>
-            <span className={positive ? "text-green-600" : "text-red-600"}>{it.marks}</span>
+            <span className={`font-medium ${positive ? "text-emerald-600" : "text-red-500"}`}>{it.marks}</span>
           </li>
         ))}
       </ol>
@@ -49,20 +57,18 @@ export function RankedList({
 
 export function GradeBadge({ grade }: { grade: string }) {
   const colors: Record<string, string> = {
-    Excellent: "bg-green-100 text-green-700",
-    Good: "bg-blue-100 text-blue-700",
-    Average: "bg-yellow-100 text-yellow-700",
-    Bad: "bg-red-100 text-red-700",
-    "Needs Attention": "bg-yellow-100 text-yellow-700",
-    "Critical Risk": "bg-red-100 text-red-700",
+    Excellent: "bg-emerald-50 text-emerald-700 border border-emerald-100",
+    Good: "bg-blue-50 text-blue-700 border border-blue-100",
+    Average: "bg-amber-50 text-amber-700 border border-amber-100",
+    Bad: "bg-red-50 text-red-700 border border-red-100",
+    "Needs Attention": "bg-amber-50 text-amber-700 border border-amber-100",
+    "Critical Risk": "bg-red-50 text-red-700 border border-red-100",
   };
   return (
-    <span className={`text-xs px-2 py-1 rounded-full ${colors[grade] || "bg-gray-100"}`}>{grade}</span>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${colors[grade] || "bg-gray-100 text-gray-600"}`}>{grade}</span>
   );
 }
 
-// Opens the linked Google Sheet directly — this is the whole "raw data"
-// workflow: no upload/download, just edit the sheet, come back, resync.
 export function RawDataButton({ sheetId }: { sheetId: string | null }) {
   if (!sheetId) return null;
   return (
@@ -70,9 +76,10 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
       href={`https://docs.google.com/spreadsheets/d/${sheetId}/edit`}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-sm border border-gray-200 rounded-lg px-4 py-2 hover:bg-gray-50"
+      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white/80 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
     >
-      Raw Data ↗
+      <span>Raw Data</span>
+      <span aria-hidden="true">↗</span>
     </a>
   );
 }
