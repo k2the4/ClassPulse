@@ -31,5 +31,19 @@ export function GradeBadge({ grade }: { grade: string }) {
 
 export function RawDataButton({ sheetId }: { sheetId: string | null }) {
   if (!sheetId) return null;
-  return <a href={`https://docs.google.com/spreadsheets/d/${sheetId}/edit`} target="_blank" rel="noopener noreferrer" className="analysis-raw-button"><span>Raw Data</span><span aria-hidden="true">↗</span></a>;
+  return (
+    <>
+      <a href={`https://docs.google.com/spreadsheets/d/${sheetId}/edit`} target="_blank" rel="noopener noreferrer" className="analysis-raw-button"><span>Raw Data</span><span aria-hidden="true">↗</span></a>
+      <style jsx global>{`
+        .analysis-top-actions > .analysis-raw-button {
+          top: 270px !important;
+        }
+        @media (max-width: 1100px) {
+          .analysis-top-actions > .analysis-raw-button {
+            top: auto !important;
+          }
+        }
+      `}</style>
+    </>
+  );
 }
