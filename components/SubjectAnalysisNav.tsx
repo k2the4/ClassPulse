@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { BarChart3, GraduationCap, LayoutDashboard, FileText } from "lucide-react";
 
 type Props = { subjectId: string };
+
+const icons = [BarChart3, GraduationCap, LayoutDashboard, FileText];
 
 export default function SubjectAnalysisNav({ subjectId }: Props) {
   const router = useRouter();
@@ -13,17 +16,15 @@ export default function SubjectAnalysisNav({ subjectId }: Props) {
   ];
 
   return (
-    <nav className="subject-analysis-nav mb-8" aria-label="Subject analysis sections">
+    <nav className="subject-analysis-nav" aria-label="Subject analysis sections">
       <div className="subject-analysis-nav__rail">
-        {items.map((item) => {
+        {items.map((item, index) => {
+          const Icon = icons[index];
           const active = router.asPath === item.href;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}
-            >
-              {item.label}
+            <Link key={item.href} href={item.href} className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}>
+              <Icon size={17} strokeWidth={1.8} />
+              <span>{item.label}</span>
             </Link>
           );
         })}
