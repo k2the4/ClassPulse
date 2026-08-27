@@ -36,8 +36,8 @@ export interface SubjectAnalysis {
   students: StudentAnalysis[];
 }
 
-const DEFAULT_TREND_THRESHOLD = 3; // matches "Trend Criteria: 3" in the source sheet
-const MAX_PER_EXAM = 30; // confirmed against real sheet data
+const DEFAULT_TREND_THRESHOLD = 3;
+const MAX_PER_EXAM = 30;
 
 export function round1(n: number) {
   return Math.round(n * 10) / 10;
@@ -59,18 +59,26 @@ export function gradeFor(combined: number, max = MAX_PER_EXAM): string {
   return "Critical Risk";
 }
 
-// Sums LH/LA across every column matching this subject code — including a
-// "<code> Lab" column if one exists, since labs are assumed to belong to
-// the same subject as their lecture component.
-function attendancePctForSubject(row: MonthTab["rows"][number] | undefined, subjectCode: string): number {
+// Attendance must use ONLY the exact selected subject column.
+// In particular, analysing "DA" must not also include "DA Lab".
+function normalizeAttendanceSubjectCode(code: string): string {
+  return code.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+function attendancePctForSubject(
+  row: MonthTab["rows"][number] | undefined,
+  subjectCode: string
+): number {
   if (!row) return 0;
-  const matches = row.subjects.filter(
-    (s) => subjectCodesMatch(s.code, subjectCode) || subjectCodesMatch(s.code, `${subjectCode}Lab`)
+
+  const target = normalizeAttendanceSubjectCode(subjectCode);
+  const match = row.subjects.find(
+    (subject) => normalizeAttendanceSubjectCode(subject.code) === target
   );
-  const lh = matches.reduce((sum, s) => sum + s.lh, 0);
-  const la = matches.reduce((sum, s) => sum + s.la, 0);
-  if (lh === 0) return 0;
-  return round1((la / lh) * 100);
+
+  if (!match || match.lh === 0) return 0;
+
+  return round1((match.la / match.lh) * 100);
 }
 
 function marksForSubject(row: SessionalRow | undefined, subjectCode: string): number {
@@ -119,7 +127,6 @@ export function computeSubjectAnalysis(
     previousMonth = months.find((m) => m.tabName !== currentMonth?.tabName) ? months[months.length - 2] : undefined;
   }
 
-  // Roster = union of students in the current month (source of truth for who's enrolled now).
   const roster = currentMonth.rows.map((r) => ({
     enrollmentNo: r.enrollmentNo,
     name: r.name,
@@ -146,9 +153,6 @@ export function computeSubjectAnalysis(
     const assignment = assignmentForSubject(assignmentByEnrollment.get(student.enrollmentNo), subjectCode);
     const presentation = marksForSubject(presentationByEnrollment.get(student.enrollmentNo), subjectCode);
 
-    // Default internal-mark basis used by the subject report. The Overall page
-    // exposes editable versions of these settings; this keeps the report from
-    // showing Basic and Moderated as the same value before custom settings are persisted.
     const weightedAssignment = assignment.total > 0 ? (assignment.submitted / assignment.total) * 5 : 0;
     const weightedPresentation = (presentation / 10) * 5;
     const weightedAttendance = (currPct / 100) * 10;
@@ -180,8 +184,6 @@ export function computeSubjectAnalysis(
     };
   });
 
-  // Default rank-based moderation. Rank 1 gets the maximum of a tier and the
-  // final rank gets its minimum, with linear interpolation between them.
   const defaultCriteria = [
     { from: 1, to: 10, min: 38, max: 40 },
     { from: 11, to: 25, min: 35, max: 38 },
@@ -255,9 +257,6 @@ export function computeSubjectAnalysis(
   };
 }
 
-// Exposed for the section-level Overall Analysis / Student Report, which
-// need per-subject internal marks aggregated across all 6 subjects rather
-// than one subject's dashboard.
 export function computeAllSubjectAnalyses(
   raw: ClassRawData,
   subjectCodes: string[],
