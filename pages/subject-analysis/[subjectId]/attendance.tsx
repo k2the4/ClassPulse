@@ -8,24 +8,13 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
 } from "recharts";
 
 import SubjectAnalysisNav from "../../../components/SubjectAnalysisNav";
 import { SubjectAnalysis } from "../../../lib/analysis";
-import { RawDataButton, StatCard } from "../../../components/AnalysisWidgets";
+import { RawDataButton } from "../../../components/AnalysisWidgets";
 
-type AttendanceView = "trend" | "risk" | "summary";
-
-const BUCKET_COLORS = {
-  above75: "#10b981",
-  to74: "#3b82f6",
-  to49: "#f59e0b",
-  below30: "#ef4444",
-};
+type AttendanceView = "trend" | "risk";
 
 export default function SubjectAttendancePage() {
   const router = useRouter();
@@ -165,35 +154,9 @@ export default function SubjectAttendancePage() {
 
   const mailtoHref = `mailto:?bcc=${encodeURIComponent(riskEmails.join(","))}&subject=${encodeURIComponent("Attendance Alert")}&body=${encodeURIComponent("This is a reminder regarding your recent attendance. Please make sure to attend upcoming classes.")}`;
 
-  const topMovers = useMemo(() => {
-    if (!data) return { improved: [], declined: [] };
-    const withChange = data.students.map((s: any) => ({
-      name: s.name,
-      change: round1((s.attendancePct?.currMonth ?? 0) - (s.attendancePct?.prevMonth ?? 0)),
-    }));
-    const sorted = [...withChange].sort((a, b) => b.change - a.change);
-    return { improved: sorted.slice(0, 5), declined: [...sorted].reverse().slice(0, 5) };
-  }, [data]);
-
   function round1(n: number) {
     return Math.round(n * 10) / 10;
   }
-
-  const donutData = data
-    ? [
-        { name: "Good Standing (75%+)", value: data.attendanceBuckets.above75, color: BUCKET_COLORS.above75 },
-        { name: "Satisfactory (50-74%)", value: data.attendanceBuckets.to74, color: BUCKET_COLORS.to74 },
-        { name: "Needs Attention (30-49%)", value: data.attendanceBuckets.to49, color: BUCKET_COLORS.to49 },
-        { name: "Critical Risk (<30%)", value: data.attendanceBuckets.below30, color: BUCKET_COLORS.below30 },
-      ]
-    : [];
-
-  const compareBarData = data
-    ? [
-        { name: data.monthsUsed?.previous || "Previous", value: data.classAveragePrevMonth },
-        { name: data.monthsUsed?.current || "Current", value: data.classAverageCurrMonth },
-      ]
-    : [];
 
   return (
     <div className="min-h-screen max-w-[1700px] mx-auto px-8 py-10">
@@ -213,7 +176,7 @@ export default function SubjectAttendancePage() {
       {typeof subjectId === "string" && <SubjectAnalysisNav subjectId={subjectId} />}
 
       <div className="flex gap-2 mb-8">
-        {(["trend", "risk", "summary"] as AttendanceView[]).map((v) => (
+        {(["trend", "risk"] as AttendanceView[]).map((v) => (
           <button key={v} onClick={() => setView(v)} className={`text-sm px-4 py-2 rounded-lg font-medium capitalize ${view === v ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
             {v === "risk" ? "At Risk" : v}
           </button>
@@ -341,25 +304,6 @@ export default function SubjectAttendancePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <section className="bg-white rounded-2xl border border-gray-100 p-6"><h3 className="font-medium text-gray-900 mb-3">Copy to Mail</h3><textarea readOnly value={riskEmailsText} rows={5} className="w-full text-xs text-gray-700 border border-gray-200 rounded-lg p-3 bg-gray-50" /><button onClick={copyEmails} disabled={riskEmails.length === 0} className="mt-3 text-sm bg-gray-900 text-white rounded-lg px-4 py-2 disabled:opacity-40">{copied ? "Copied!" : "Copy Emails"}</button></section>
             <section className="bg-white rounded-2xl border border-gray-100 p-6"><h3 className="font-medium text-gray-900 mb-3">Send Alert Emails</h3><p className="text-sm text-gray-500 mb-4">Opens your default email app with all {riskEmails.length} filtered students BCC'd.</p><a href={mailtoHref} className={`inline-block text-sm rounded-lg px-4 py-2 text-white ${riskEmails.length === 0 ? "bg-gray-300 pointer-events-none" : "bg-red-600 hover:bg-red-700"}`}>Send Alert Emails ↗</a></section>
-          </div>
-        </>
-      )}
-
-      {data && view === "summary" && (
-        <>
-          <div className="mb-6"><h2 className="text-xl font-semibold text-gray-900">Attendance Summary</h2><p className="text-sm text-gray-500 mt-1">Overall class attendance health at a glance.</p></div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"><StatCard label="Total Students" value={data.totalStudents} /><StatCard label="Class Average (Current)" value={`${data.classAverageCurrMonth}%`} /><StatCard label="Class Average (Previous)" value={`${data.classAveragePrevMonth}%`} /><StatCard label="Overall Trend" value={`${data.overallTrendPct > 0 ? "+" : ""}${data.overallTrendPct}%`} positive={data.overallTrendPct >= 0} /></div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6"><h3 className="font-medium text-gray-900 mb-4">Attendance Breakdown</h3><ResponsiveContainer width="100%" height={260}><PieChart><Pie data={donutData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={95} paddingAngle={2}>{donutData.map((entry, i) => <Cell key={i} fill={entry.color} />)}</Pie><Tooltip /><Legend wrapperStyle={{ fontSize: 11 }} /></PieChart></ResponsiveContainer></section>
-            <section className="bg-white rounded-2xl border border-gray-100 p-6"><h3 className="font-medium text-gray-900 mb-4">Class Average: Previous vs Current</h3><ResponsiveContainer width="100%" height={260}><BarChart data={compareBarData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={12} /><YAxis fontSize={12} /><Tooltip /><Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></section>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6"><h3 className="font-medium text-gray-900 mb-4">Core Summary</h3><table className="w-full text-sm"><tbody><tr className="border-b border-gray-50"><td className="py-2 text-gray-600">Good Standing (≥75%)</td><td className="py-2 text-right font-medium">{data.attendanceBuckets.above75}</td></tr><tr className="border-b border-gray-50"><td className="py-2 text-gray-600">Satisfactory (50-74%)</td><td className="py-2 text-right font-medium">{data.attendanceBuckets.to74}</td></tr><tr className="border-b border-gray-50"><td className="py-2 text-gray-600">Needs Attention (30-49%)</td><td className="py-2 text-right font-medium">{data.attendanceBuckets.to49}</td></tr><tr><td className="py-2 text-gray-600">Critical Risk (&lt;30%)</td><td className="py-2 text-right font-medium">{data.attendanceBuckets.below30}</td></tr></tbody></table></section>
-            <section className="bg-white rounded-2xl border border-gray-100 p-6"><h3 className="font-medium text-gray-900 mb-4">Attendance Shifts</h3><table className="w-full text-sm"><tbody><tr className="border-b border-gray-50"><td className="py-2 text-gray-600">Improving Students</td><td className="py-2 text-right font-medium text-emerald-600">{data.trendCounts?.increasing ?? 0}</td></tr><tr className="border-b border-gray-50"><td className="py-2 text-gray-600">Declining Students</td><td className="py-2 text-right font-medium text-red-600">{data.trendCounts?.decreasing ?? 0}</td></tr><tr><td className="py-2 text-gray-600">Stable Students</td><td className="py-2 text-right font-medium text-gray-600">{data.trendCounts?.stable ?? 0}</td></tr></tbody></table></section>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6"><h3 className="font-medium text-gray-900 mb-4">Top 5 Most Improved</h3><ol className="text-sm space-y-2">{topMovers.improved.map((s, i) => <li key={s.name} className="flex justify-between"><span>{i + 1}. {s.name}</span><span className="text-emerald-600 font-medium">{s.change > 0 ? "+" : ""}{s.change}%</span></li>)}</ol></section>
-            <section className="bg-white rounded-2xl border border-gray-100 p-6"><h3 className="font-medium text-gray-900 mb-4">Top 5 Critical Decliners</h3><ol className="text-sm space-y-2">{topMovers.declined.map((s, i) => <li key={s.name} className="flex justify-between"><span>{i + 1}. {s.name}</span><span className="text-red-600 font-medium">{s.change > 0 ? "+" : ""}{s.change}%</span></li>)}</ol></section>
           </div>
         </>
       )}
