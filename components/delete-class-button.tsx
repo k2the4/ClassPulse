@@ -1,0 +1,3 @@
+'use client';
+import { useRouter } from 'next/navigation'; import { createClient } from '@/lib/supabase';
+export function DeleteClassButton({classId,label}:{classId:string;label:string}){const router=useRouter();async function remove(){if(!confirm(`Delete ${label}? This permanently removes its students, uploads, attendance, and marks.`))return;const{error}=await createClient().rpc('delete_class_as_admin',{p_class_id:classId});if(error)alert(error.message);else router.refresh()}return <button onClick={remove} className="mt-3 text-sm font-medium text-red-700 hover:underline">Remove class</button>}

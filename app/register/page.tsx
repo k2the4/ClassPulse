@@ -1,0 +1,1 @@
+import { AuthForm } from '@/components/auth-form'; export default function Register(){return <main className="grid min-h-screen place-items-center p-6"><div><h1 className="mb-2 text-center text-3xl font-bold">Request teacher access</h1><p className="mb-6 text-center text-slate-600">An administrator will review your college account.</p><AuthForm register/></div></main>}
