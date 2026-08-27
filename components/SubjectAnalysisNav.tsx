@@ -1,39 +1,30 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-type Props = {
-  subjectId: string;
-};
+type Props = { subjectId: string };
 
 export default function SubjectAnalysisNav({ subjectId }: Props) {
   const router = useRouter();
-
   const items = [
-    { label: "Attendance", href: `/subject-analysis/${subjectId}/attendance` },
-    { label: "Academic", href: `/subject-analysis/${subjectId}/academic` },
-    { label: "Overall", href: `/subject-analysis/${subjectId}/overall` },
-    { label: "Student Report", href: `/subject-analysis/${subjectId}/students` },
+    { label: "Attendance", href: `/subject-analysis/${subjectId}/attendance`, short: "01" },
+    { label: "Academic", href: `/subject-analysis/${subjectId}/academic`, short: "02" },
+    { label: "Overall", href: `/subject-analysis/${subjectId}/overall`, short: "03" },
+    { label: "Student Report", href: `/subject-analysis/${subjectId}/students`, short: "04" },
   ];
 
   return (
-    <nav className="mb-8 border-b border-gray-200/80">
-      <div className="flex gap-1 overflow-x-auto">
+    <nav className="subject-analysis-nav mb-8" aria-label="Subject analysis sections">
+      <div className="subject-analysis-nav__rail">
         {items.map((item) => {
           const active = router.asPath === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`relative px-4 py-3 text-sm whitespace-nowrap transition-all ${
-                active
-                  ? "text-gray-900 font-semibold"
-                  : "text-gray-500 hover:text-gray-900"
-              }`}
+              className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}
             >
-              {item.label}
-              {active && (
-                <span className="absolute left-4 right-4 bottom-0 h-0.5 rounded-full bg-slate-900" />
-              )}
+              <span className="subject-analysis-nav__index">{item.short}</span>
+              <span>{item.label}</span>
             </Link>
           );
         })}
