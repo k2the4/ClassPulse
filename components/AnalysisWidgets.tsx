@@ -42,16 +42,53 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
   if (!sidebar) return null;
 
   return createPortal(
-    <a
-      href={sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : undefined}
-      target={sheetId ? "_blank" : undefined}
-      rel={sheetId ? "noopener noreferrer" : undefined}
-      aria-disabled={!sheetId}
-      className={`analysis-side-raw-button${sheetId ? "" : " is-loading"}`}
-    >
-      <span aria-hidden="true">↓</span>
-      <span>Raw Data</span>
-    </a>,
+    <>
+      <a
+        href={sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : undefined}
+        target={sheetId ? "_blank" : undefined}
+        rel={sheetId ? "noopener noreferrer" : undefined}
+        aria-disabled={!sheetId}
+        className={`analysis-side-raw-button${sheetId ? "" : " is-loading"}`}
+      >
+        <span aria-hidden="true">↓</span>
+        <span>Raw Data</span>
+      </a>
+      <style jsx global>{`
+        .analysis-side-raw-button {
+          display: flex !important;
+          align-items: center !important;
+          gap: 11px !important;
+          margin: 64px 0 0 !important;
+          padding: 11px 12px !important;
+          border-radius: 10px !important;
+          color: #667085 !important;
+          font-size: 13px !important;
+          font-weight: 500 !important;
+          line-height: 1.2 !important;
+          text-decoration: none !important;
+          transition: .18s !important;
+        }
+        .analysis-side-raw-button:hover {
+          background: rgba(79,70,229,.06) !important;
+          color: #2d246f !important;
+          text-decoration: none !important;
+        }
+        .analysis-side-raw-button > span:first-child {
+          width: 18px;
+          text-align: center;
+          font-size: 16px;
+        }
+        .analysis-side-raw-button.is-loading {
+          cursor: default;
+          opacity: .65;
+          pointer-events: none;
+        }
+        @media (max-width: 1100px) {
+          .analysis-side-raw-button { display: none !important; }
+        }
+      `}</style>
+    </>
+    ,
     sidebar
   );
 }
