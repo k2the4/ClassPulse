@@ -33,13 +33,13 @@ export function GradeBadge({ grade }: { grade: string }) {
 }
 
 export function RawDataButton({ sheetId }: { sheetId: string | null }) {
-  const [sidebar, setSidebar] = useState<HTMLElement | null>(null);
+  const [sideNav, setSideNav] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    setSidebar(document.querySelector<HTMLElement>(".analysis-sidebar"));
+    setSideNav(document.querySelector<HTMLElement>(".analysis-side-nav"));
   }, []);
 
-  if (!sidebar) return null;
+  if (!sideNav) return null;
 
   return createPortal(
     <>
@@ -58,7 +58,7 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
           display: flex !important;
           align-items: center !important;
           gap: 11px !important;
-          margin: 64px 0 0 !important;
+          margin: 0 !important;
           padding: 11px 12px !important;
           border-radius: 10px !important;
           color: #667085 !important;
@@ -89,6 +89,6 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
       `}</style>
     </>
     ,
-    sidebar
+    sideNav
   );
 }
