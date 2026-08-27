@@ -66,6 +66,9 @@ function linear(rank: number, tier: Criteria) {
   if (tier.to <= tier.from) return tier.maxMarks;
   return tier.maxMarks + ((rank - tier.from) / (tier.to - tier.from)) * (tier.minMarks - tier.maxMarks);
 }
+function columnValue(row: any, column: ColumnKey) {
+  return Number(row[column] ?? 0);
+}
 
 export default function SubjectOverallPage() {
   const router = useRouter();
@@ -84,6 +87,7 @@ export default function SubjectOverallPage() {
   const [criteria, setCriteria] = useState<Criteria[]>(DEFAULT_CRITERIA);
   const [sortColumn, setSortColumn] = useState<ColumnKey>("moderated");
   const [sortDirection, setSortDirection] = useState<SortDirection>("none");
+  const [riskColumn, setRiskColumn] = useState<ColumnKey>("basic");
   const [riskLower, setRiskLower] = useState(0);
   const [riskUpper, setRiskUpper] = useState(40);
 
@@ -165,10 +169,13 @@ export default function SubjectOverallPage() {
   const filteredRiskRows = useMemo(() => {
     const lo = Math.min(riskLower, riskUpper);
     const hi = Math.max(riskLower, riskUpper);
-    return baseRows.filter(row => row.basic >= lo && row.basic <= hi);
-  }, [baseRows, riskLower, riskUpper]);
+    return baseRows.filter(row => {
+      const value = columnValue(row, riskColumn);
+      return value >= lo && value <= hi;
+    });
+  }, [baseRows, riskColumn, riskLower, riskUpper]);
 
-  const topFive = useMemo(() => [...filteredRiskRows].sort((a, b) => b.basic - a.basic).slice(0, 5), [filteredRiskRows]);
+  const topFive = useMemo(() => [...filteredRiskRows].sort((a, b) => columnValue(b, riskColumn) - columnValue(a, riskColumn)).slice(0, 5), [filteredRiskRows, riskColumn]);
 
   const riskDistribution = useMemo(() => [
     { name: `Above 32 (${baseRows.filter(r => r.basic > 32).length})`, value: baseRows.filter(r => r.basic > 32).length },
@@ -200,10 +207,34 @@ export default function SubjectOverallPage() {
   }
 
   function updateCriteria(i: number, field: keyof Criteria, value: string) {
-    setCriteria(current => current.map((row, index) => index === i ? { ...row, [field]: num(value, row[field]) } : row));
+    setCriteria(current => {
+      const next = current.map(row => ({ ...row }));
+      const parsed = num(value, next[i][field]);
+
+      if (field === "from") return next;
+
+      if (field === "to") {
+        const minimum = next[i].from;
+        next[i].to = Math.max(minimum, Math.floor(parsed));
+        for (let index = i + 1; index < next.length; index++) {
+          next[index].from = next[index - 1].to + 1;
+          if (next[index].to < next[index].from) next[index].to = next[index].from;
+        }
+      } else {
+        next[i][field] = parsed;
+      }
+
+      next[0].from = 1;
+      for (let index = 1; index < next.length; index++) {
+        next[index].from = next[index - 1].to + 1;
+        if (next[index].to < next[index].from) next[index].to = next[index].from;
+      }
+      return next;
+    });
   }
 
   function selectRiskRange(index: number) {
+    setRiskColumn("basic");
     if (index === 0) { setRiskLower(32.1); setRiskUpper(40); }
     if (index === 1) { setRiskLower(24); setRiskUpper(32); }
     if (index === 2) { setRiskLower(16); setRiskUpper(23.9); }
@@ -266,7 +297,7 @@ export default function SubjectOverallPage() {
 
           <section className="bg-white rounded-2xl border border-gray-100 p-4">
             <div className="flex flex-col md:flex-row md:justify-between gap-2">
-              <div><h3 className="font-medium text-gray-900">Moderated Marks Criteria</h3><p className="text-[11px] text-gray-500 mt-1">Marks are distributed by rank, then rounded up to a whole mark.</p></div>
+              <div><h3 className="font-medium text-gray-900">Moderated Marks Criteria</h3><p className="text-[11px] text-gray-500 mt-1">Ranks stay continuous: Tier 1 always starts at 1, and every next tier starts at the previous tier's last rank + 1.</p></div>
               <div className="flex gap-2">
                 <select value={sortColumn} onChange={e => setSortColumn(e.target.value as ColumnKey)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs">{ALL_COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select>
                 <select value={sortDirection} onChange={e => setSortDirection(e.target.value as SortDirection)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"><option value="none">No sorting</option><option value="desc">High to low</option><option value="asc">Low to high</option></select>
@@ -276,7 +307,10 @@ export default function SubjectOverallPage() {
               {criteria.map((row, i) => <div key={i} className="border border-gray-100 rounded-xl p-2.5">
                 <p className="text-[11px] font-medium text-gray-700 mb-1.5">Tier {i + 1}</p>
                 <div className="grid grid-cols-4 gap-1">
-                  {(["from", "to", "minMarks", "maxMarks"] as (keyof Criteria)[]).map(field => <label key={field} className="text-[9px] text-gray-400">{field === "minMarks" ? "Min" : field === "maxMarks" ? "Max" : field[0].toUpperCase() + field.slice(1)}<input type="number" step={field === "minMarks" || field === "maxMarks" ? "0.1" : "1"} value={row[field]} onChange={e => updateCriteria(i, field, e.target.value)} className="mt-1 w-full border border-gray-200 rounded px-1.5 py-1 text-xs text-gray-900"/></label>)}
+                  <label className="text-[9px] text-gray-400">From<input type="number" value={row.from} readOnly className="mt-1 w-full border border-gray-200 rounded px-1.5 py-1 text-xs text-gray-500 bg-gray-50"/></label>
+                  <label className="text-[9px] text-gray-400">To<input type="number" min={row.from} step="1" value={row.to} onChange={e => updateCriteria(i, "to", e.target.value)} className="mt-1 w-full border border-gray-200 rounded px-1.5 py-1 text-xs text-gray-900"/></label>
+                  <label className="text-[9px] text-gray-400">Min<input type="number" step="0.1" value={row.minMarks} onChange={e => updateCriteria(i, "minMarks", e.target.value)} className="mt-1 w-full border border-gray-200 rounded px-1.5 py-1 text-xs text-gray-900"/></label>
+                  <label className="text-[9px] text-gray-400">Max<input type="number" step="0.1" value={row.maxMarks} onChange={e => updateCriteria(i, "maxMarks", e.target.value)} className="mt-1 w-full border border-gray-200 rounded px-1.5 py-1 text-xs text-gray-900"/></label>
                 </div>
               </div>)}
             </div>
@@ -296,27 +330,27 @@ export default function SubjectOverallPage() {
       </> : <>
         <section className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
           <h3 className="font-medium text-gray-900">At-Risk Filter</h3>
-          <p className="text-xs text-gray-500 mt-1">Filtering, the table and the graph use Basic Marks out of 40. Click a graph slice to filter by that range.</p>
+          <p className="text-xs text-gray-500 mt-1">Choose any available column to filter the student table. The graph remains a Basic Marks distribution; clicking a slice switches the filter to Basic Marks.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-            <label className="text-xs text-gray-500">Column<div className="mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50">Basic Marks</div></label>
-            <label className="text-xs text-gray-500">Lower bound<input type="number" min="0" max="40" value={riskLower} onChange={e => setRiskLower(num(e.target.value, riskLower))} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"/></label>
-            <label className="text-xs text-gray-500">Upper bound<input type="number" min="0" max="40" value={riskUpper} onChange={e => setRiskUpper(num(e.target.value, riskUpper))} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"/></label>
+            <label className="text-xs text-gray-500">Column<select value={riskColumn} onChange={e => setRiskColumn(e.target.value as ColumnKey)} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white">{ALL_COLUMNS.map(column => <option key={column.key} value={column.key}>{column.label}</option>)}</select></label>
+            <label className="text-xs text-gray-500">Lower bound<input type="number" min="0" value={riskLower} onChange={e => setRiskLower(num(e.target.value, riskLower))} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"/></label>
+            <label className="text-xs text-gray-500">Upper bound<input type="number" min="0" value={riskUpper} onChange={e => setRiskUpper(num(e.target.value, riskUpper))} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"/></label>
           </div>
         </section>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4">
           <section className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100"><h3 className="font-medium text-gray-900">Filtered Students</h3><p className="text-xs text-gray-500 mt-1">{filteredRiskRows.length} students match the selected Basic Marks range.</p></div>
+            <div className="px-4 py-3 border-b border-gray-100"><h3 className="font-medium text-gray-900">Filtered Students</h3><p className="text-xs text-gray-500 mt-1">{filteredRiskRows.length} students match the selected {ALL_COLUMNS.find(c => c.key === riskColumn)?.label} range.</p></div>
             <div className="overflow-auto max-h-[620px]">
-              <table className="min-w-[1000px] w-full table-fixed text-sm"><thead className="sticky top-0 bg-white z-10 border-b border-gray-100 text-xs text-gray-500"><tr><th className="text-left px-3 py-2 w-[180px]">Name</th><th className="text-left px-3 py-2 w-[135px]">Enrollment</th><th className="text-center px-2 py-2">Assignment</th><th className="text-center px-2 py-2">Presentation</th><th className="text-center px-2 py-2">Attendance</th><th className="text-center px-2 py-2">Moderated Att.</th><th className="text-center px-2 py-2">Midsem 1</th><th className="text-center px-2 py-2">Midsem 2</th><th className="text-center px-2 py-2 font-semibold text-gray-700">Basic Marks</th></tr></thead><tbody>{filteredRiskRows.map(row => <tr key={row.enrollmentNo} className="border-b border-gray-50 text-gray-700"><td className="px-3 py-2 whitespace-nowrap">{row.name}</td><td className="px-3 py-2 text-gray-500 whitespace-nowrap">{row.enrollmentNo}</td><td className="text-center px-2 py-2">{row.assignment}</td><td className="text-center px-2 py-2">{row.presentation}</td><td className="text-center px-2 py-2">{row.attendance}</td><td className="text-center px-2 py-2">{row.moderatedAttendance}</td><td className="text-center px-2 py-2">{row.midsem1}</td><td className="text-center px-2 py-2">{row.midsem2}</td><td className="text-center px-2 py-2 font-semibold">{row.basic}</td></tr>)}</tbody></table>
+              <table className="min-w-[1000px] w-full table-fixed text-sm"><thead className="sticky top-0 bg-white z-10 border-b border-gray-100 text-xs text-gray-500"><tr><th className="text-left px-3 py-2 w-[180px]">Name</th><th className="text-left px-3 py-2 w-[135px]">Enrollment</th><th className="text-center px-2 py-2">Assignment</th><th className="text-center px-2 py-2">Presentation</th><th className="text-center px-2 py-2">Attendance</th><th className="text-center px-2 py-2">Moderated Att.</th><th className="text-center px-2 py-2">Midsem 1</th><th className="text-center px-2 py-2">Midsem 2</th><th className="text-center px-2 py-2 font-semibold text-gray-700">Basic Marks</th><th className="text-center px-2 py-2">Moderated Marks</th></tr></thead><tbody>{filteredRiskRows.map(row => <tr key={row.enrollmentNo} className="border-b border-gray-50 text-gray-700"><td className="px-3 py-2 whitespace-nowrap">{row.name}</td><td className="px-3 py-2 text-gray-500 whitespace-nowrap">{row.enrollmentNo}</td><td className="text-center px-2 py-2">{row.assignment}</td><td className="text-center px-2 py-2">{row.presentation}</td><td className="text-center px-2 py-2">{row.attendance}</td><td className="text-center px-2 py-2">{row.moderatedAttendance}</td><td className="text-center px-2 py-2">{row.midsem1}</td><td className="text-center px-2 py-2">{row.midsem2}</td><td className="text-center px-2 py-2 font-semibold">{row.basic}</td><td className="text-center px-2 py-2">{row.moderated}</td></tr>)}</tbody></table>
             </div>
           </section>
 
           <div className="space-y-4">
-            <section className="bg-white rounded-2xl border border-gray-100 p-4"><h3 className="font-medium text-gray-900">Top 5 Students</h3><p className="text-xs text-gray-500 mt-1">Highest Basic Marks among the filtered students.</p><ol className="mt-3 space-y-2 text-sm">{topFive.map((row, i) => <li key={row.enrollmentNo} className="flex justify-between gap-3"><span>{i + 1}. {row.name}</span><span className="font-medium">{row.basic}</span></li>)}</ol></section>
+            <section className="bg-white rounded-2xl border border-gray-100 p-4"><h3 className="font-medium text-gray-900">Top 5 Students</h3><p className="text-xs text-gray-500 mt-1">Highest selected-column values among the filtered students.</p><ol className="mt-3 space-y-2 text-sm">{topFive.map((row, i) => <li key={row.enrollmentNo} className="flex justify-between gap-3"><span>{i + 1}. {row.name}</span><span className="font-medium">{columnValue(row, riskColumn)}</span></li>)}</ol></section>
             <section className="bg-white rounded-2xl border border-gray-100 p-4">
               <h3 className="font-medium text-gray-900">Basic Marks Distribution</h3>
-              <p className="text-xs text-gray-500 mt-1">Click a slice to filter: Above 32, 24–32, 16–24 or Below 16.</p>
+              <p className="text-xs text-gray-500 mt-1">Click a slice to filter Basic Marks: Above 32, 24–32, 16–24 or Below 16.</p>
               <div className="h-[270px] mt-2"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={riskDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={82} label>{riskDistribution.map((entry, i) => <Cell key={`${entry.name}-${i}`} fill={COLORS[i]} onClick={() => selectRiskRange(i)} style={{ cursor: "pointer" }}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer></div>
             </section>
           </div>
