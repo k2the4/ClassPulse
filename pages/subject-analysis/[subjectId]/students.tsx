@@ -5,7 +5,13 @@ import SubjectAnalysisNav from "../../../components/SubjectAnalysisNav";
 import { SubjectAnalysis } from "../../../lib/analysis";
 import { RawDataButton, GradeBadge } from "../../../components/AnalysisWidgets";
 
-function round1(n: number) { return Math.round((Number(n) || 0) * 10) / 10; }
+function round1(n: number) {
+  return Math.round((Number(n) || 0) * 10) / 10;
+}
+
+function shortMonth(month: string) {
+  return month.replace(/\s*20\d{2}/, "");
+}
 
 export default function SubjectStudentReportPage() {
   const router = useRouter();
@@ -88,10 +94,12 @@ export default function SubjectStudentReportPage() {
 
   const basicMarks = round1(selected?.internalMarks?.basic ?? 0);
   const moderatedMarks = Math.ceil(Number(selected?.internalMarks?.moderated ?? 0));
+  const moderationGain = round1(moderatedMarks - basicMarks);
   const previousAttendance = round1(selected?.attendancePct?.prevMonth ?? 0);
   const currentAttendance = round1(selected?.attendancePct?.currMonth ?? 0);
   const attendanceChange = round1(currentAttendance - previousAttendance);
-  const classAverage = data?.classAverageCurrMonth ?? 0;
+  const classAverage = round1(data?.classAverageBasicMarks ?? 0);
+  const attendanceHistory = selected?.attendanceHistory || [];
 
   const classRank = useMemo(() => {
     if (!selected || !students.length) return null;
@@ -104,8 +112,8 @@ export default function SubjectStudentReportPage() {
     return index >= 0 ? index + 1 : null;
   }, [selected, students]);
 
-  const betterThan = classAverage > 0 && basicMarks > 0
-    ? Math.min(100, Math.max(0, Math.round((students.filter((s: any) => Number(s.internalMarks?.basic ?? 0) < basicMarks).length / Math.max(1, students.length)) * 100)))
+  const betterThan = basicMarks > 0 && students.length
+    ? Math.min(100, Math.max(0, Math.round((students.filter((s: any) => Number(s.internalMarks?.basic ?? 0) < basicMarks).length / students.length) * 100)))
     : null;
 
   const performanceStatus = (value: number, max: number) => {
@@ -154,9 +162,15 @@ export default function SubjectStudentReportPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-5">
             <section className="bg-white rounded-2xl border border-gray-100 p-5 h-fit xl:sticky xl:top-5">
-              <input type="text" placeholder="Search name or enrollment" value={search} onChange={(e)=>setSearch(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4"/>
+              <input type="text" placeholder="Search name or enrollment" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4" />
               <div className="max-h-[680px] overflow-y-auto space-y-1 pr-1">
-                {filteredList.map((s:any)=><button key={s.enrollmentNo} onClick={()=>setSelectedEnrollment(s.enrollmentNo)} className={`w-full text-left px-3 py-3 rounded-xl transition ${s.enrollmentNo===selectedEnrollment?"bg-gray-900 text-white":"hover:bg-gray-50 text-gray-700"}`}><span className="block text-sm font-medium truncate">{s.name}</span><span className={`block text-xs mt-1 ${s.enrollmentNo===selectedEnrollment?"text-gray-300":"text-gray-400"}`}>{s.enrollmentNo}</span></button>)}{!filteredList.length&&<p className="text-sm text-gray-400 text-center py-6">No matches.</p>}
+                {filteredList.map((s: any) => (
+                  <button key={s.enrollmentNo} onClick={() => setSelectedEnrollment(s.enrollmentNo)} className={`w-full text-left px-3 py-3 rounded-xl transition ${s.enrollmentNo === selectedEnrollment ? "bg-gray-900 text-white" : "hover:bg-gray-50 text-gray-700"}`}>
+                    <span className="block text-sm font-medium truncate">{s.name}</span>
+                    <span className={`block text-xs mt-1 ${s.enrollmentNo === selectedEnrollment ? "text-gray-300" : "text-gray-400"}`}>{s.enrollmentNo}</span>
+                  </button>
+                ))}
+                {!filteredList.length && <p className="text-sm text-gray-400 text-center py-6">No matches.</p>}
               </div>
             </section>
 
@@ -169,7 +183,7 @@ export default function SubjectStudentReportPage() {
                     <p className="text-sm text-gray-500 mt-2">{selected.enrollmentNo} · {selected.email || "Email not available"}</p>
                   </div>
                   <div className="sm:text-right">
-                    <GradeBadge grade={currentOverallStatus.label === "Excellent" ? "Excellent" : selected.midsem?.grade || currentOverallStatus.label}/>
+                    <GradeBadge grade={currentOverallStatus.label === "Excellent" ? "Excellent" : selected.midsem?.grade || currentOverallStatus.label} />
                     <p className="text-xs text-gray-400 mt-2">Based on current subject performance</p>
                   </div>
                 </div>
@@ -177,10 +191,27 @@ export default function SubjectStudentReportPage() {
 
               <div className="p-6 md:p-8 space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="rounded-2xl border border-gray-100 p-5"><p className="text-xs text-gray-400">Current Attendance</p><p className="text-3xl font-semibold mt-2">{currentAttendance}%</p><p className={`text-xs mt-2 font-medium ${attendanceChange >= 0 ? "text-emerald-600" : "text-red-500"}`}>{attendanceChange > 0 ? "+" : ""}{attendanceChange}% from previous</p><span className={`inline-flex mt-2 text-xs px-2.5 py-1 rounded-full ${selected.attendancePct?.trend === "Decreasing" ? "bg-red-50 text-red-600" : selected.attendancePct?.trend === "Increasing" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{selected.attendancePct?.trend || "Stable"}</span></div>
-                  <div className="rounded-2xl border border-gray-100 p-5"><p className="text-xs text-gray-400">Internal Score (Basic)</p><p className="text-3xl font-semibold mt-2">{basicMarks} <span className="text-base text-gray-400 font-normal">/ 40</span></p><p className="text-xs mt-2 font-medium text-emerald-600">{classAverage ? `${basicMarks >= classAverage ? "+" : ""}${round1(basicMarks - classAverage)} vs class avg` : ""}</p></div>
-                  <div className="rounded-2xl border border-gray-100 p-5"><p className="text-xs text-gray-400">Class Rank</p><p className="text-3xl font-semibold mt-2">{classRank ? `#${classRank}` : "—"} <span className="text-base text-gray-400 font-normal">/ {students.length}</span></p><p className="text-xs mt-2 font-medium text-indigo-600">{classRank ? `Top ${Math.max(1, Math.round((classRank / Math.max(1, students.length)) * 100))}% of class` : ""}</p></div>
-                  <div className="rounded-2xl border border-gray-100 p-5"><p className="text-xs text-gray-400">Moderated Score</p><p className="text-3xl font-semibold mt-2">{moderatedMarks} <span className="text-base text-gray-400 font-normal">/ 40</span></p><p className="text-xs mt-2 font-medium text-emerald-600">+{Math.max(0, moderatedMarks - basicMarks)} after moderation</p></div>
+                  <div className="rounded-2xl border border-gray-100 p-5">
+                    <p className="text-xs text-gray-400">Current Attendance</p>
+                    <p className="text-3xl font-semibold mt-2">{currentAttendance}%</p>
+                    <p className={`text-xs mt-2 font-medium ${attendanceChange >= 0 ? "text-emerald-600" : "text-red-500"}`}>{attendanceChange > 0 ? "+" : ""}{attendanceChange}% from previous</p>
+                    <span className={`inline-flex mt-2 text-xs px-2.5 py-1 rounded-full ${selected.attendancePct?.trend === "Decreasing" ? "bg-red-50 text-red-600" : selected.attendancePct?.trend === "Increasing" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{selected.attendancePct?.trend || "Stable"}</span>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 p-5">
+                    <p className="text-xs text-gray-400">Internal Score (Basic)</p>
+                    <p className="text-3xl font-semibold mt-2">{basicMarks} <span className="text-base text-gray-400 font-normal">/ 40</span></p>
+                    <p className={`text-xs mt-2 font-medium ${basicMarks >= classAverage ? "text-emerald-600" : "text-red-500"}`}>{classAverage ? `${basicMarks >= classAverage ? "+" : ""}${round1(basicMarks - classAverage)} vs class avg` : ""}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 p-5">
+                    <p className="text-xs text-gray-400">Class Rank</p>
+                    <p className="text-3xl font-semibold mt-2">{classRank ? `#${classRank}` : "—"} <span className="text-base text-gray-400 font-normal">/ {students.length}</span></p>
+                    <p className="text-xs mt-2 font-medium text-indigo-600">{classRank ? `Top ${Math.max(1, Math.round((classRank / Math.max(1, students.length)) * 100))}% of class` : ""}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 p-5">
+                    <p className="text-xs text-gray-400">Moderated Score</p>
+                    <p className="text-3xl font-semibold mt-2">{moderatedMarks} <span className="text-base text-gray-400 font-normal">/ 40</span></p>
+                    <p className={`text-xs mt-2 font-medium ${moderationGain >= 0 ? "text-emerald-600" : "text-red-500"}`}>{moderationGain >= 0 ? "+" : ""}{moderationGain} after moderation</p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -188,7 +219,10 @@ export default function SubjectStudentReportPage() {
                     <h4 className="text-lg font-semibold text-gray-900">Assessment Breakdown</h4>
                     <p className="text-xs text-gray-400 mt-1">Raw marks obtained by the student.</p>
                     <div className="mt-4 divide-y divide-gray-100">
-                      {assessmentRows.map((row) => { const status = performanceStatus(row.value, row.max); return <div key={row.label} className="flex items-center justify-between gap-3 py-3.5"><span className="text-sm text-gray-600">{row.label}</span><div className="flex items-center gap-3"><span className="font-semibold text-gray-900">{row.raw}</span><span className={`text-[11px] px-2.5 py-1 rounded-full ${status.tone}`}>{status.label}</span></div></div>; })}
+                      {assessmentRows.map((row) => {
+                        const status = performanceStatus(row.value, row.max);
+                        return <div key={row.label} className="flex items-center justify-between gap-3 py-3.5"><span className="text-sm text-gray-600">{row.label}</span><div className="flex items-center gap-3"><span className="font-semibold text-gray-900">{row.raw}</span><span className={`text-[11px] px-2.5 py-1 rounded-full ${status.tone}`}>{status.label}</span></div></div>;
+                      })}
                     </div>
                   </section>
 
@@ -206,9 +240,9 @@ export default function SubjectStudentReportPage() {
                     <h4 className="text-lg font-semibold text-gray-900">Internal Marks Summary</h4>
                     <p className="text-xs text-gray-400 mt-1">Basic marks are the weighted total. Moderated marks are rank-adjusted using the subject moderation tiers.</p>
                     <div className="mt-5 space-y-5">
-                      <div><div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Raw Performance (Basic)</span><span className="font-semibold">{basicMarks} / 40</span></div><div className="h-2.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-gray-500" style={{width:`${Math.min(100,(basicMarks/40)*100)}%`}}/></div></div>
-                      <div><div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Moderated Performance</span><span className="font-semibold">{moderatedMarks} / 40</span></div><div className="h-2.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-gray-900" style={{width:`${Math.min(100,(moderatedMarks/40)*100)}%`}}/></div></div>
-                      <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm"><span className="font-medium text-emerald-700">+{Math.max(0, moderatedMarks - basicMarks)} marks after moderation</span></div>
+                      <div><div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Raw Performance (Basic)</span><span className="font-semibold">{basicMarks} / 40</span></div><div className="h-2.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-gray-500" style={{ width: `${Math.min(100, (basicMarks / 40) * 100)}%` }} /></div></div>
+                      <div><div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Moderated Performance</span><span className="font-semibold">{moderatedMarks} / 40</span></div><div className="h-2.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-gray-900" style={{ width: `${Math.min(100, (moderatedMarks / 40) * 100)}%` }} /></div></div>
+                      <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm"><span className="font-medium text-emerald-700">{moderationGain >= 0 ? "+" : ""}{moderationGain} marks after moderation</span></div>
                     </div>
                   </section>
 
@@ -217,25 +251,23 @@ export default function SubjectStudentReportPage() {
                     <p className="text-xs text-gray-400 mt-1">See how the student compares with the rest of the class.</p>
                     <div className="grid grid-cols-3 gap-3 mt-5">
                       <div className="rounded-xl border border-gray-100 p-4 text-center"><p className="text-xs text-gray-400">Your Score</p><p className="text-2xl font-semibold text-blue-600 mt-2">{basicMarks}</p><p className="text-xs text-gray-400">/ 40</p></div>
-                      <div className="rounded-xl border border-gray-100 p-4 text-center"><p className="text-xs text-gray-400">Class Average</p><p className="text-2xl font-semibold text-gray-900 mt-2">{round1(classAverage)}</p><p className="text-xs text-gray-400">/ 40</p></div>
+                      <div className="rounded-xl border border-gray-100 p-4 text-center"><p className="text-xs text-gray-400">Class Average</p><p className="text-2xl font-semibold text-gray-900 mt-2">{classAverage}</p><p className="text-xs text-gray-400">/ 40</p></div>
                       <div className="rounded-xl border border-gray-100 p-4 text-center"><p className="text-xs text-gray-400">Difference</p><p className={`text-2xl font-semibold mt-2 ${basicMarks >= classAverage ? "text-emerald-600" : "text-red-500"}`}>{basicMarks - classAverage >= 0 ? "+" : ""}{round1(basicMarks - classAverage)}</p><p className="text-xs text-gray-400">vs average</p></div>
                     </div>
-                    <div className="mt-5"><div className="flex justify-between text-xs text-gray-400"><span>0%</span><span className="font-medium text-gray-700">{betterThan !== null ? `Better than ${betterThan}% of class` : ""}</span><span>100%</span></div><div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{width:`${betterThan ?? 0}%`}}/></div></div>
+                    <div className="mt-5"><div className="flex justify-between text-xs text-gray-400"><span>0%</span><span className="font-medium text-gray-700">{betterThan !== null ? `Better than ${betterThan}% of class` : ""}</span><span>100%</span></div><div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${betterThan ?? 0}%` }} /></div></div>
                   </section>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.7fr)] gap-5">
                   <section className="rounded-2xl border border-gray-100 p-5">
-                    <div className="flex items-center justify-between gap-3"><div><h4 className="text-lg font-semibold text-gray-900">Performance Trend</h4><p className="text-xs text-gray-400 mt-1">Track the student's attendance trend across available months.</p></div></div>
+                    <div><h4 className="text-lg font-semibold text-gray-900">Performance Trend</h4><p className="text-xs text-gray-400 mt-1">Attendance from every available month in the raw sheet.</p></div>
                     <div className="mt-5 flex items-end gap-4 h-44">
                       <div className="text-[10px] text-gray-400 h-full flex flex-col justify-between py-1"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
-                      <div className="relative flex-1 h-full flex items-end gap-3 border-l border-b border-gray-200 px-4 pb-1">
-                        {data.availableMonths.slice(-4).map((month: string) => {
-                          const row = data as any;
-                          const monthIndex = data.availableMonths.indexOf(month);
-                          const source = monthIndex === data.availableMonths.length - 1 ? currentAttendance : monthIndex === data.availableMonths.length - 2 ? previousAttendance : null;
-                          const height = source === null ? 0 : Math.max(6, Math.min(100, source));
-                          return <div key={month} className="flex-1 h-full flex flex-col items-center justify-end"><div className="w-full max-w-[55px] rounded-t-lg bg-gray-900/80" style={{height:`${height}%`}} title={`${month}: ${source ?? "—"}%`}></div><span className="text-[10px] text-gray-400 mt-2 text-center">{month.replace(" 20", "\n")}</span></div>;
+                      <div className="relative flex-1 h-full flex items-end gap-2 sm:gap-3 border-l border-b border-gray-200 px-3 pb-1 overflow-x-auto">
+                        {attendanceHistory.map((point: any) => {
+                          const value = round1(point.percentage ?? 0);
+                          const height = value > 0 ? Math.max(6, Math.min(100, value)) : 0;
+                          return <div key={point.month} className="min-w-[58px] flex-1 h-full flex flex-col items-center justify-end"><div className="w-full max-w-[55px] rounded-t-lg bg-gray-900/80" style={{ height: `${height}%` }} title={`${point.month}: ${value}%`} /><span className="text-[10px] text-gray-400 mt-2 text-center whitespace-nowrap">{shortMonth(point.month)}</span></div>;
                         })}
                       </div>
                     </div>
