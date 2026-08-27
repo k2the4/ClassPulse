@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+}
+
+model College {
+  id          String       @id @default(cuid())
+  name        String
+  departments Department[]
+  users       User[]
+  createdAt   DateTime     @default(now())
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String // e.g. "ECE"
+  college   College  @relation(fields: [collegeId], references: [id])
+  collegeId String
+  classes   Class[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         Role         @default(TEACHER)
+  college      College      @relation(fields: [collegeId], references: [id])
+  collegeId    String
+  assignments  Assignment[] // subjects this teacher teaches
+  proctorOf    Class[]      @relation("Proctor")
+  createdAt    DateTime     @default(now())
+}
+
+// e.g. "B.Tech ECE, 4th Year, Semester 7"
+model Class {
+  id            String     @id @default(cuid())
+  department    Department @relation(fields: [departmentId], references: [id])
+  departmentId  String
+  program       String // "B.Tech ECE"
+  academicYear  String // "2026-27"
+  year          String // "4th Year"
+  semester      Int // 7
+  proctor       User?      @relation("Proctor", fields: [proctorId], references: [id])
+  proctorId     String?
+  sections      Section[]
+  createdAt     DateTime   @default(now())
+}
+
+model Section {
+  id        String    @id @default(cuid())
+  name      String // "A"
+  class     Class     @relation(fields: [classId], references: [id])
+  classId   String
+  strength  Int       @default(0)
+  students  Student[]
+  subjects  Subject[]
+  sheetLink SheetLink?
+  snapshots AnalysisSnapshot[]
+  createdAt DateTime  @default(now())
+
+  @@unique([classId, name])
+}
+
+model Student {
+  id             String   @id @default(cuid())
+  enrollmentNo   String
+  name           String
+  email          String
+  section        Section  @relation(fields: [sectionId], references: [id])
+  sectionId      String
+  createdAt      DateTime @default(now())
+
+  @@unique([sectionId, enrollmentNo])
+}
+
+// e.g. "Data Analysis" / "DA 338 T", scoped to one section
+model Subject {
+  id           String       @id @default(cuid())
+  name         String
+  code         String
+  section      Section      @relation(fields: [sectionId], references: [id])
+  sectionId    String
+  sheetLink    SheetLink?
+  assignments  Assignment[]
+  snapshots    AnalysisSnapshot[]
+  createdAt    DateTime     @default(now())
+
+  @@unique([sectionId, code])
+}
+
+// which teacher(s) can view/manage a subject
+model Assignment {
+  id        String   @id @default(cuid())
+  teacher   User     @relation(fields: [teacherId], references: [id])
+  teacherId String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  subjectId String
+  createdAt DateTime @default(now())
+
+  @@unique([teacherId, subjectId])
+}
+
+model SheetLink {
+  id         String   @id @default(cuid())
+
+  // Either a combined section sheet...
+  section    Section? @relation(fields: [sectionId], references: [id])
+  sectionId  String?  @unique
+
+  // ...or an individual subject sheet
+  subject    Subject? @relation(fields: [subjectId], references: [id])
+  subjectId  String?  @unique
+
+  sheetId    String
+  gid        String?
+  lastSyncAt DateTime?
+}
+
+// cached, computed analysis for a subject OR a section — refreshed via sync,
+// read by dashboards. Exactly one of subjectId/sectionId should be set.
+model AnalysisSnapshot {
+  id         String   @id @default(cuid())
+
+  subject    Subject? @relation(fields: [subjectId], references: [id])
+  subjectId  String?
+
+  section    Section? @relation(fields: [sectionId], references: [id])
+  sectionId  String?
+
+  computedAt DateTime @default(now())
+  data       Json // SubjectAnalysis shape (lib/analysis.ts) or ClassAnalysis shape (lib/analysisClass.ts)
+
+  @@index([subjectId, computedAt])
+  @@index([sectionId, computedAt])
+}

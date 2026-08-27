@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+
+.env
+.env.local
+.env.*.local
+
+classpulse-sync-89da9fe3c9a8.json
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+.DS_Store
+Thumbs.db
