@@ -1,5 +1,29 @@
-import { createServerClient } from '@supabase/ssr'; import { NextResponse, type NextRequest } from 'next/server';
-const protectedPaths=['/dashboard','/classes','/admin'];
-const publicKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-export async function middleware(request: NextRequest) { let response=NextResponse.next({request}); const supabase=createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,publicKey,{cookies:{getAll:()=>request.cookies.getAll(),setAll:(items)=>items.forEach(({name,value,options})=>response.cookies.set(name,value,options))}}); const {data:{user}}=await supabase.auth.getUser(); if(protectedPaths.some(path=>request.nextUrl.pathname.startsWith(path)) && !user) return NextResponse.redirect(new URL('/login',request.url)); return response; }
-export const config={matcher:['/dashboard/:path*','/classes/:path*','/admin/:path*']};
+import { getToken } from 'next-auth/jwt';
+import { NextResponse, type NextRequest } from 'next/server';
+
+const protectedPaths = ['/dashboard', '/classes', '/admin'];
+
+export async function middleware(request: NextRequest) {
+  const isProtected = protectedPaths.some((path) =>
+    request.nextUrl.pathname.startsWith(path)
+  );
+
+  if (!isProtected) return NextResponse.next();
+
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  if (!token) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('callbackUrl', request.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/classes/:path*', '/admin/:path*'],
+};
