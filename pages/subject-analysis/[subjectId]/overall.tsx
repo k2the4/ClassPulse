@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-
 import SubjectAnalysisNav from "../../../components/SubjectAnalysisNav";
 import { SubjectAnalysis } from "../../../lib/analysis";
 import { RawDataButton } from "../../../components/AnalysisWidgets";
@@ -13,7 +12,8 @@ type WeightKey = "assignment" | "presentation" | "attendance" | "midsem1" | "mid
 type Weights = Record<WeightKey, number>;
 type Criteria = { from: number; to: number; minMarks: number; maxMarks: number };
 
-const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+const TARGET = 40;
+const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#ef4444"];
 const DEFAULT_WEIGHTS: Weights = { assignment: 5, presentation: 5, attendance: 10, midsem1: 10, midsem2: 10 };
 const DEFAULT_CRITERIA: Criteria[] = [
   { from: 1, to: 10, minMarks: 38, maxMarks: 40 },
@@ -22,24 +22,46 @@ const DEFAULT_CRITERIA: Criteria[] = [
   { from: 41, to: 65, minMarks: 25, maxMarks: 30 },
 ];
 const BASIC_COLUMNS: { key: ColumnKey; label: string }[] = [
-  { key: "assignment", label: "Assignment" }, { key: "presentation", label: "Presentation" },
-  { key: "attendance", label: "Attendance" }, { key: "moderatedAttendance", label: "Moderated Attendance" },
-  { key: "midsem1", label: "Midsem 1" }, { key: "midsem2", label: "Midsem 2" },
+  { key: "assignment", label: "Assignment" },
+  { key: "presentation", label: "Presentation" },
+  { key: "attendance", label: "Attendance" },
+  { key: "moderatedAttendance", label: "Moderated Attendance" },
+  { key: "midsem1", label: "Midsem 1" },
+  { key: "midsem2", label: "Midsem 2" },
+];
+const HEADERS: { key: ColumnKey; label: string; weight?: WeightKey }[] = [
+  { key: "assignment", label: "Assignment", weight: "assignment" },
+  { key: "presentation", label: "Presentation", weight: "presentation" },
+  { key: "attendance", label: "Attendance", weight: "attendance" },
+  { key: "moderatedAttendance", label: "Moderated Att." },
+  { key: "midsem1", label: "Midsem 1", weight: "midsem1" },
+  { key: "midsem2", label: "Midsem 2", weight: "midsem2" },
+  { key: "basic", label: "Basic" },
+  { key: "moderated", label: "Moderated" },
 ];
 const ALL_COLUMNS = [...BASIC_COLUMNS, { key: "basic" as ColumnKey, label: "Basic Marks" }, { key: "moderated" as ColumnKey, label: "Moderated Marks" }];
-const HEADERS: { key: ColumnKey; label: string; weight?: WeightKey }[] = [
-  { key: "assignment", label: "Assignment", weight: "assignment" }, { key: "presentation", label: "Presentation", weight: "presentation" },
-  { key: "attendance", label: "Attendance", weight: "attendance" }, { key: "moderatedAttendance", label: "Moderated Att." },
-  { key: "midsem1", label: "Midsem 1", weight: "midsem1" }, { key: "midsem2", label: "Midsem 2", weight: "midsem2" },
-  { key: "basic", label: "Basic" }, { key: "moderated", label: "Moderated" },
-];
-function round1(n: number) { return Math.round((Number.isFinite(n) ? n : 0) * 10) / 10; }
-function num(v: string, fallback = 0) { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : fallback; }
-function weighted(raw: number, rawMax: number, weight: number) { return rawMax > 0 && weight > 0 ? round1((raw / rawMax) * weight) : 0; }
-function linearTier(rank: number, tier: Criteria) {
-  if (tier.to <= tier.from) return round1(tier.maxMarks);
-  const t = (rank - tier.from) / (tier.to - tier.from);
-  return round1(tier.maxMarks + (tier.minMarks - tier.maxMarks) * t);
+
+const round1 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 10) / 10;
+const num = (v: string, fallback = 0) => Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : fallback;
+const weighted = (raw: number, max: number, weight: number) => max > 0 && weight > 0 ? round1(raw / max * weight) : 0;
+function weightKey(key: ColumnKey): WeightKey | null {
+  if (key === "moderatedAttendance") return "attendance";
+  return key === "assignment" || key === "presentation" || key === "attendance" || key === "midsem1" || key === "midsem2" ? key : null;
+}
+function normalize(columns: ColumnKey[], weights: Weights): Weights {
+  const keys = Array.from(new Set(columns.map(weightKey).filter((k): k is WeightKey => !!k)));
+  if (!keys.length) return weights;
+  const total = keys.reduce((s, k) => s + Math.max(0, weights[k]), 0) || keys.length;
+  const next = { ...weights }; let used = 0;
+  keys.forEach((k, i) => {
+    if (i === keys.length - 1) next[k] = round1(Math.max(0, TARGET - used));
+    else { next[k] = round1(((Math.max(0, weights[k]) || 1) / total) * TARGET); used += next[k]; }
+  });
+  return next;
+}
+function linear(rank: number, tier: Criteria) {
+  if (tier.to <= tier.from) return tier.maxMarks;
+  return tier.maxMarks + ((rank - tier.from) / (tier.to - tier.from)) * (tier.minMarks - tier.maxMarks);
 }
 
 export default function SubjectOverallPage() {
@@ -57,9 +79,8 @@ export default function SubjectOverallPage() {
   const [criteria, setCriteria] = useState<Criteria[]>(DEFAULT_CRITERIA);
   const [sortColumn, setSortColumn] = useState<ColumnKey>("moderated");
   const [sortDirection, setSortDirection] = useState<SortDirection>("none");
-  const [riskColumn, setRiskColumn] = useState<ColumnKey>("moderated");
   const [riskLower, setRiskLower] = useState(0);
-  const [riskUpper, setRiskUpper] = useState(100);
+  const [riskUpper, setRiskUpper] = useState(40);
 
   async function loadAnalysis(sync = false) {
     if (!subjectId || typeof subjectId !== "string") return;
@@ -74,67 +95,77 @@ export default function SubjectOverallPage() {
   }
   useEffect(() => { loadAnalysis(); }, [subjectId]);
 
+  const selectedTotal = useMemo(() => round1(basicColumns.reduce((s, c) => { const k = weightKey(c); return s + (k ? weights[k] : 0); }, 0)), [basicColumns, weights]);
   const baseRows = useMemo(() => {
     const preliminary = (data?.students || []).map((s: any, originalIndex: number) => ({
       enrollmentNo: s.enrollmentNo, name: s.name, originalIndex,
       assignmentRaw: Number(s.assignment?.submitted || 0), assignmentTotal: Number(s.assignment?.total || 0),
       presentationRaw: Number(s.presentation || 0), attendanceRaw: Number(s.attendancePct?.currMonth || 0),
-      midsem1Raw: Number(s.midsem?.first || 0), midsem2Raw: Number(s.midsem?.second || 0),
       assignment: weighted(Number(s.assignment?.submitted || 0), Number(s.assignment?.total || 0), weights.assignment),
       presentation: weighted(Number(s.presentation || 0), 10, weights.presentation),
       attendance: weighted(Number(s.attendancePct?.currMonth || 0), 100, weights.attendance),
-      midsem1: weighted(Number(s.midsem?.first || 0), 30, weights.midsem1), midsem2: weighted(Number(s.midsem?.second || 0), 30, weights.midsem2),
+      midsem1: weighted(Number(s.midsem?.first || 0), 30, weights.midsem1),
+      midsem2: weighted(Number(s.midsem?.second || 0), 30, weights.midsem2),
     }));
-    const rankedAttendance = [...preliminary].sort((a,b) => b.attendanceRaw - a.attendanceRaw || a.originalIndex - b.originalIndex);
-    const attendanceMap = new Map(rankedAttendance.map((r, i) => [r.enrollmentNo, Math.max(0, 10 - Math.floor(i / 7))]));
-    const withBasic = preliminary.map(r => {
-      const moderatedAttendance = attendanceMap.get(r.enrollmentNo) ?? 0;
-      const values: Record<string, number> = { ...r, moderatedAttendance };
-      return { ...r, moderatedAttendance, basic: round1(basicColumns.reduce((sum, key) => sum + (values[key] || 0), 0)) };
+    const ranked = [...preliminary].sort((a, b) => b.attendanceRaw - a.attendanceRaw || a.originalIndex - b.originalIndex);
+    const n = ranked.length;
+    const attendanceMap = new Map<string, number>();
+    ranked.forEach((row, i) => attendanceMap.set(row.enrollmentNo, n ? 10 - Math.min(9, Math.floor((i / n) * 10)) : 0));
+    const withBasic = preliminary.map(row => {
+      const moderatedAttendance = attendanceMap.get(row.enrollmentNo) ?? 0;
+      const values: Record<string, number> = { ...row, moderatedAttendance };
+      const basic = round1(basicColumns.reduce((sum, key) => sum + (Number(values[key]) || 0), 0));
+      return { ...row, moderatedAttendance, basic };
     });
-    const rankedBasic = [...withBasic].sort((a,b) => b.basic - a.basic || a.originalIndex - b.originalIndex);
-    const moderation = new Map<string, { rank: number; moderated: number }>();
-    rankedBasic.forEach((r, i) => {
+    const rankedBasic = [...withBasic].sort((a, b) => b.basic - a.basic || a.originalIndex - b.originalIndex);
+    const moderated = new Map<string, { rank: number; moderated: number }>();
+    rankedBasic.forEach((row, i) => {
       const rank = i + 1; const tier = criteria.find(c => rank >= c.from && rank <= c.to);
-      moderation.set(r.enrollmentNo, { rank, moderated: tier ? linearTier(rank, tier) : r.basic });
+      moderated.set(row.enrollmentNo, { rank, moderated: Math.ceil(tier ? linear(rank, tier) : row.basic) });
     });
-    return withBasic.map(r => ({ ...r, ...(moderation.get(r.enrollmentNo) || { rank: 0, moderated: r.basic }) }));
+    return withBasic.map(row => ({ ...row, ...(moderated.get(row.enrollmentNo) || { rank: 0, moderated: Math.ceil(row.basic) }) }));
   }, [data, weights, basicColumns, criteria]);
 
   const sortedRows = useMemo(() => {
     const rows = [...baseRows];
-    if (sortDirection === "none") return rows.sort((a,b) => a.originalIndex - b.originalIndex);
-    return rows.sort((a:any,b:any) => (sortDirection === "asc" ? a[sortColumn] - b[sortColumn] : b[sortColumn] - a[sortColumn]) || a.name.localeCompare(b.name));
+    if (sortDirection === "none") return rows.sort((a, b) => a.originalIndex - b.originalIndex);
+    return rows.sort((a: any, b: any) => ((sortDirection === "asc" ? a[sortColumn] - b[sortColumn] : b[sortColumn] - a[sortColumn]) || a.name.localeCompare(b.name)));
   }, [baseRows, sortColumn, sortDirection]);
   const filteredRiskRows = useMemo(() => {
     const lo = Math.min(riskLower, riskUpper), hi = Math.max(riskLower, riskUpper);
-    return baseRows.filter((r:any) => Number(r[riskColumn] || 0) >= lo && Number(r[riskColumn] || 0) <= hi);
-  }, [baseRows, riskColumn, riskLower, riskUpper]);
-  const topFive = useMemo(() => [...filteredRiskRows].sort((a:any,b:any) => Number(b[riskColumn]||0)-Number(a[riskColumn]||0)).slice(0,5), [filteredRiskRows, riskColumn]);
-  const distributionData = useMemo(() => {
-    if (!filteredRiskRows.length) return [];
-    const values = filteredRiskRows.map((r:any) => Number(r[riskColumn]||0)); const min = Math.min(...values), max = Math.max(...values);
-    if (min === max) return [{ name: `${round1(min)} (${values.length})`, value: values.length }];
-    const step = (max-min)/4;
-    return Array.from({length:4},(_,i)=>{ const start=min+step*i, end=i===3?max:min+step*(i+1); const count=values.filter(v=>i===3?v>=start&&v<=end:v>=start&&v<end).length; return {name:`${round1(start)}–${round1(end)} (${count})`,value:count}; });
-  }, [filteredRiskRows, riskColumn]);
+    return baseRows.filter(row => row.basic >= lo && row.basic <= hi);
+  }, [baseRows, riskLower, riskUpper]);
+  const topFive = useMemo(() => [...filteredRiskRows].sort((a, b) => b.basic - a.basic).slice(0, 5), [filteredRiskRows]);
+  const riskDistribution = useMemo(() => [
+    { name: `Above 32 (${filteredRiskRows.filter(r => r.basic > 32).length})`, value: filteredRiskRows.filter(r => r.basic > 32).length },
+    { name: `24–32 (${filteredRiskRows.filter(r => r.basic >= 24 && r.basic <= 32).length})`, value: filteredRiskRows.filter(r => r.basic >= 24 && r.basic <= 32).length },
+    { name: `16–24 (${filteredRiskRows.filter(r => r.basic >= 16 && r.basic < 24).length})`, value: filteredRiskRows.filter(r => r.basic >= 16 && r.basic < 24).length },
+    { name: `Below 16 (${filteredRiskRows.filter(r => r.basic < 16).length})`, value: filteredRiskRows.filter(r => r.basic < 16).length },
+  ], [filteredRiskRows]);
 
-  const updateWeight = (k: WeightKey, v: string) => setWeights(c => ({...c,[k]:num(v,c[k])}));
-  const toggleBasic = (k: ColumnKey) => setBasicColumns(c => c.includes(k) ? c.filter(x=>x!==k) : k === "attendance" ? [...c.filter(x=>x!=="moderatedAttendance"),k] : k === "moderatedAttendance" ? [...c.filter(x=>x!=="attendance"),k] : [...c,k]);
-  const updateCriteria = (i:number, field:keyof Criteria, v:string) => setCriteria(c => c.map((r,index)=>index===i?{...r,[field]:num(v,r[field])}:r));
+  function updateWeight(key: WeightKey, value: string) { setWeights(current => normalize(basicColumns, { ...current, [key]: num(value, current[key]) })); }
+  function toggleBasic(key: ColumnKey) {
+    setBasicColumns(current => {
+      const next = current.includes(key) ? current.filter(x => x !== key) : key === "attendance" ? [...current.filter(x => x !== "moderatedAttendance"), key] : key === "moderatedAttendance" ? [...current.filter(x => x !== "attendance"), key] : [...current, key];
+      setWeights(w => normalize(next, w)); return next;
+    });
+  }
+  function updateCriteria(i: number, field: keyof Criteria, value: string) { setCriteria(c => c.map((r, index) => index === i ? { ...r, [field]: num(value, r[field]) } : r)); }
 
   return <div className="min-h-screen max-w-[1900px] mx-auto px-6 py-8">
-    <div className="flex items-start justify-between mb-6"><div><h1 className="text-lg font-semibold text-gray-900">Subject Analysis</h1>{computedAt && <p className="text-xs text-gray-400 mt-1">Last synced {new Date(computedAt).toLocaleString()}</p>}</div><div className="flex items-center gap-2"><RawDataButton sheetId={sheetId}/><button onClick={()=>loadAnalysis(true)} disabled={syncing} className="text-sm bg-gray-900 text-white rounded-lg px-4 py-2 disabled:opacity-50">{syncing?"Syncing...":"Sync now"}</button></div></div>
+    <div className="flex items-start justify-between mb-6"><div><h1 className="text-lg font-semibold text-gray-900">Subject Analysis</h1>{computedAt && <p className="text-xs text-gray-400 mt-1">Last synced {new Date(computedAt).toLocaleString()}</p>}</div><div className="flex items-center gap-2"><RawDataButton sheetId={sheetId}/><button onClick={() => loadAnalysis(true)} disabled={syncing} className="text-sm bg-gray-900 text-white rounded-lg px-4 py-2 disabled:opacity-50">{syncing ? "Syncing..." : "Sync now"}</button></div></div>
     {typeof subjectId === "string" && <SubjectAnalysisNav subjectId={subjectId}/>} {error && <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg p-4 mb-6">{error}</div>} {loading && !data && <div className="text-sm text-gray-500 py-10">Loading overall analysis...</div>}
-    {data && <><div className="mb-5"><h2 className="text-xl font-semibold text-gray-900">Overall Analysis</h2><p className="text-sm text-gray-500 mt-1">Configure internal marks, moderation, ranking and at-risk filtering for this subject.</p></div><div className="flex gap-2 mb-6"><button onClick={()=>setView("internal")} className={`px-4 py-2 rounded-lg text-sm font-medium ${view==="internal"?"bg-gray-900 text-white":"bg-gray-100 text-gray-600"}`}>Internal Marks</button><button onClick={()=>setView("risk")} className={`px-4 py-2 rounded-lg text-sm font-medium ${view==="risk"?"bg-gray-900 text-white":"bg-gray-100 text-gray-600"}`}>At Risk</button></div>
+    {data && <><div className="mb-5"><h2 className="text-xl font-semibold text-gray-900">Overall Analysis</h2><p className="text-sm text-gray-500 mt-1">Configure internal marks, moderation, ranking and at-risk filtering for this subject.</p></div><div className="flex gap-2 mb-5"><button onClick={() => setView("internal")} className={`px-4 py-2 rounded-lg text-sm font-medium ${view === "internal" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}>Internal Marks</button><button onClick={() => setView("risk")} className={`px-4 py-2 rounded-lg text-sm font-medium ${view === "risk" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}>At Risk</button></div>
     {view === "internal" ? <>
-      <section className="bg-white rounded-2xl border border-gray-100 p-5 mb-5"><h3 className="font-medium text-gray-900">Weightage & Basic Marks</h3><div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">{(Object.keys(DEFAULT_WEIGHTS) as WeightKey[]).map(k=><label key={k} className="text-xs text-gray-500">{k==="midsem1"?"Midsem 1":k==="midsem2"?"Midsem 2":k[0].toUpperCase()+k.slice(1)} weight<input type="number" min="0" step="0.5" value={weights[k]} onChange={e=>updateWeight(k,e.target.value)} className="mt-1 w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-900"/></label>)}</div><div className="flex flex-wrap gap-2 mt-4">{BASIC_COLUMNS.map(c=><label key={c.key} className="inline-flex items-center gap-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2"><input type="checkbox" checked={basicColumns.includes(c.key)} onChange={()=>toggleBasic(c.key)}/>{c.label}</label>)}</div></section>
-      <section className="bg-white rounded-2xl border border-gray-100 p-4 mb-5"><div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3"><div><h3 className="font-medium text-gray-900">Moderated Marks Criteria</h3><p className="text-xs text-gray-500 mt-1">Within each tier, the first rank receives the maximum and the last rank receives the minimum, with marks distributed linearly.</p></div><div className="flex gap-2"><select value={sortColumn} onChange={e=>setSortColumn(e.target.value as ColumnKey)} className="border border-gray-200 rounded-lg px-2 py-2 text-sm">{ALL_COLUMNS.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select><select value={sortDirection} onChange={e=>setSortDirection(e.target.value as SortDirection)} className="border border-gray-200 rounded-lg px-2 py-2 text-sm"><option value="none">No sorting</option><option value="desc">Highest to lowest</option><option value="asc">Lowest to highest</option></select></div></div><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">{criteria.map((r,i)=><div key={i} className="border border-gray-100 rounded-xl p-3"><p className="text-xs font-medium text-gray-700 mb-2">Tier {i+1}</p><div className="grid grid-cols-4 gap-1"><label className="text-[10px] text-gray-400">From<input type="number" value={r.from} onChange={e=>updateCriteria(i,"from",e.target.value)} className="mt-1 w-full border rounded px-1 py-1 text-xs"/></label><label className="text-[10px] text-gray-400">To<input type="number" value={r.to} onChange={e=>updateCriteria(i,"to",e.target.value)} className="mt-1 w-full border rounded px-1 py-1 text-xs"/></label><label className="text-[10px] text-gray-400">Min<input type="number" step="0.1" value={r.minMarks} onChange={e=>updateCriteria(i,"minMarks",e.target.value)} className="mt-1 w-full border rounded px-1 py-1 text-xs"/></label><label className="text-[10px] text-gray-400">Max<input type="number" step="0.1" value={r.maxMarks} onChange={e=>updateCriteria(i,"maxMarks",e.target.value)} className="mt-1 w-full border rounded px-1 py-1 text-xs"/></label></div></div>)}</div></section>
-      <section className="bg-white rounded-2xl border border-gray-100 overflow-hidden"><div className="px-4 py-3 border-b"><h3 className="font-medium text-gray-900">Internal Marks Data</h3><p className="text-xs text-gray-500 mt-1">Compact view — all columns fit on screen. The small line below each weighted score shows the raw source value.</p></div><div className="max-h-[700px] overflow-y-auto"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[16%]"/><col className="w-[10%]"/>{HEADERS.map(h=><col key={h.key} className="w-[9.25%]"/>)}</colgroup><thead className="sticky top-0 z-10 bg-white border-b text-gray-500"><tr>{HEADERS.map((h,i)=><th key={h.key} className="px-1 py-2 text-center align-bottom"><span className="block text-[10px] text-gray-400">{h.weight?weights[h.weight]:h.key==="moderatedAttendance"?"10":h.key==="basic"?"selected":h.key==="moderated"?"tiered":""}</span><span className="font-medium">{h.label}</span></th>)}</tr><tr className="hidden"><th/></tr></thead><tbody>{sortedRows.map((r:any)=><tr key={r.enrollmentNo} className="border-b border-gray-50 hover:bg-gray-50/70"><td className="px-2 py-2 truncate text-gray-900" title={r.name}>{r.name}</td><td className="px-1 py-2 truncate text-gray-500" title={r.enrollmentNo}>{r.enrollmentNo}</td>{HEADERS.map(h=>{const raw = h.key==="assignment"?`${r.assignmentRaw}/${r.assignmentTotal}`:h.key==="presentation"?`${r.presentationRaw}/10`:h.key==="attendance"?`${r.attendanceRaw}%`:h.key==="midsem1"?`${r.midsem1Raw}/30`:h.key==="midsem2"?`${r.midsem2Raw}/30`:h.key==="moderated"?`Rank ${r.rank}`:""; return <td key={h.key} className="px-1 py-2 text-center"><span className={h.key==="moderated"?"font-semibold":"font-medium"}>{round1(r[h.key])}</span>{raw&&<span className="block text-[10px] text-gray-400">{raw}</span>}</td>})}</tr>)}</tbody></table></div></section>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
+        <section className="bg-white rounded-2xl border border-gray-100 p-4"><div className="flex justify-between gap-3"><h3 className="font-medium text-gray-900">Weightage & Basic Marks</h3><span className={`text-xs font-medium ${selectedTotal === TARGET ? "text-green-700" : "text-red-600"}`}>Selected total: {selectedTotal}/40</span></div><div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3">{(Object.keys(DEFAULT_WEIGHTS) as WeightKey[]).map(key => { const active = basicColumns.some(c => weightKey(c) === key); const label = key === "midsem1" ? "Midsem 1" : key === "midsem2" ? "Midsem 2" : key[0].toUpperCase() + key.slice(1); return <label key={key} className={`text-[11px] ${active ? "text-gray-600" : "text-gray-400"}`}>{label}<input type="number" min="0" step="0.5" disabled={!active} value={weights[key]} onChange={e => updateWeight(key, e.target.value)} className="mt-1 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 disabled:bg-gray-50 disabled:text-gray-400"/></label>; })}</div><div className="flex flex-wrap gap-2 mt-3">{BASIC_COLUMNS.map(c => <label key={c.key} className="inline-flex items-center gap-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5"><input type="checkbox" checked={basicColumns.includes(c.key)} onChange={() => toggleBasic(c.key)}/>{c.label}</label>)}</div><p className="text-[11px] text-gray-400 mt-2">Only checked components count. Active weights are automatically normalized to exactly 40.</p></section>
+        <section className="bg-white rounded-2xl border border-gray-100 p-4"><div className="flex flex-col md:flex-row md:justify-between gap-2"><div><h3 className="font-medium text-gray-900">Moderated Marks Criteria</h3><p className="text-[11px] text-gray-500 mt-1">Marks are distributed by rank, then rounded up to a whole mark.</p></div><div className="flex gap-2"><select value={sortColumn} onChange={e => setSortColumn(e.target.value as ColumnKey)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs">{ALL_COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select><select value={sortDirection} onChange={e => setSortDirection(e.target.value as SortDirection)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"><option value="none">No sorting</option><option value="desc">High to low</option><option value="asc">Low to high</option></select></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">{criteria.map((r, i) => <div key={i} className="border border-gray-100 rounded-xl p-2.5"><p className="text-[11px] font-medium text-gray-700 mb-1.5">Tier {i + 1}</p><div className="grid grid-cols-4 gap-1">{(["from", "to", "minMarks", "maxMarks"] as (keyof Criteria)[]).map(field => <label key={field} className="text-[9px] text-gray-400">{field === "minMarks" ? "Min" : field === "maxMarks" ? "Max" : field[0].toUpperCase() + field.slice(1)}<input type="number" step={field === "minMarks" || field === "maxMarks" ? "0.1" : "1"} value={r[field]} onChange={e => updateCriteria(i, field, e.target.value)} className="mt-1 w-full border border-gray-200 rounded px-1.5 py-1 text-xs text-gray-900"/></label>)}</div></div>)}</div></section>
+      </div>
+      <section className="bg-white rounded-2xl border border-gray-100 overflow-hidden"><div className="px-4 py-3 border-b border-gray-100"><h3 className="font-medium text-gray-900">Internal Marks Data</h3><p className="text-xs text-gray-500 mt-1">Basic marks use only the checked components and total 40 at maximum.</p></div><div className="overflow-auto max-h-[620px]"><table className="min-w-[1250px] w-full table-fixed text-sm"><colgroup><col className="w-[190px]"/><col className="w-[135px]"/>{HEADERS.map(h => <col key={h.key} className="w-[120px]"/>)}<col className="w-[80px]"/></colgroup><thead className="sticky top-0 bg-white z-10 border-b border-gray-100"><tr className="text-xs text-gray-500"><th className="text-left px-4 py-2 font-medium">Name</th><th className="text-left px-3 py-2 font-medium">Enrollment</th>{HEADERS.map(h => <th key={h.key} className="text-center px-2 py-2 font-medium"><div>{h.label}</div>{h.weight && <div className="text-[10px] text-gray-400 mt-0.5">/{weights[h.weight]}</div>}</th>)}<th className="text-center px-2 py-2 font-medium">Rank</th></tr></thead><tbody>{sortedRows.map((row: any) => <tr key={row.enrollmentNo} className="border-b border-gray-50 text-gray-700"><td className="px-4 py-2 whitespace-nowrap">{row.name}</td><td className="px-3 py-2 text-gray-500 whitespace-nowrap">{row.enrollmentNo}</td>{HEADERS.map(h => <td key={h.key} className={`px-2 py-2 text-center ${h.key === "moderated" ? "font-medium" : ""}`}>{h.key === "moderated" ? row.moderated : h.key === "basic" ? row.basic : row[h.key]}</td>)}<td className="px-2 py-2 text-center">{row.rank}</td></tr>)}</tbody></table></div></section>
     </> : <>
-      <section className="bg-white rounded-2xl border border-gray-100 p-5 mb-5"><h3 className="font-medium text-gray-900">At-Risk Filter</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4"><label className="text-xs text-gray-500">Column<select value={riskColumn} onChange={e=>setRiskColumn(e.target.value as ColumnKey)} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm">{ALL_COLUMNS.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select></label><label className="text-xs text-gray-500">Lower bound<input type="number" step="0.1" value={riskLower} onChange={e=>setRiskLower(Number(e.target.value)||0)} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"/></label><label className="text-xs text-gray-500">Upper bound<input type="number" step="0.1" value={riskUpper} onChange={e=>setRiskUpper(Number(e.target.value)||0)} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"/></label></div></section>
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5"><section className="bg-white rounded-2xl border border-gray-100 overflow-hidden"><div className="p-4 border-b"><h3 className="font-medium text-gray-900">Filtered Students</h3><p className="text-xs text-gray-500">{filteredRiskRows.length} students match the selected range.</p></div><div className="max-h-[700px] overflow-y-auto"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[17%]"/><col className="w-[11%]"/>{ALL_COLUMNS.map(c=><col key={c.key} className="w-[9%]"/>)}</colgroup><thead className="sticky top-0 bg-white border-b text-gray-500"><tr><th className="px-2 py-2 text-left">Name</th><th className="px-2 py-2 text-left">Enrollment</th>{ALL_COLUMNS.map(c=><th key={c.key} className={`px-1 py-2 text-center ${c.key===riskColumn?"text-gray-900":""}`}>{c.label}</th>)}</tr></thead><tbody>{filteredRiskRows.map((r:any)=><tr key={r.enrollmentNo} className="border-b border-gray-50"><td className="px-2 py-2 truncate" title={r.name}>{r.name}</td><td className="px-2 py-2 truncate text-gray-500">{r.enrollmentNo}</td>{ALL_COLUMNS.map(c=><td key={c.key} className={`px-1 py-2 text-center ${c.key===riskColumn?"font-semibold text-red-600":"text-gray-600"}`}>{round1(r[c.key])}</td>)}</tr>)}</tbody></table></div></section>
-      <div className="space-y-5"><section className="bg-white rounded-2xl border border-gray-100 p-5"><h3 className="font-medium text-gray-900">Top 5 Students</h3><p className="text-xs text-gray-500 mt-1">Highest scores among the currently filtered students.</p><ol className="mt-4 space-y-3">{topFive.map((r:any,i)=><li key={r.enrollmentNo} className="flex items-center justify-between text-sm border-b border-gray-50 pb-2"><span><span className="text-gray-400 mr-2">{i+1}.</span>{r.name}</span><span className="font-semibold">{round1(r[riskColumn])}</span></li>)}{!topFive.length&&<p className="text-sm text-gray-400">No students match this range.</p>}</ol></section><section className="bg-white rounded-2xl border border-gray-100 p-5"><h3 className="font-medium text-gray-900">Range Distribution</h3><p className="text-xs text-gray-500 mt-1">Each slice is labelled with its mark range and student count.</p><div className="h-[300px] mt-2">{distributionData.length?<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={distributionData} dataKey="value" nameKey="name" outerRadius={92} label={({name})=>name}>{distributionData.map((e,i)=><Cell key={e.name} fill={COLORS[i%COLORS.length]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer>:<div className="h-full flex items-center justify-center text-sm text-gray-400">No students match this range.</div>}</div></section></div></div>
-    </>}</>}
+      <section className="bg-white rounded-2xl border border-gray-100 p-4 mb-4"><h3 className="font-medium text-gray-900">At-Risk Filter</h3><p className="text-xs text-gray-500 mt-1">Filtering, the table and the graph use Basic Marks out of 40.</p><div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3"><label className="text-xs text-gray-500">Column<div className="mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50">Basic Marks</div></label><label className="text-xs text-gray-500">Lower bound<input type="number" min="0" max="40" value={riskLower} onChange={e => setRiskLower(num(e.target.value, riskLower))} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"/></label><label className="text-xs text-gray-500">Upper bound<input type="number" min="0" max="40" value={riskUpper} onChange={e => setRiskUpper(num(e.target.value, riskUpper))} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"/></label></div></section>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4"><section className="bg-white rounded-2xl border border-gray-100 overflow-hidden"><div className="px-4 py-3 border-b border-gray-100"><h3 className="font-medium text-gray-900">Filtered Students</h3><p className="text-xs text-gray-500 mt-1">{filteredRiskRows.length} students match the selected Basic Marks range.</p></div><div className="overflow-auto max-h-[620px]"><table className="min-w-[1000px] w-full table-fixed text-sm"><thead className="sticky top-0 bg-white z-10 border-b border-gray-100 text-xs text-gray-500"><tr><th className="text-left px-3 py-2 w-[180px]">Name</th><th className="text-left px-3 py-2 w-[135px]">Enrollment</th><th className="text-center px-2 py-2">Assignment</th><th className="text-center px-2 py-2">Presentation</th><th className="text-center px-2 py-2">Attendance</th><th className="text-center px-2 py-2">Moderated Att.</th><th className="text-center px-2 py-2">Midsem 1</th><th className="text-center px-2 py-2">Midsem 2</th><th className="text-center px-2 py-2 font-semibold text-gray-700">Basic Marks</th></tr></thead><tbody>{filteredRiskRows.map(row => <tr key={row.enrollmentNo} className="border-b border-gray-50 text-gray-700"><td className="px-3 py-2 whitespace-nowrap">{row.name}</td><td className="px-3 py-2 text-gray-500 whitespace-nowrap">{row.enrollmentNo}</td><td className="text-center px-2 py-2">{row.assignment}</td><td className="text-center px-2 py-2">{row.presentation}</td><td className="text-center px-2 py-2">{row.attendance}</td><td className="text-center px-2 py-2">{row.moderatedAttendance}</td><td className="text-center px-2 py-2">{row.midsem1}</td><td className="text-center px-2 py-2">{row.midsem2}</td><td className="text-center px-2 py-2 font-semibold">{row.basic}</td></tr>)}</tbody></table></div></section><div className="space-y-4"><section className="bg-white rounded-2xl border border-gray-100 p-4"><h3 className="font-medium text-gray-900">Top 5 Students</h3><p className="text-xs text-gray-500 mt-1">Highest Basic Marks among the filtered students.</p><ol className="mt-3 space-y-2 text-sm">{topFive.map((row, i) => <li key={row.enrollmentNo} className="flex justify-between gap-3"><span>{i + 1}. {row.name}</span><span className="font-medium">{row.basic}</span></li>)}</ol></section><section className="bg-white rounded-2xl border border-gray-100 p-4"><h3 className="font-medium text-gray-900">Basic Marks Distribution</h3><p className="text-xs text-gray-500 mt-1">Above 32, 24–32, 16–24 and Below 16.</p><div className="h-[270px] mt-2"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={riskDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={82} label>{riskDistribution.map((entry, i) => <Cell key={`${entry.name}-${i}`} fill={COLORS[i]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer></div></section></div></div>
+    </>}
+    </>}
   </div>;
 }
