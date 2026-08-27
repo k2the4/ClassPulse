@@ -6,10 +6,10 @@ type Props = { subjectId: string };
 export default function SubjectAnalysisNav({ subjectId }: Props) {
   const router = useRouter();
   const items = [
-    { label: "Attendance", href: `/subject-analysis/${subjectId}/attendance`, short: "01" },
-    { label: "Academic", href: `/subject-analysis/${subjectId}/academic`, short: "02" },
-    { label: "Overall", href: `/subject-analysis/${subjectId}/overall`, short: "03" },
-    { label: "Student Report", href: `/subject-analysis/${subjectId}/students`, short: "04" },
+    { label: "Attendance", href: `/subject-analysis/${subjectId}/attendance` },
+    { label: "Academic", href: `/subject-analysis/${subjectId}/academic` },
+    { label: "Overall", href: `/subject-analysis/${subjectId}/overall` },
+    { label: "Student Report", href: `/subject-analysis/${subjectId}/students` },
   ];
 
   return (
@@ -23,8 +23,7 @@ export default function SubjectAnalysisNav({ subjectId }: Props) {
               href={item.href}
               className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}
             >
-              <span className="subject-analysis-nav__index">{item.short}</span>
-              <span>{item.label}</span>
+              {item.label}
             </Link>
           );
         })}
