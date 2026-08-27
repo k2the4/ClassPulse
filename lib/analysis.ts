@@ -13,6 +13,7 @@ export interface StudentAnalysis {
   name: string;
   email: string;
   attendancePct: { prevMonth: number; currMonth: number; trend: Trend };
+  attendanceHistory: { month: string; percentage: number }[];
   assignment: { submitted: number; total: number };
   presentation: number;
   midsem: { first: number; second: number; combined: number; max: number; grade: string };
@@ -27,6 +28,7 @@ export interface SubjectAnalysis {
   monthsUsed: { previous: string | null; current: string };
   classAverageCurrMonth: number;
   classAveragePrevMonth: number;
+  classAverageBasicMarks: number;
   overallTrendPct: number;
   attendanceBuckets: { below30: number; to49: number; to74: number; above75: number };
   trendCounts: { increasing: number; decreasing: number; stable: number };
@@ -65,10 +67,8 @@ function normalizeAttendanceSubjectCode(code: string): string {
 
 /**
  * Calculate attendance for the selected subject only.
- *
- * The monthly source sheets use cumulative LH/LA totals. For a subject
- * analysis, use that subject's exact LH/LA pair, rather than combining it
- * with other subjects or lab columns.
+ * The monthly source sheets use cumulative LH/LA totals, so use the
+ * selected subject's exact LH/LA pair rather than combining subjects.
  */
 function attendancePctForSubject(
   row: MonthTab["rows"][number] | undefined,
@@ -77,14 +77,10 @@ function attendancePctForSubject(
   if (!row) return 0;
 
   const target = normalizeAttendanceSubjectCode(subjectCode);
-
-  // First prefer an exact code match (e.g. DA exactly).
   let match = row.subjects.find(
     (subject) => normalizeAttendanceSubjectCode(subject.code) === target
   );
 
-  // Database codes can be full university codes while attendance tabs use
-  // the short course code. Match only a non-lab subject in that case.
   if (!match) {
     match = row.subjects.find((subject) => {
       const code = normalizeAttendanceSubjectCode(subject.code);
@@ -96,7 +92,6 @@ function attendancePctForSubject(
   }
 
   if (!match || match.lh <= 0) return 0;
-
   return round1((match.la / match.lh) * 100);
 }
 
@@ -145,6 +140,10 @@ export function computeSubjectAnalysis(
     previousMonth = currentIndex > 0 ? months[currentIndex - 1] : undefined;
   }
 
+  if (!currentMonth) {
+    throw new Error("No attendance months available for this subject analysis.");
+  }
+
   const roster = currentMonth.rows.map((r) => ({
     enrollmentNo: r.enrollmentNo,
     name: r.name,
@@ -159,10 +158,20 @@ export function computeSubjectAnalysis(
   const presentationByEnrollment = new Map((raw.presentation || []).map((r) => [r.enrollmentNo, r]));
   const currByEnrollment = new Map(currentMonth.rows.map((r) => [r.enrollmentNo, r]));
   const prevByEnrollment = new Map((previousMonth?.rows || []).map((r) => [r.enrollmentNo, r]));
+  const monthRowsByEnrollment = new Map(
+    months.map((month) => [month.tabName, new Map(month.rows.map((r) => [r.enrollmentNo, r]))])
+  );
 
   const students: StudentAnalysis[] = roster.map((student) => {
     const currPct = attendancePctForSubject(currByEnrollment.get(student.enrollmentNo), subjectCode);
     const prevPct = attendancePctForSubject(prevByEnrollment.get(student.enrollmentNo), subjectCode);
+    const attendanceHistory = months.map((month) => ({
+      month: month.tabName,
+      percentage: attendancePctForSubject(
+        monthRowsByEnrollment.get(month.tabName)?.get(student.enrollmentNo),
+        subjectCode
+      ),
+    }));
 
     const midsem1 = marksForSubject(exam1ByEnrollment.get(student.enrollmentNo), subjectCode);
     const midsem2 = marksForSubject(exam2ByEnrollment.get(student.enrollmentNo), subjectCode);
@@ -189,6 +198,7 @@ export function computeSubjectAnalysis(
         currMonth: currPct,
         trend: classifyTrend(prevPct, currPct, trendCriteria),
       },
+      attendanceHistory,
       assignment,
       presentation,
       midsem: {
@@ -225,6 +235,7 @@ export function computeSubjectAnalysis(
   const totalStudents = students.length || 1;
   const classAverageCurrMonth = students.reduce((s, x) => s + x.attendancePct.currMonth, 0) / totalStudents;
   const classAveragePrevMonth = students.reduce((s, x) => s + x.attendancePct.prevMonth, 0) / totalStudents;
+  const classAverageBasicMarks = students.reduce((s, x) => s + x.internalMarks.basic, 0) / totalStudents;
 
   const attendanceBuckets = students.reduce(
     (acc, s) => {
@@ -261,6 +272,7 @@ export function computeSubjectAnalysis(
     monthsUsed: { previous: previousMonth?.tabName ?? null, current: currentMonth.tabName },
     classAverageCurrMonth: round1(classAverageCurrMonth),
     classAveragePrevMonth: round1(classAveragePrevMonth),
+    classAverageBasicMarks: round1(classAverageBasicMarks),
     overallTrendPct: round1(
       ((classAverageCurrMonth - classAveragePrevMonth) / (classAveragePrevMonth || 1)) * 100
     ),
