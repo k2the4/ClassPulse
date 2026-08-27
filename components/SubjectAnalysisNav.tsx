@@ -1,30 +1,29 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { BarChart3, GraduationCap, LayoutDashboard, FileText } from "lucide-react";
+import { BarChart3, FileText, GraduationCap, LayoutDashboard } from "lucide-react";
 
 type Props = { subjectId: string };
 
-const icons = [BarChart3, GraduationCap, LayoutDashboard, FileText];
+const items = [
+  { label: "Attendance", icon: BarChart3, path: "attendance" },
+  { label: "Academic", icon: GraduationCap, path: "academic" },
+  { label: "Overall", icon: LayoutDashboard, path: "overall" },
+  { label: "Student Report", icon: FileText, path: "students" },
+];
 
 export default function SubjectAnalysisNav({ subjectId }: Props) {
   const router = useRouter();
-  const items = [
-    { label: "Attendance", href: `/subject-analysis/${subjectId}/attendance` },
-    { label: "Academic", href: `/subject-analysis/${subjectId}/academic` },
-    { label: "Overall", href: `/subject-analysis/${subjectId}/overall` },
-    { label: "Student Report", href: `/subject-analysis/${subjectId}/students` },
-  ];
 
   return (
     <nav className="subject-analysis-nav" aria-label="Subject analysis sections">
       <div className="subject-analysis-nav__rail">
-        {items.map((item, index) => {
-          const Icon = icons[index];
-          const active = router.asPath === item.href;
+        {items.map(({ label, icon: Icon, path }) => {
+          const href = `/subject-analysis/${subjectId}/${path}`;
+          const active = router.pathname.endsWith(`/${path}`);
           return (
-            <Link key={item.href} href={item.href} className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}>
+            <Link key={path} href={href} className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}>
               <Icon size={17} strokeWidth={1.8} />
-              <span>{item.label}</span>
+              <span>{label}</span>
             </Link>
           );
         })}
