@@ -1,3 +1,94 @@
-@tailwind base; @tailwind components; @tailwind utilities;
-@layer base { * { @apply border-slate-200; } body { @apply bg-slate-50 text-slate-900; } input,select { @apply w-full rounded-lg border bg-white px-3 py-2 text-sm; } }
-@layer components { .card { @apply rounded-xl border bg-white p-5 shadow-sm; } .btn { @apply inline-flex items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50; } .btn-secondary { @apply inline-flex items-center justify-center rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50; } .label { @apply mb-1 block text-sm font-medium; } }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { @apply border-slate-200; }
+  body {
+    color: #172033;
+    background:
+      radial-gradient(circle at top left, rgba(236, 228, 211, .7), transparent 30%),
+      linear-gradient(180deg, #fbfaf7 0%, #f5f1e8 100%);
+  }
+  input, select {
+    @apply w-full rounded-xl border bg-white px-3 py-2 text-sm;
+    border-color: #dfe3ea;
+    box-shadow: 0 1px 1px rgba(15, 23, 42, .02);
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: #94a3b8;
+    box-shadow: 0 0 0 3px rgba(30, 41, 59, .08);
+  }
+  button, a { -webkit-tap-highlight-color: transparent; }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border bg-white p-5;
+    border-color: rgba(203, 213, 225, .75);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, .045);
+  }
+  .btn {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50;
+    background: linear-gradient(135deg, #172033, #26344b);
+    box-shadow: 0 8px 18px rgba(23, 32, 51, .12);
+  }
+  .btn:hover { filter: brightness(1.05); }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border bg-white px-4 py-2 text-sm font-medium;
+    border-color: #dfe3ea;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .035);
+  }
+  .btn-secondary:hover { background: #f8fafc; }
+  .label { @apply mb-1 block text-sm font-medium; }
+}
+
+/* Shared analysis polish. Existing analysis pages use these Tailwind patterns,
+   so the visual system is upgraded without changing their data logic. */
+.min-h-screen.max-w-\[1700px\] {
+  position: relative;
+}
+
+.bg-white.rounded-2xl {
+  background: rgba(255,255,255,.82) !important;
+  border-color: rgba(203,213,225,.78) !important;
+  box-shadow: 0 12px 32px rgba(15,23,42,.045) !important;
+}
+
+.bg-gray-900.text-white.rounded-lg,
+.bg-gray-900.text-white.rounded-xl {
+  background: linear-gradient(135deg, #172033, #26344b) !important;
+  box-shadow: 0 8px 18px rgba(23,32,51,.12);
+}
+
+.text-gray-900 { color: #172033 !important; }
+.text-gray-500 { color: #667085 !important; }
+.text-gray-400 { color: #98a2b3 !important; }
+
+.border-gray-100 { border-color: rgba(226,232,240,.8) !important; }
+.border-gray-200 { border-color: #dfe3ea !important; }
+
+.rounded-lg { border-radius: .75rem; }
+.rounded-2xl { border-radius: 1.1rem; }
+
+/* Tables feel lighter and easier to scan. */
+table thead tr { background: rgba(248,250,252,.72); }
+table th { font-size: .72rem; letter-spacing: .01em; color: #7b8798; font-weight: 600; }
+table tbody tr { transition: background .15s ease; }
+table tbody tr:hover { background: rgba(248,250,252,.78); }
+
+/* Scrollbars used by the long analysis tables. */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #c8ced8; border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: #aeb7c4; }
+
+/* Recharts inherits a calmer dashboard look. */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line { stroke: #d9dee7; }
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 28px rgba(15,23,42,.1) !important;
+}
