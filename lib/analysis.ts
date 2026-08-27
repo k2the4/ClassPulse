@@ -59,12 +59,17 @@ export function gradeFor(combined: number, max = MAX_PER_EXAM): string {
   return "Critical Risk";
 }
 
-// Attendance must use ONLY the exact selected subject column.
-// In particular, analysing "DA" must not also include "DA Lab".
 function normalizeAttendanceSubjectCode(code: string): string {
   return code.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
+/**
+ * Calculate attendance for the selected subject only.
+ *
+ * The monthly source sheets use cumulative LH/LA totals. For a subject
+ * analysis, use that subject's exact LH/LA pair, rather than combining it
+ * with other subjects or lab columns.
+ */
 function attendancePctForSubject(
   row: MonthTab["rows"][number] | undefined,
   subjectCode: string
@@ -72,11 +77,25 @@ function attendancePctForSubject(
   if (!row) return 0;
 
   const target = normalizeAttendanceSubjectCode(subjectCode);
-  const match = row.subjects.find(
+
+  // First prefer an exact code match (e.g. DA exactly).
+  let match = row.subjects.find(
     (subject) => normalizeAttendanceSubjectCode(subject.code) === target
   );
 
-  if (!match || match.lh === 0) return 0;
+  // Database codes can be full university codes while attendance tabs use
+  // the short course code. Match only a non-lab subject in that case.
+  if (!match) {
+    match = row.subjects.find((subject) => {
+      const code = normalizeAttendanceSubjectCode(subject.code);
+      const firstToken = code.split(/[\s(\[]+/)[0];
+      const targetToken = target.split(/[\s(\[]+/)[0];
+      const isLab = /(?:^|\s)LAB(?:\s|$)/.test(code);
+      return !isLab && firstToken === targetToken;
+    });
+  }
+
+  if (!match || match.lh <= 0) return 0;
 
   return round1((match.la / match.lh) * 100);
 }
@@ -116,15 +135,14 @@ export function computeSubjectAnalysis(
   if (settings.currentMonth) {
     currentMonth = months.find((m) => m.tabName === settings.currentMonth);
   }
-  if (!currentMonth) {
-    currentMonth = months[months.length - 1];
-  }
+  if (!currentMonth) currentMonth = months[months.length - 1];
 
   if (settings.previousMonth) {
     previousMonth = months.find((m) => m.tabName === settings.previousMonth);
   }
-  if (!previousMonth) {
-    previousMonth = months.find((m) => m.tabName !== currentMonth?.tabName) ? months[months.length - 2] : undefined;
+  if (!previousMonth && currentMonth) {
+    const currentIndex = months.findIndex((m) => m.tabName === currentMonth?.tabName);
+    previousMonth = currentIndex > 0 ? months[currentIndex - 1] : undefined;
   }
 
   const roster = currentMonth.rows.map((r) => ({
@@ -190,6 +208,7 @@ export function computeSubjectAnalysis(
     { from: 26, to: 40, min: 31, max: 35 },
     { from: 41, to: 65, min: 25, max: 30 },
   ];
+
   [...students]
     .sort((a, b) => b.internalMarks.basic - a.internalMarks.basic || a.name.localeCompare(b.name))
     .forEach((student, index) => {
