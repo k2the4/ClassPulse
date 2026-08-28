@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { ArrowDown, BarChart3, BookOpen, GraduationCap, LayoutDashboard } from "lucide-react";
 
 export function StatCard({ label, value, positive }: { label: string; value: string | number; positive?: boolean }) {
   return (
@@ -34,31 +35,122 @@ export function GradeBadge({ grade }: { grade: string }) {
 
 export function RawDataButton({ sheetId }: { sheetId: string | null }) {
   const [sideNav, setSideNav] = useState<HTMLElement | null>(null);
+  const [standalone, setStandalone] = useState(false);
 
   useEffect(() => {
-    setSideNav(document.querySelector<HTMLElement>(".analysis-side-nav"));
+    const existing = document.querySelector<HTMLElement>(".analysis-side-nav");
+    if (existing) {
+      setSideNav(existing);
+      return;
+    }
+
+    if (!window.location.pathname.startsWith("/subject-analysis/")) return;
+
+    const root = document.querySelector<HTMLElement>(".min-h-screen.max-w-\\[1900px\\]");
+    if (root) root.classList.add("overall-analysis-root");
+    document.body.classList.add("overall-analysis-body");
+    setStandalone(true);
   }, []);
 
-  if (!sideNav) return null;
+  const rawLink = (
+    <a
+      href={sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : undefined}
+      target={sheetId ? "_blank" : undefined}
+      rel={sheetId ? "noopener noreferrer" : undefined}
+      aria-disabled={!sheetId}
+      className={`analysis-side-raw-button${sheetId ? "" : " is-loading"}`}
+    >
+      <ArrowDown size={16} strokeWidth={1.8} />
+      <span>Raw Data</span>
+    </a>
+  );
+
+  if (sideNav) return createPortal(rawLink, sideNav);
+  if (!standalone) return null;
 
   return createPortal(
-    <>
-      <a
-        href={sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : undefined}
-        target={sheetId ? "_blank" : undefined}
-        rel={sheetId ? "noopener noreferrer" : undefined}
-        aria-disabled={!sheetId}
-        className={`analysis-side-raw-button${sheetId ? "" : " is-loading"}`}
-      >
-        <span aria-hidden="true">↓</span>
-        <span>Raw Data</span>
-      </a>
+    <aside className="analysis-standalone-sidebar" aria-label="ClassPulse navigation">
+      <div className="analysis-brand">
+        <span className="analysis-brand__mark"><BarChart3 size={18} /></span>
+        <span>ClassPulse</span>
+      </div>
+      <nav className="analysis-side-nav analysis-standalone-nav">
+        <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
+        <a href="/classes"><BookOpen size={18} />Class Analysis</a>
+        <a className="is-active" href={window.location.pathname}><GraduationCap size={18} />Subject Analysis</a>
+        {rawLink}
+      </nav>
+      <div className="analysis-side-footer">ClassPulse Teacher Portal</div>
       <style jsx global>{`
-        .analysis-side-raw-button {
+        .overall-analysis-body { background: #faf9f5 !important; }
+        .overall-analysis-root {
+          width: calc(100% - 184px) !important;
+          max-width: 1900px !important;
+          margin-left: 184px !important;
+          margin-right: 0 !important;
+        }
+        .analysis-standalone-sidebar {
+          position: fixed;
+          z-index: 40;
+          inset: 0 auto 0 0;
+          width: 184px;
+          min-height: 100vh;
+          background: rgba(255,255,255,.97);
+          border-right: 1px solid #e3e7ed;
+          display: flex;
+          flex-direction: column;
+          padding: 24px 11px 14px;
+          box-sizing: border-box;
+        }
+        .analysis-standalone-sidebar .analysis-brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 0 10px;
+          margin-bottom: 30px;
+          color: #17223b;
+          font-size: 17px;
+          font-weight: 750;
+          letter-spacing: -.4px;
+        }
+        .analysis-standalone-sidebar .analysis-brand__mark {
+          width: 32px;
+          height: 32px;
+          border-radius: 9px;
+          display: grid;
+          place-items: center;
+          color: white;
+          background: linear-gradient(145deg,#3f2a8f,#4b2e91);
+          box-shadow: 0 9px 22px rgba(62,42,143,.2);
+        }
+        .analysis-standalone-nav { display: flex; flex-direction: column; gap: 5px; }
+        .analysis-standalone-nav > a:not(.analysis-side-raw-button) {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-height: 42px;
+          padding: 0 12px;
+          border-radius: 10px;
+          color: #667085;
+          font-size: 13px;
+          font-weight: 500;
+          transition: .18s ease;
+        }
+        .analysis-standalone-nav > a:not(.analysis-side-raw-button):hover {
+          background: #f5f3ff;
+          color: #33227f;
+        }
+        .analysis-standalone-nav > a.is-active {
+          background: #eeebfb;
+          color: #33227f;
+          font-weight: 650;
+        }
+        .analysis-standalone-nav > a.is-active svg { color: #3f2a9b; }
+        .analysis-standalone-nav .analysis-side-raw-button {
           display: flex !important;
           align-items: center !important;
           gap: 11px !important;
-          margin: 0 !important;
+          margin: 1px 0 0 !important;
           padding: 11px 12px !important;
           border-radius: 10px !important;
           color: #667085 !important;
@@ -68,27 +160,23 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
           text-decoration: none !important;
           transition: .18s !important;
         }
-        .analysis-side-raw-button:hover {
+        .analysis-standalone-nav .analysis-side-raw-button:hover {
           background: rgba(79,70,229,.06) !important;
-          color: #2d246f !important;
-          text-decoration: none !important;
+          color: #33227f !important;
         }
-        .analysis-side-raw-button > span:first-child {
-          width: 18px;
-          text-align: center;
-          font-size: 16px;
+        .analysis-standalone-sidebar .analysis-side-footer {
+          margin-top: auto;
+          padding: 16px 10px 7px;
+          border-top: 1px solid #e6e9ee;
+          color: #8b96a8;
+          font-size: 10px;
         }
-        .analysis-side-raw-button.is-loading {
-          cursor: default;
-          opacity: .65;
-          pointer-events: none;
-        }
-        @media (max-width: 1100px) {
-          .analysis-side-raw-button { display: none !important; }
+        @media (max-width: 900px) {
+          .overall-analysis-root { width: 100% !important; margin-left: 0 !important; }
+          .analysis-standalone-sidebar { display: none; }
         }
       `}</style>
-    </>
-    ,
-    sideNav
+    </aside>,
+    document.body
   );
 }
