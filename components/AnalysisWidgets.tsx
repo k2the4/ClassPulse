@@ -46,7 +46,9 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
 
     if (!window.location.pathname.startsWith("/subject-analysis/")) return;
 
-    const root = document.querySelector<HTMLElement>(".min-h-screen.max-w-\\[1900px\\]");
+    const root = document.querySelector<HTMLElement>("#\\_\\_next > div.min-h-screen.max-w-\\[1900px\\]")
+      || document.querySelector<HTMLElement>("div.min-h-screen.max-w-\\[1900px\\]")
+      || document.querySelector<HTMLElement>("#\\_\\_next > div.min-h-screen");
     if (root) root.classList.add("overall-analysis-root");
     document.body.classList.add("overall-analysis-body");
     setStandalone(true);
@@ -88,6 +90,29 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
           max-width: 1900px !important;
           margin-left: 184px !important;
           margin-right: 0 !important;
+        }
+        .overall-analysis-root > .bg-white,
+        .overall-analysis-root section.bg-white {
+          border-color: #dfe4eb !important;
+          box-shadow: 0 8px 28px rgba(25, 34, 59, .035) !important;
+        }
+        .overall-analysis-root button.bg-gray-900 {
+          background: #3f2a8f !important;
+          box-shadow: 0 8px 20px rgba(63,42,143,.18) !important;
+        }
+        .overall-analysis-root button.bg-gray-900:hover { background: #33227f !important; }
+        .overall-analysis-root button.bg-gray-100:hover { background: #f0edfb !important; color: #33227f !important; }
+        .overall-analysis-root input,
+        .overall-analysis-root select {
+          border-color: #d8e0ea;
+          border-radius: 9px;
+          background: #fff;
+        }
+        .overall-analysis-root input:focus,
+        .overall-analysis-root select:focus {
+          outline: none;
+          border-color: #4b2e91 !important;
+          box-shadow: 0 0 0 2px rgba(75,46,145,.12) !important;
         }
         .analysis-standalone-sidebar {
           position: fixed;
