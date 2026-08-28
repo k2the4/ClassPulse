@@ -11,7 +11,7 @@ type ExamKey = "midsem1" | "midsem2" | "combined" | "max";
 type Tier = "Excellent" | "Good" | "Needs Attention" | "Critical Risk";
 type CombinedSort = "combined" | "midsem1" | "midsem2" | "max";
 type SortOrder = "desc" | "asc" | "none";
-type SummaryExam = "combined" | "midsem1" | "midsem2";
+type SummaryExam = "combined" | "midsem1" | "midsem2" | "max";
 type SummarySort = "none" | "desc" | "asc";
 
 const MAX = 30;
@@ -40,6 +40,10 @@ function tierFor(marks: number): Tier {
   if (p >= 60) return "Good";
   if (p >= 40) return "Needs Attention";
   return "Critical Risk";
+}
+
+function gradeClass(tier: Tier) {
+  return tier === "Excellent" ? "excellent" : tier === "Good" ? "good" : tier === "Needs Attention" ? "attention" : "risk";
 }
 
 export default function SubjectAcademicPage() {
@@ -150,7 +154,7 @@ export default function SubjectAcademicPage() {
   const combinedHighestNames = combinedRows.filter((row) => row.combined === combinedHighest).map((row) => row.name);
 
   const summaryRows = useMemo(() => combinedRows.map((row) => {
-    const marks = summaryExam === "midsem1" ? row.first : summaryExam === "midsem2" ? row.second : row.combined;
+    const marks = summaryExam === "midsem1" ? row.first : summaryExam === "midsem2" ? row.second : summaryExam === "max" ? row.max : row.combined;
     return { ...row, marks, tier: tierFor(marks), change: round1(row.second - row.first) };
   }).filter((row) => {
     const lower = Number(summaryLower);
@@ -215,7 +219,7 @@ export default function SubjectAcademicPage() {
       </>}
 
       {data && view === "combined" && <>
-        <section className="analysis-hero">
+        <section className="analysis-hero combined-hero">
           <div className="analysis-hero-copy"><h2>Midsem Combined</h2><p>Compare both Midsem examinations in one view.</p></div>
           <Metric label="Students" value={combinedRows.length} detail="combined records" />
           <Metric label="Class Average" value={combinedAverage} detail="combined average" />
@@ -228,7 +232,7 @@ export default function SubjectAcademicPage() {
         <section className="combined-layout">
           <section className="analysis-panel analysis-table-panel combined-table-panel">
             <div className="analysis-panel-head"><div><h3>All Students</h3><p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>{selectedTier ? `Filtered: ${selectedTier}` : "Combined Midsem results"}</p></div><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{selectedTier && <button className="analysis-secondary" style={{ padding: "5px 8px" }} onClick={() => setSelectedTier(null)}><X size={13} />Clear</button>}<span className="analysis-count">{sortedCombinedRows.length} Students</span></div></div>
-            <div className="analysis-table-wrap combined-table-wrap"><table className="analysis-table"><thead><tr><th>Rank</th><th>Student</th><th>Midsem 1</th><th>Midsem 2</th><th>Combined</th><th>Max</th><th>Grade</th></tr></thead><tbody>{sortedCombinedRows.map((row, index) => { const tier = tierFor(row.combined); const rank = combinedRankRows.findIndex(r => r.enrollmentNo === row.enrollmentNo) + 1; return <tr key={row.enrollmentNo}><td>{sortOrder === "none" ? rank : index + 1}</td><td><span className="student-cell"><span className="student-avatar">{initials(row.name)}</span>{row.name}</span></td><td>{row.first}</td><td>{row.second}</td><td><strong>{row.combined}</strong></td><td>{row.max}</td><td><button type="button" className={`analysis-grade-badge ${tier === "Excellent" ? "excellent" : tier === "Good" ? "good" : tier === "Needs Attention" ? "attention" : "risk"}`} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)}>{tier}</button></td></tr>; })}{!sortedCombinedRows.length && <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match the selected filter.</td></tr>}</tbody></table></div>
+            <div className="analysis-table-wrap combined-table-wrap"><table className="analysis-table"><thead><tr><th>Rank</th><th>Student</th><th>Midsem 1</th><th>Midsem 2</th><th>Combined</th><th>Max</th><th>Grade</th></tr></thead><tbody>{sortedCombinedRows.map((row, index) => { const tier = tierFor(row.combined); const rank = combinedRankRows.findIndex(r => r.enrollmentNo === row.enrollmentNo) + 1; return <tr key={row.enrollmentNo}><td>{sortOrder === "none" ? rank : index + 1}</td><td><span className="student-cell"><span className="student-avatar">{initials(row.name)}</span>{row.name}</span></td><td className={`tier-mark ${gradeClass(tierFor(row.first))}`}>{row.first}</td><td className={`tier-mark ${gradeClass(tierFor(row.second))}`}>{row.second}</td><td className={`tier-mark ${gradeClass(tier)}`}><strong>{row.combined}</strong></td><td className={`tier-mark ${gradeClass(tierFor(row.max))}`}>{row.max}</td><td><button type="button" className={`analysis-grade-badge ${gradeClass(tier)}`} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)}>{tier}</button></td></tr>; })}{!sortedCombinedRows.length && <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match the selected filter.</td></tr>}</tbody></table></div>
           </section>
           <div className="combined-right-column">
             <section className="analysis-panel combined-chart-panel"><div className="combined-panel-title"><div><h3>Grade Distribution</h3><p>Click a bar to filter the table by performance tier.</p></div><span><strong>{combinedRows.length}</strong> Students</span></div><div className="combined-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={TIERS.map(t => ({ name: t, count: combinedCounts[t] }))} onClick={(state: any) => { const tier = state?.activeLabel as Tier | undefined; if (tier && TIERS.includes(tier)) setSelectedTier(selectedTier === tier ? null : tier); }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={10} /><YAxis allowDecimals={false} fontSize={11} /><Tooltip /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{TIERS.map(t => <Cell key={t} fill={COLORS[t]} cursor="pointer" opacity={!selectedTier || selectedTier === t ? 1 : .35} />)}</Bar></BarChart></ResponsiveContainer></div></section>
@@ -243,7 +247,7 @@ export default function SubjectAcademicPage() {
         <section className="summary-filter-panel analysis-panel">
           <div className="summary-filter-title"><div><h3>Filter Criteria</h3><p>Narrow the student list by examination, performance tier, marks range, and order.</p></div><button className="analysis-secondary" onClick={() => { setSummaryExam("combined"); setSummaryTier("all"); setSummaryLower("0"); setSummaryUpper("30"); setSummarySort("none"); }}>Reset</button></div>
           <div className="summary-filter-grid">
-            <label><span>Exam</span><select value={summaryExam} onChange={(e) => setSummaryExam(e.target.value as SummaryExam)}><option value="combined">Combined</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></label>
+            <label><span>Exam</span><select value={summaryExam} onChange={(e) => setSummaryExam(e.target.value as SummaryExam)}><option value="combined">Combined</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option><option value="max">Max</option></select></label>
             <label><span>Performance Tier</span><select value={summaryTier} onChange={(e) => setSummaryTier(e.target.value as Tier | "all")}><option value="all">All Tiers</option>{TIERS.map(t => <option key={t} value={t}>{t}</option>)}</select></label>
             <label><span>Lower Bound</span><input type="number" min="0" max="30" value={summaryLower} onChange={(e) => setSummaryLower(e.target.value)} /></label>
             <label><span>Upper Bound</span><input type="number" min="0" max="30" value={summaryUpper} onChange={(e) => setSummaryUpper(e.target.value)} /></label>
@@ -262,7 +266,7 @@ export default function SubjectAcademicPage() {
         <section className="summary-main-grid">
           <section className="analysis-panel summary-student-panel">
             <div className="analysis-panel-head"><div><h3>Filtered Students</h3><p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>Showing {summaryRows.length} of {students.length} students</p></div><span className="analysis-count">{summaryRows.length} Students</span></div>
-            <div className="analysis-table-wrap summary-table-wrap"><table className="analysis-table"><thead><tr><th>Enrollment</th><th>Student</th><th>Marks</th><th>Tier</th></tr></thead><tbody>{summaryRows.map(row => <tr key={row.enrollmentNo}><td>{row.enrollmentNo}</td><td><span className="student-cell"><span className="student-avatar">{initials(row.name)}</span>{row.name}</span></td><td><strong>{row.marks}</strong></td><td><button type="button" className={`analysis-grade-badge ${row.tier === "Excellent" ? "excellent" : row.tier === "Good" ? "good" : row.tier === "Needs Attention" ? "attention" : "risk"}`} onClick={() => setSummaryTier(summaryTier === row.tier ? "all" : row.tier)}>{row.tier}</button></td></tr>)}{!summaryRows.length && <tr><td colSpan={4} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match these filters.</td></tr>}</tbody></table></div>
+            <div className="analysis-table-wrap summary-table-wrap"><table className="analysis-table"><thead><tr><th>Enrollment</th><th>Student</th><th>Marks</th><th>Tier</th></tr></thead><tbody>{summaryRows.map(row => <tr key={row.enrollmentNo}><td>{row.enrollmentNo}</td><td><span className="student-cell"><span className="student-avatar">{initials(row.name)}</span>{row.name}</span></td><td className={`tier-mark ${gradeClass(row.tier)}`}><strong>{row.marks}</strong></td><td><button type="button" className={`analysis-grade-badge ${gradeClass(row.tier)}`} onClick={() => setSummaryTier(summaryTier === row.tier ? "all" : row.tier)}>{row.tier}</button></td></tr>)}{!summaryRows.length && <tr><td colSpan={4} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match these filters.</td></tr>}</tbody></table></div>
           </section>
 
           <div className="summary-right-column">
@@ -281,7 +285,12 @@ export default function SubjectAcademicPage() {
       .combined-control select:focus { border-color: #4b2e91; box-shadow: 0 0 0 2px rgba(75,46,145,.12); }
       .combined-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(360px, .95fr); gap: 16px; align-items: start; }
       .combined-table-wrap { min-height: 560px; max-height: 560px; }
+      .combined-table-panel .analysis-table { table-layout: fixed; }
       .combined-table-panel .analysis-table th, .combined-table-panel .analysis-table td { white-space: nowrap; }
+      .combined-table-panel .analysis-table th:nth-child(1), .combined-table-panel .analysis-table td:nth-child(1) { width: 55px; }
+      .combined-table-panel .analysis-table th:nth-child(2), .combined-table-panel .analysis-table td:nth-child(2) { width: 28%; }
+      .combined-table-panel .analysis-table th:nth-child(3), .combined-table-panel .analysis-table td:nth-child(3), .combined-table-panel .analysis-table th:nth-child(4), .combined-table-panel .analysis-table td:nth-child(4), .combined-table-panel .analysis-table th:nth-child(5), .combined-table-panel .analysis-table td:nth-child(5), .combined-table-panel .analysis-table th:nth-child(6), .combined-table-panel .analysis-table td:nth-child(6) { width: 11%; }
+      .combined-table-panel .analysis-table th:nth-child(7), .combined-table-panel .analysis-table td:nth-child(7) { width: 16%; }
       .combined-table-panel .analysis-table th:not(:nth-child(2)), .combined-table-panel .analysis-table td:not(:nth-child(2)) { text-align: center; }
       .combined-right-column { display: grid; gap: 16px; }
       .combined-chart-panel { padding: 18px; }
@@ -292,6 +301,16 @@ export default function SubjectAcademicPage() {
       .combined-panel-title > span strong { color: #344054; }
       .combined-chart { height: 300px; margin-top: 10px; }
       .combined-tier-panel { padding: 18px; }
+      .tier-mark { font-weight: 700; }
+      .tier-mark.excellent { color: #15966a !important; }
+      .tier-mark.good { color: #4d75d0 !important; }
+      .tier-mark.attention { color: #f59e0b !important; }
+      .tier-mark.risk { color: #ef4444 !important; }
+      .combined-hero .analysis-metric:nth-child(2), .summary-metric-grid .analysis-metric:nth-child(1) { border-top: 3px solid #4d75d0; }
+      .combined-hero .analysis-metric:nth-child(3), .summary-metric-grid .analysis-metric:nth-child(2) { border-top: 3px solid #15966a; }
+      .combined-hero .analysis-metric:nth-child(4), .summary-metric-grid .analysis-metric:nth-child(3) { border-top: 3px solid #f59e0b; }
+      .summary-metric-grid .analysis-metric:nth-child(4) { border-top: 3px solid #4d75d0; }
+      .summary-metric-grid .analysis-metric:nth-child(5) { border-top: 3px solid #15966a; }
 
       .summary-heading { margin: 4px 0 18px; }
       .summary-heading h2 { margin: 0; font-size: 22px; }
@@ -309,12 +328,17 @@ export default function SubjectAcademicPage() {
       .summary-main-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, .9fr); gap: 16px; align-items: start; }
       .summary-student-panel { min-width: 0; }
       .summary-table-wrap { max-height: 650px; min-height: 650px; overflow: auto; }
+      .summary-table-wrap .analysis-table { table-layout: fixed; }
       .summary-table-wrap .analysis-table th, .summary-table-wrap .analysis-table td { white-space: nowrap; }
+      .summary-table-wrap .analysis-table th:nth-child(1), .summary-table-wrap .analysis-table td:nth-child(1) { width: 24%; }
+      .summary-table-wrap .analysis-table th:nth-child(2), .summary-table-wrap .analysis-table td:nth-child(2) { width: 40%; }
+      .summary-table-wrap .analysis-table th:nth-child(3), .summary-table-wrap .analysis-table td:nth-child(3) { width: 16%; text-align: center; }
+      .summary-table-wrap .analysis-table th:nth-child(4), .summary-table-wrap .analysis-table td:nth-child(4) { width: 20%; text-align: center; }
       .summary-right-column { display: grid; gap: 16px; }
       .summary-rank-panel { padding: 18px; }
       .summary-rank-title h3 { margin: 0; }
       .summary-rank-title p { margin: 5px 0 12px; color: #98a2b3; font-size: 11px; }
-      .summary-rank-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eef1f5; font-size: 12px; }
+      .summary-rank-row { display: grid; grid-template-columns: 24px minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eef1f5; font-size: 12px; }
       .summary-rank-row:last-child { border-bottom: 0; }
       .summary-rank-row > span { color: #667085; }
       .summary-rank-row p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #344054; }
