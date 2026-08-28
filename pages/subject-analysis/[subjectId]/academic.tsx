@@ -11,6 +11,8 @@ type ExamKey = "midsem1" | "midsem2" | "combined" | "max";
 type Tier = "Excellent" | "Good" | "Needs Attention" | "Critical Risk";
 type CombinedSort = "combined" | "midsem1" | "midsem2" | "max";
 type SortOrder = "desc" | "asc" | "none";
+type SummaryExam = "combined" | "midsem1" | "midsem2";
+type SummarySort = "none" | "desc" | "asc";
 
 const MAX = 30;
 const TIERS: Tier[] = ["Excellent", "Good", "Needs Attention", "Critical Risk"];
@@ -53,6 +55,11 @@ export default function SubjectAcademicPage() {
   const [selectedTier, setSelectedTier] = useState<Tier | null>(null);
   const [combinedSort, setCombinedSort] = useState<CombinedSort>("combined");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [summaryExam, setSummaryExam] = useState<SummaryExam>("combined");
+  const [summaryTier, setSummaryTier] = useState<Tier | "all">("all");
+  const [summaryLower, setSummaryLower] = useState("0");
+  const [summaryUpper, setSummaryUpper] = useState("30");
+  const [summarySort, setSummarySort] = useState<SummarySort>("none");
 
   async function loadAnalysis(sync = false) {
     if (!subjectId || typeof subjectId !== "string") return;
@@ -142,6 +149,25 @@ export default function SubjectAcademicPage() {
   const combinedHighest = combinedRows.length ? Math.max(...combinedRows.map((row) => row.combined)) : 0;
   const combinedHighestNames = combinedRows.filter((row) => row.combined === combinedHighest).map((row) => row.name);
 
+  const summaryRows = useMemo(() => combinedRows.map((row) => {
+    const marks = summaryExam === "midsem1" ? row.first : summaryExam === "midsem2" ? row.second : row.combined;
+    return { ...row, marks, tier: tierFor(marks), change: round1(row.second - row.first) };
+  }).filter((row) => {
+    const lower = Number(summaryLower);
+    const upper = Number(summaryUpper);
+    return row.marks >= (Number.isFinite(lower) ? lower : 0) && row.marks <= (Number.isFinite(upper) ? upper : MAX) && (summaryTier === "all" || row.tier === summaryTier);
+  }).sort((a, b) => {
+    if (summarySort === "none") return 0;
+    return summarySort === "desc" ? b.marks - a.marks : a.marks - b.marks;
+  }), [combinedRows, summaryExam, summaryTier, summaryLower, summaryUpper, summarySort]);
+
+  const summaryAverage = combinedRows.length ? round1(combinedRows.reduce((sum, row) => sum + row.combined, 0) / combinedRows.length) : 0;
+  const summaryPassRate = combinedRows.length ? Math.round(combinedRows.filter((row) => row.combined >= 12).length / combinedRows.length * 100) : 0;
+  const midsem1Average = midsem1.average;
+  const midsem2Average = midsem2.average;
+  const increases = [...combinedRows].map((row) => ({ ...row, change: round1(row.second - row.first) })).filter((row) => row.change > 0).sort((a, b) => b.change - a.change).slice(0, 5);
+  const decreases = [...combinedRows].map((row) => ({ ...row, change: round1(row.second - row.first) })).filter((row) => row.change < 0).sort((a, b) => a.change - b.change).slice(0, 5);
+
   return <div className="analysis-layout">
     <aside className="analysis-sidebar">
       <div className="analysis-brand"><span className="analysis-brand__mark"><BarChart3 size={18} /></span><span>ClassPulse</span></div>
@@ -195,18 +221,15 @@ export default function SubjectAcademicPage() {
           <Metric label="Class Average" value={combinedAverage} detail="combined average" />
           <Metric label="Best Score" value={combinedHighest} detail={combinedHighestNames.join(", ") || "best individual result"} />
         </section>
-
         <section className="combined-controls-bar">
           <div className="combined-control"><label htmlFor="combined-sort-field">Grade / Sort By</label><select id="combined-sort-field" value={combinedSort} onChange={(e) => setCombinedSort(e.target.value as CombinedSort)}><option value="combined">Combined (average)</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option><option value="max">Maximum score</option></select></div>
           <div className="combined-control"><label htmlFor="combined-sort-order">Order</label><select id="combined-sort-order" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)}><option value="desc">High to Low</option><option value="asc">Low to High</option><option value="none">No Sort</option></select></div>
         </section>
-
         <section className="combined-layout">
           <section className="analysis-panel analysis-table-panel combined-table-panel">
             <div className="analysis-panel-head"><div><h3>All Students</h3><p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>{selectedTier ? `Filtered: ${selectedTier}` : "Combined Midsem results"}</p></div><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{selectedTier && <button className="analysis-secondary" style={{ padding: "5px 8px" }} onClick={() => setSelectedTier(null)}><X size={13} />Clear</button>}<span className="analysis-count">{sortedCombinedRows.length} Students</span></div></div>
             <div className="analysis-table-wrap combined-table-wrap"><table className="analysis-table"><thead><tr><th>Rank</th><th>Student</th><th>Midsem 1</th><th>Midsem 2</th><th>Combined</th><th>Max</th><th>Grade</th></tr></thead><tbody>{sortedCombinedRows.map((row, index) => { const tier = tierFor(row.combined); const rank = combinedRankRows.findIndex(r => r.enrollmentNo === row.enrollmentNo) + 1; return <tr key={row.enrollmentNo}><td>{sortOrder === "none" ? rank : index + 1}</td><td><span className="student-cell"><span className="student-avatar">{initials(row.name)}</span>{row.name}</span></td><td>{row.first}</td><td>{row.second}</td><td><strong>{row.combined}</strong></td><td>{row.max}</td><td><button type="button" className={`analysis-grade-badge ${tier === "Excellent" ? "excellent" : tier === "Good" ? "good" : tier === "Needs Attention" ? "attention" : "risk"}`} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)}>{tier}</button></td></tr>; })}{!sortedCombinedRows.length && <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match the selected filter.</td></tr>}</tbody></table></div>
           </section>
-
           <div className="combined-right-column">
             <section className="analysis-panel combined-chart-panel"><div className="combined-panel-title"><div><h3>Grade Distribution</h3><p>Click a bar to filter the table by performance tier.</p></div><span><strong>{combinedRows.length}</strong> Students</span></div><div className="combined-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={TIERS.map(t => ({ name: t, count: combinedCounts[t] }))} onClick={(state: any) => { const tier = state?.activeLabel as Tier | undefined; if (tier && TIERS.includes(tier)) setSelectedTier(selectedTier === tier ? null : tier); }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={10} /><YAxis allowDecimals={false} fontSize={11} /><Tooltip /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{TIERS.map(t => <Cell key={t} fill={COLORS[t]} cursor="pointer" opacity={!selectedTier || selectedTier === t ? 1 : .35} />)}</Bar></BarChart></ResponsiveContainer></div></section>
             <section className="analysis-panel combined-tier-panel"><h3>Performance Tiers</h3><div className="academic-tier-grid">{TIERS.map(t => <button key={t} type="button" className="academic-tier-card" onClick={() => setSelectedTier(selectedTier === t ? null : t)} style={{ borderColor: `${COLORS[t]}55`, cursor: "pointer", boxShadow: selectedTier === t ? `0 0 0 2px ${COLORS[t]}33` : undefined }}><span>{t}</span><strong style={{ color: COLORS[t] }}>{combinedCounts[t]}</strong></button>)}</div></section>
@@ -215,7 +238,39 @@ export default function SubjectAcademicPage() {
         </section>
       </>}
 
-      {data && view === "summary" && <section className="analysis-content-grid"><section className="analysis-panel analysis-table-panel"><div className="analysis-panel-head"><h3>Academic Summary</h3><span className="analysis-count">{students.length} Students</span></div><div className="analysis-table-wrap academic-table-wrap"><table className="analysis-table"><thead><tr><th>Student</th><th>Midsem 1</th><th>Midsem 2</th><th>Change</th></tr></thead><tbody>{combinedRows.map(r => { const c = round1(r.second - r.first); return <tr key={r.enrollmentNo}><td className="student-cell">{r.name}</td><td>{r.first}</td><td>{r.second}</td><td className={c >= 0 ? "change-up" : "change-down"}>{c > 0 ? "+" : ""}{c}</td></tr>; })}</tbody></table></div></section><section className="analysis-panel analysis-chart-panel"><h3>Combined Grade Distribution</h3><p>Students grouped by their combined Midsem performance.</p><div className="analysis-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={TIERS.map(t => ({ name: t, count: combinedCounts[t] }))}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={10} /><YAxis allowDecimals={false} fontSize={11} /><Tooltip /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{TIERS.map(t => <Cell key={t} fill={COLORS[t]} />)}</Bar></BarChart></ResponsiveContainer></div></section></section>}
+      {data && view === "summary" && <>
+        <section className="summary-heading"><div><h2>Academic Summary</h2><p>Compare Midsem 1 and Midsem 2 with the same ClassPulse academic analysis theme.</p></div></section>
+        <section className="summary-filter-panel analysis-panel">
+          <div className="summary-filter-title"><div><h3>Filter Criteria</h3><p>Narrow the student list by examination, performance tier, marks range, and order.</p></div><button className="analysis-secondary" onClick={() => { setSummaryExam("combined"); setSummaryTier("all"); setSummaryLower("0"); setSummaryUpper("30"); setSummarySort("none"); }}>Reset</button></div>
+          <div className="summary-filter-grid">
+            <label><span>Exam</span><select value={summaryExam} onChange={(e) => setSummaryExam(e.target.value as SummaryExam)}><option value="combined">Combined</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></label>
+            <label><span>Performance Tier</span><select value={summaryTier} onChange={(e) => setSummaryTier(e.target.value as Tier | "all")}><option value="all">All Tiers</option>{TIERS.map(t => <option key={t} value={t}>{t}</option>)}</select></label>
+            <label><span>Lower Bound</span><input type="number" min="0" max="30" value={summaryLower} onChange={(e) => setSummaryLower(e.target.value)} /></label>
+            <label><span>Upper Bound</span><input type="number" min="0" max="30" value={summaryUpper} onChange={(e) => setSummaryUpper(e.target.value)} /></label>
+            <label><span>Sort</span><select value={summarySort} onChange={(e) => setSummarySort(e.target.value as SummarySort)}><option value="none">No Sort</option><option value="desc">High to Low</option><option value="asc">Low to High</option></select></label>
+          </div>
+        </section>
+
+        <section className="summary-metric-grid">
+          <Metric label="Overall Class Average" value={summaryAverage} detail="combined average" />
+          <Metric label="Highest Combined Score" value={combinedHighest} detail={combinedHighestNames[0] || "—"} />
+          <Metric label="Overall Pass Rate" value={`${summaryPassRate}%`} detail="students scoring 12 or more" />
+          <Metric label="Midsem 1 Average" value={midsem1Average} detail="out of 30 marks" />
+          <Metric label="Midsem 2 Average" value={midsem2Average} detail="out of 30 marks" />
+        </section>
+
+        <section className="summary-main-grid">
+          <section className="analysis-panel summary-student-panel">
+            <div className="analysis-panel-head"><div><h3>Filtered Students</h3><p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>Showing {summaryRows.length} of {students.length} students</p></div><span className="analysis-count">{summaryRows.length} Students</span></div>
+            <div className="analysis-table-wrap summary-table-wrap"><table className="analysis-table"><thead><tr><th>Enrollment</th><th>Student</th><th>Marks</th><th>Tier</th></tr></thead><tbody>{summaryRows.map(row => <tr key={row.enrollmentNo}><td>{row.enrollmentNo}</td><td><span className="student-cell"><span className="student-avatar">{initials(row.name)}</span>{row.name}</span></td><td><strong>{row.marks}</strong></td><td><button type="button" className={`analysis-grade-badge ${row.tier === "Excellent" ? "excellent" : row.tier === "Good" ? "good" : row.tier === "Needs Attention" ? "attention" : "risk"}`} onClick={() => setSummaryTier(summaryTier === row.tier ? "all" : row.tier)}>{row.tier}</button></td></tr>)}{!summaryRows.length && <tr><td colSpan={4} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match these filters.</td></tr>}</tbody></table></div>
+          </section>
+
+          <div className="summary-right-column">
+            <section className="analysis-panel summary-rank-panel"><div className="summary-rank-title"><div><h3>Marks Increase (Top 5)</h3><p>Students whose Midsem 2 score improved.</p></div></div>{increases.length ? increases.map((row, i) => <div className="summary-rank-row" key={row.enrollmentNo}><span>{i + 1}.</span><p>{row.name}</p><strong className="change-up">+{row.change}</strong></div>) : <p className="summary-empty">No increases.</p>}</section>
+            <section className="analysis-panel summary-rank-panel"><div className="summary-rank-title"><div><h3>Marks Decrease (Top 5)</h3><p>Students whose Midsem 2 score fell.</p></div></div>{decreases.length ? decreases.map((row, i) => <div className="summary-rank-row" key={row.enrollmentNo}><span>{i + 1}.</span><p>{row.name}</p><strong className="change-down">{row.change}</strong></div>) : <p className="summary-empty">No decreases.</p>}</section>
+          </div>
+        </section>
+      </>}
     </main>
 
     <style jsx global>{`
@@ -237,9 +292,53 @@ export default function SubjectAcademicPage() {
       .combined-panel-title > span strong { color: #344054; }
       .combined-chart { height: 300px; margin-top: 10px; }
       .combined-tier-panel { padding: 18px; }
-      @media (max-width: 1200px) { .combined-layout { grid-template-columns: 1fr; } .combined-right-column { grid-template-columns: 1fr 1fr; } .combined-right-column .academic-rank-grid { grid-column: 1 / -1; } }
-      @media (max-width: 800px) { .combined-controls-bar { justify-content: flex-start; } .combined-layout { grid-template-columns: 1fr; } .combined-right-column { grid-template-columns: 1fr; } .combined-control { min-width: 0; flex: 1; } .combined-table-wrap { min-height: 480px; max-height: 480px; } }
-      @media (max-width: 600px) { .combined-controls-bar { flex-direction: column; align-items: stretch; } }
+
+      .summary-heading { margin: 4px 0 18px; }
+      .summary-heading h2 { margin: 0; font-size: 22px; }
+      .summary-heading p { margin: 6px 0 0; color: #667085; font-size: 13px; }
+      .summary-filter-panel { padding: 18px; margin-bottom: 16px; }
+      .summary-filter-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+      .summary-filter-title h3 { margin: 0; }
+      .summary-filter-title p { margin: 5px 0 0; color: #98a2b3; font-size: 11px; }
+      .summary-filter-grid { display: grid; grid-template-columns: 1.1fr 1.1fr .8fr .8fr 1fr; gap: 12px; }
+      .summary-filter-grid label { display: block; }
+      .summary-filter-grid label > span { display: block; margin: 0 0 7px; color: #667085; font-size: 11px; font-weight: 600; }
+      .summary-filter-grid select, .summary-filter-grid input { width: 100%; height: 40px; border: 1px solid #d8e0ea; border-radius: 9px; background: #fff; color: #344054; padding: 0 12px; font-size: 13px; outline: none; box-sizing: border-box; }
+      .summary-filter-grid select:focus, .summary-filter-grid input:focus { border-color: #4b2e91; box-shadow: 0 0 0 2px rgba(75,46,145,.12); }
+      .summary-metric-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+      .summary-main-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, .9fr); gap: 16px; align-items: start; }
+      .summary-student-panel { min-width: 0; }
+      .summary-table-wrap { max-height: 650px; min-height: 650px; overflow: auto; }
+      .summary-table-wrap .analysis-table th, .summary-table-wrap .analysis-table td { white-space: nowrap; }
+      .summary-right-column { display: grid; gap: 16px; }
+      .summary-rank-panel { padding: 18px; }
+      .summary-rank-title h3 { margin: 0; }
+      .summary-rank-title p { margin: 5px 0 12px; color: #98a2b3; font-size: 11px; }
+      .summary-rank-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eef1f5; font-size: 12px; }
+      .summary-rank-row:last-child { border-bottom: 0; }
+      .summary-rank-row > span { color: #667085; }
+      .summary-rank-row p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #344054; }
+      .summary-rank-row strong { font-size: 12px; }
+      .summary-empty { color: #98a2b3; font-size: 12px; margin: 10px 0 0; }
+
+      @media (max-width: 1200px) {
+        .combined-layout, .summary-main-grid { grid-template-columns: 1fr; }
+        .combined-right-column { grid-template-columns: 1fr 1fr; }
+        .combined-right-column .academic-rank-grid { grid-column: 1 / -1; }
+        .summary-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .summary-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
+      @media (max-width: 800px) {
+        .combined-controls-bar { justify-content: flex-start; }
+        .combined-layout, .summary-main-grid { grid-template-columns: 1fr; }
+        .combined-right-column, .summary-metric-grid, .summary-filter-grid { grid-template-columns: 1fr; }
+        .combined-control { min-width: 0; flex: 1; }
+        .combined-table-wrap, .summary-table-wrap { min-height: 480px; max-height: 480px; }
+      }
+      @media (max-width: 600px) {
+        .combined-controls-bar { flex-direction: column; align-items: stretch; }
+        .summary-filter-title { flex-direction: column; }
+      }
     `}</style>
   </div>;
 }
