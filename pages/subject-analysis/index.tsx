@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 import Link from "next/link";
+import { useState } from "react";
 import { BookOpen, ArrowLeft, ArrowRight, BarChart3 } from "lucide-react";
 
 interface SubjectOption {
@@ -24,8 +25,7 @@ interface Props {
 }
 
 export default function SubjectAnalysisChooser({ teacherName, classes, subjects }: Props) {
-  const firstClass = classes[0]?.id || "";
-  const [selectedClass, setSelectedClass] = require("react").useState(firstClass);
+  const [selectedClass, setSelectedClass] = useState(classes[0]?.id || "");
   const selectedSubjects = subjects.filter((subject) => subject.sectionId === selectedClass);
 
   return (
@@ -135,10 +135,11 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 
   const classMap = new Map<string, ClassOption>();
   for (const subject of subjectsRaw) {
-    const sectionClass = subject.section.class;
-    classMap.set(sectionClass.id, {
-      id: subject.section.id,
-      label: `${sectionClass.department.name} — ${sectionClass.program}, Sem ${sectionClass.semester}, Section ${subject.section.name}`,
+    const section = subject.section;
+    const sectionClass = section.class;
+    classMap.set(section.id, {
+      id: section.id,
+      label: `${sectionClass.department.name} — ${sectionClass.program}, Sem ${sectionClass.semester}, Section ${section.name}`,
     });
   }
 
