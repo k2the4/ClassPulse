@@ -1,15 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
-type SubjectSeed = {
-  name: string;
-  code: string;
-};
+type SubjectSeed = { name: string; code: string };
 
 const prisma = new PrismaClient();
 
-// Theory subjects supplied for the ECE curriculum.
-// Labs are intentionally excluded for now.
+// Theory subjects supplied for the ECE curriculum. Labs are intentionally excluded.
 const subjectsBySemester: Record<number, SubjectSeed[]> = {
   1: [
     { name: "Environmental Studies", code: "SEM1-ENVIRONMENTAL-STUDIES" },
@@ -63,7 +59,6 @@ const subjectsBySemester: Record<number, SubjectSeed[]> = {
     { name: "DA", code: "DA 338 T" },
   ],
   7: [
-    // The supplied timetable identifies these subjects by these abbreviations only.
     { name: "MLDA", code: "MLDA" },
     { name: "IOT", code: "IOT" },
     { name: "PR", code: "PR" },
@@ -89,26 +84,15 @@ async function main() {
     create: { id: "demo-college", name: "Demo Institute of Technology" },
   });
 
-  const existingDepartment = await prisma.department.findFirst({
-    where: { collegeId: college.id, name: "ECE" },
-  });
-
   const eceDepartment =
-    existingDepartment ??
-    (await prisma.department.create({
-      data: { name: "ECE", collegeId: college.id },
-    }));
+    (await prisma.department.findFirst({ where: { collegeId: college.id, name: "ECE" } })) ??
+    (await prisma.department.create({ data: { name: "ECE", collegeId: college.id } }));
 
   const passwordHash = await bcrypt.hash("changeme123", 10);
 
   const teacher = await prisma.user.upsert({
     where: { email: "geetanjali@demo.edu" },
-    update: {
-      name: "Dr. Geetanjali",
-      passwordHash,
-      role: "TEACHER",
-      collegeId: college.id,
-    },
+    update: { name: "Dr. Geetanjali", passwordHash, role: "TEACHER", collegeId: college.id },
     create: {
       name: "Dr. Geetanjali",
       email: "geetanjali@demo.edu",
@@ -120,12 +104,7 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "admin@demo.edu" },
-    update: {
-      name: "College Admin",
-      passwordHash,
-      role: "ADMIN",
-      collegeId: college.id,
-    },
+    update: { name: "College Admin", passwordHash, role: "ADMIN", collegeId: college.id },
     create: {
       name: "College Admin",
       email: "admin@demo.edu",
@@ -135,29 +114,25 @@ async function main() {
     },
   });
 
-  // Create all three ECE batches for Semesters 1-7.
+  // Create the three ECE batches for Semesters 1-7.
   // Semester 8 intentionally has no regular subjects.
   for (const batch of eceBatches) {
     for (let semester = 1; semester <= 7; semester += 1) {
       const program = `B.Tech ${batch}`;
       const isLegacyEce2Sem7 = batch === "ECE 2" && semester === 7;
 
-      // The original demo seed created "B.Tech ECE" for Sem 7.
-      // Reuse that record as ECE 2 instead of leaving a duplicate class behind.
-      const existingClass = await prisma.class.findFirst({
-        where: {
-          departmentId: eceDepartment.id,
-          academicYear: "2026-27",
-          semester,
-          OR: [
-            { program },
-            ...(isLegacyEce2Sem7 ? [{ program: "B.Tech ECE" }] : []),
-          ],
-        },
-      });
-
       const cls =
-        existingClass ??
+        (await prisma.class.findFirst({
+          where: {
+            departmentId: eceDepartment.id,
+            academicYear: "2026-27",
+            semester,
+            OR: [
+              { program },
+              ...(isLegacyEce2Sem7 ? [{ program: "B.Tech ECE" }] : []),
+            ],
+          },
+        })) ??
         (await prisma.class.create({
           data: {
             departmentId: eceDepartment.id,
@@ -169,7 +144,7 @@ async function main() {
           },
         }));
 
-      if (cls.program !== program) {
+      if (cls.program !== program || cls.year !== yearForSemester(semester)) {
         await prisma.class.update({
           where: { id: cls.id },
           data: {
@@ -181,9 +156,7 @@ async function main() {
       }
 
       const section =
-        (await prisma.section.findFirst({
-          where: { classId: cls.id, name: "A" },
-        })) ??
+        (await prisma.section.findFirst({ where: { classId: cls.id, name: "A" } })) ??
         (await prisma.section.create({
           data: {
             classId: cls.id,
@@ -192,32 +165,24 @@ async function main() {
           },
         }));
 
-      if (batch === "ECE 2" && semester === 7) {
-        await prisma.section.update({
-          where: { id: section.id },
-          data: { strength: 65 },
-        });
+      if (batch === "ECE 2" && semester === 7 && section.strength !== 65) {
+        await prisma.section.update({ where: { id: section.id }, data: { strength: 65 } });
       }
 
       for (const subject of subjectsBySemester[semester]) {
-        const existingSubject = await prisma.subject.findFirst({
+        const existing = await prisma.subject.findFirst({
           where: { sectionId: section.id, code: subject.code },
         });
-
-        if (!existingSubject) {
+        if (!existing) {
           await prisma.subject.create({
-            data: {
-              name: subject.name,
-              code: subject.code,
-              sectionId: section.id,
-            },
+            data: { name: subject.name, code: subject.code, sectionId: section.id },
           });
         }
       }
     }
   }
 
-  // Keep the existing ECE 2 Sem 7 / Section A demo data and its sheet links.
+  // Preserve the existing ECE 2 / Sem 7 / Section A demo SheetLinks.
   const demoClass = await prisma.class.findFirst({
     where: {
       departmentId: eceDepartment.id,
@@ -226,65 +191,37 @@ async function main() {
       semester: 7,
     },
   });
-
   const demoSection = demoClass
     ? await prisma.section.findFirst({ where: { classId: demoClass.id, name: "A" } })
     : null;
 
   if (demoSection) {
-    await prisma.section.update({
-      where: { id: demoSection.id },
-      data: { strength: 65 },
-    });
-
     const daSubject = await prisma.subject.findFirst({
       where: { sectionId: demoSection.id, code: "DA 338 T" },
     });
-
     if (daSubject) {
-      const assignment = await prisma.assignment.findFirst({
-        where: { teacherId: teacher.id, subjectId: daSubject.id },
+      await prisma.assignment.upsert({
+        where: { teacherId_subjectId: { teacherId: teacher.id, subjectId: daSubject.id } },
+        update: {},
+        create: { teacherId: teacher.id, subjectId: daSubject.id },
       });
-
-      if (!assignment) {
-        await prisma.assignment.create({
-          data: { teacherId: teacher.id, subjectId: daSubject.id },
-        });
-      }
-
-      const subjectSheet = await prisma.sheetLink.findFirst({
+      await prisma.sheetLink.upsert({
         where: { subjectId: daSubject.id },
+        update: {},
+        create: { subjectId: daSubject.id, sheetId: "118662A6Ifl2GDZKnh120v2jNylUiMWGNYThfRXSDX6U" },
       });
-
-      if (!subjectSheet) {
-        await prisma.sheetLink.create({
-          data: {
-            subjectId: daSubject.id,
-            sheetId: "118662A6Ifl2GDZKnh120v2jNylUiMWGNYThfRXSDX6U",
-          },
-        });
-      }
     }
-
-    const sectionSheet = await prisma.sheetLink.findFirst({
+    await prisma.sheetLink.upsert({
       where: { sectionId: demoSection.id },
+      update: {},
+      create: { sectionId: demoSection.id, sheetId: "1DM3brNxfdWl0I4r9cbffjh_PlXaWaTsM" },
     });
-
-    if (!sectionSheet) {
-      await prisma.sheetLink.create({
-        data: {
-          sectionId: demoSection.id,
-          sheetId: "1DM3brNxfdWl0I4r9cbffjh_PlXaWaTsM",
-        },
-      });
-    }
   }
 
   console.log("Seed complete.");
   console.log("Created/updated ECE 1, ECE 2 and ECE E for Semesters 1-7.");
-  console.log("Semester 8 intentionally has no subjects.");
-  console.log("Labs are intentionally excluded.");
-  console.log("Login as: geetanjali@demo.edu / changeme123");
+  console.log("Semester 8 intentionally has no subjects; labs are excluded.");
+  console.log("Login: geetanjali@demo.edu / changeme123");
   console.log("Admin: admin@demo.edu / changeme123");
 }
 
@@ -293,6 +230,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(async () => prisma.$disconnect());
