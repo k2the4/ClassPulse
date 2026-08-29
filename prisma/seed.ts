@@ -4,7 +4,9 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  const college = await prisma.college.create({ data: { name: "Demo Institute of Technology" });
+  const college = await prisma.college.create({
+    data: { name: "Demo Institute of Technology" },
+  });
 
   const dept = await prisma.department.create({
     data: { name: "ECE", collegeId: college.id },
