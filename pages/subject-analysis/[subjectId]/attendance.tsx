@@ -29,6 +29,10 @@ export default function SubjectAttendancePage() {
   const [upperBound, setUpperBound] = useState(100);
   const [riskTrendFilter, setRiskTrendFilter] = useState("All");
   const [riskMonth, setRiskMonth] = useState<"previous" | "current">("current");
+  const [draftLowerBound, setDraftLowerBound] = useState(0);
+  const [draftUpperBound, setDraftUpperBound] = useState(100);
+  const [draftRiskTrendFilter, setDraftRiskTrendFilter] = useState("All");
+  const [draftRiskMonth, setDraftRiskMonth] = useState<"previous" | "current">("current");
   const [copied, setCopied] = useState(false);
 
   async function loadAnalysis(sync = false, previous = previousMonth, current = currentMonth, criteria = trendCriteria) {
@@ -87,10 +91,36 @@ export default function SubjectAttendancePage() {
   ];
 
   function openRisk(options: { trend?: string; lower?: number; upper?: number }) {
-    setRiskTrendFilter(options.trend || "All");
-    setLowerBound(options.lower ?? 0);
-    setUpperBound(options.upper ?? 100);
+    const nextTrend = options.trend || "All";
+    const nextLower = options.lower ?? 0;
+    const nextUpper = options.upper ?? 100;
+    setDraftRiskTrendFilter(nextTrend);
+    setDraftLowerBound(nextLower);
+    setDraftUpperBound(nextUpper);
+    setRiskTrendFilter(nextTrend);
+    setLowerBound(nextLower);
+    setUpperBound(nextUpper);
     setView("risk");
+  }
+
+  function applyRiskFilters() {
+    const lo = Math.max(0, Math.min(100, Math.min(draftLowerBound, draftUpperBound)));
+    const hi = Math.max(0, Math.min(100, Math.max(draftLowerBound, draftUpperBound)));
+    setLowerBound(lo);
+    setUpperBound(hi);
+    setRiskTrendFilter(draftRiskTrendFilter);
+    setRiskMonth(draftRiskMonth);
+  }
+
+  function resetRiskFilters() {
+    setLowerBound(0);
+    setUpperBound(100);
+    setRiskTrendFilter("All");
+    setRiskMonth("current");
+    setDraftLowerBound(0);
+    setDraftUpperBound(100);
+    setDraftRiskTrendFilter("All");
+    setDraftRiskMonth("current");
   }
 
   async function copyEmails() {
@@ -142,7 +172,7 @@ export default function SubjectAttendancePage() {
             <h2>Attendance Trend</h2>
             <p>Compare attendance between two months and identify increasing, decreasing, and stable students.</p>
           </div>
-          <Metric icon={<Users size={19} />} label={`Class Average (${previousMonth || "Previous"})`} value={`${previousAverage}%`} change={averageChange} />
+          <Metric icon={<Users size={19} />} label={`Class Average (${previousMonth || "Previous"})`} value={`${previousAverage}%`} />
           <Metric icon={<Gauge size={19} />} label={`Class Average (${currentMonth || "Current"})`} value={`${currentAverage}%`} change={averageChange} />
           <Metric icon={<Sparkles size={19} />} label="Students Improving" value={improvingCount} detail={`${students.length ? round1((improvingCount / students.length) * 100) : 0}% of total students`} good />
         </section>
@@ -212,13 +242,14 @@ export default function SubjectAttendancePage() {
         <section className="analysis-panel analysis-settings">
           <div className="analysis-panel-head" style={{ marginBottom: 18 }}>
             <div><h3>Filter Criteria</h3><p style={{ margin: "5px 0 0", color: "#667085", fontSize: 12 }}>Narrow the list before copying addresses or sending alerts.</p></div>
-            <button className="analysis-secondary" onClick={() => { setLowerBound(0); setUpperBound(100); setRiskTrendFilter("All"); setRiskMonth("current"); }}><RefreshCw size={14} />Reset</button>
+            <button className="analysis-secondary" onClick={resetRiskFilters}><RefreshCw size={14} />Reset</button>
           </div>
           <div className="analysis-settings-grid">
-            <div><label>Lower Bound (%)</label><input type="number" min="0" max="100" value={lowerBound} onChange={(e) => setLowerBound(Math.max(0, Math.min(100, Number(e.target.value))))} /></div>
-            <div><label>Upper Bound (%)</label><input type="number" min="0" max="100" value={upperBound} onChange={(e) => setUpperBound(Math.max(0, Math.min(100, Number(e.target.value))))} /></div>
-            <div><label>Trend</label><select value={riskTrendFilter} onChange={(e) => setRiskTrendFilter(e.target.value)}><option>All</option><option>Increasing</option><option>Decreasing</option><option>Stable</option></select></div>
-            <div><label>Month</label><select value={riskMonth} onChange={(e) => setRiskMonth(e.target.value as "previous" | "current")}><option value="current">{currentMonth}</option><option value="previous">{previousMonth}</option></select></div>
+            <div><label>Lower Bound (%)</label><input type="number" min="0" max="100" value={draftLowerBound} onChange={(e) => setDraftLowerBound(Math.max(0, Math.min(100, Number(e.target.value))))} /></div>
+            <div><label>Upper Bound (%)</label><input type="number" min="0" max="100" value={draftUpperBound} onChange={(e) => setDraftUpperBound(Math.max(0, Math.min(100, Number(e.target.value))))} /></div>
+            <div><label>Trend</label><select value={draftRiskTrendFilter} onChange={(e) => setDraftRiskTrendFilter(e.target.value)}><option>All</option><option>Increasing</option><option>Decreasing</option><option>Stable</option></select></div>
+            <div><label>Month</label><select value={draftRiskMonth} onChange={(e) => setDraftRiskMonth(e.target.value as "previous" | "current")}><option value="current">{currentMonth}</option><option value="previous">{previousMonth}</option></select></div>
+            <button className="analysis-primary" onClick={applyRiskFilters}><SlidersHorizontal size={15} />Apply</button>
           </div>
         </section>
 
