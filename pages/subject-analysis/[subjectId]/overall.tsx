@@ -151,7 +151,7 @@ export default function SubjectOverallPage() {
     if (sortDirection === "none") return rows.sort((a, b) => a.originalIndex - b.originalIndex);
     return rows.sort((a: any, b: any) => ((sortDirection === "asc" ? a[riskColumn] - b[riskColumn] : b[riskColumn] - a[riskColumn]) || a.name.localeCompare(b.name)));
   }, [baseRows, riskColumn, riskLower, riskUpper, sortDirection]);
-  const topFive = useMemo(() => [...filteredRiskRows].sort((a, b) => columnValue(b, riskColumn) - columnValue(a, riskColumn)).slice(0, 5), [filteredRiskRows, riskColumn]);
+  const topFive = useMemo(() => [...baseRows].sort((a, b) => columnValue(b, riskColumn) - columnValue(a, riskColumn) || a.originalIndex - b.originalIndex).slice(0, 5), [baseRows, riskColumn]);
   const riskDistribution = useMemo(() => [
     { name: "Excellent", value: baseRows.filter(r => columnValue(r, riskColumn) > 32).length, lower: 32.0001, upper: 40 },
     { name: "Good", value: baseRows.filter(r => { const v = columnValue(r, riskColumn); return v >= 24 && v <= 32; }).length, lower: 24, upper: 32 },
@@ -204,11 +204,13 @@ export default function SubjectOverallPage() {
           <section className="at-risk-filter rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="at-risk-filter-inner">
               <div className="at-risk-filter-title"><h3>At-Risk Filters</h3><p>Choose a mark column, range and sort.</p></div>
-              <label><span>Column</span><select value={draftRiskColumn} onChange={e => setDraftRiskColumn(e.target.value as ColumnKey)}><option value="basic">Basic</option><option value="moderated">Moderated</option><option value="assignment">Assignment</option><option value="presentation">Presentation</option><option value="attendance">Attendance</option><option value="moderatedAttendance">Moderated Att.</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></label>
-              <label><span>Lower bound</span><input type="number" min="0" max="40" value={draftRiskLower} onChange={e => setDraftRiskLower(num(e.target.value,draftRiskLower))}/></label>
-              <label><span>Upper bound</span><input type="number" min="0" max="40" value={draftRiskUpper} onChange={e => setDraftRiskUpper(num(e.target.value,draftRiskUpper))}/></label>
-              <label><span>Sort</span><select value={draftSortDirection} onChange={e => setDraftSortDirection(e.target.value as SortDirection)}><option value="none">No sort</option><option value="asc">Low to high</option><option value="desc">High to low</option></select></label>
-              <button type="button" onClick={applyRiskFilters} className="at-risk-apply">Apply</button>
+              <div className="at-risk-filter-controls">
+                <label><span>Column</span><select value={draftRiskColumn} onChange={e => setDraftRiskColumn(e.target.value as ColumnKey)}><option value="basic">Basic</option><option value="moderated">Moderated</option><option value="assignment">Assignment</option><option value="presentation">Presentation</option><option value="attendance">Attendance</option><option value="moderatedAttendance">Moderated Att.</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></label>
+                <label><span>Lower bound</span><input type="number" min="0" max="40" value={draftRiskLower} onChange={e => setDraftRiskLower(num(e.target.value,draftRiskLower))}/></label>
+                <label><span>Upper bound</span><input type="number" min="0" max="40" value={draftRiskUpper} onChange={e => setDraftRiskUpper(num(e.target.value,draftRiskUpper))}/></label>
+                <label><span>Sort</span><select value={draftSortDirection} onChange={e => setDraftSortDirection(e.target.value as SortDirection)}><option value="none">No sort</option><option value="asc">Low to high</option><option value="desc">High to low</option></select></label>
+                <button type="button" onClick={applyRiskFilters} className="at-risk-apply">Apply</button>
+              </div>
             </div>
           </section>
           <section className="at-risk-table rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -217,7 +219,7 @@ export default function SubjectOverallPage() {
           </section>
           <aside className="at-risk-side-stack">
             <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><h3 className="text-sm font-semibold text-slate-900">Distribution</h3><p className="mt-0.5 text-[10px] text-slate-500">Click a segment to stage that score range in the filters.</p><div className="h-52 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={riskDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`} labelLine={false} onClick={(_, index) => selectDistributionBucket(index)}>{riskDistribution.map((_,i)=><Cell key={i} fill={COLORS[i]} cursor="pointer"/>)}</Pie><Tooltip formatter={(value: number) => [`${value} students`, "Count"]}/></PieChart></ResponsiveContainer></div></section>
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"><div className="px-3 py-2 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-900">Top Students in Filter</h3></div><div className="grid grid-cols-1 divide-y divide-slate-100">{topFive.map(row=><div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3"><div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div><div className={`text-sm shrink-0 ${scoreClass(columnValue(row,riskColumn))}`}>{columnValue(row,riskColumn)}</div></div>)}</div></section>
+            <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"><div className="px-3 py-2 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-900">Top Students</h3><p className="text-[10px] text-slate-500 mt-0.5">Highest scores overall for the selected mark column.</p></div><div className="grid grid-cols-1 divide-y divide-slate-100">{topFive.map(row=><div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3"><div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div><div className={`text-sm shrink-0 ${scoreClass(columnValue(row,riskColumn))}`}>{columnValue(row,riskColumn)}</div></div>)}</div></section>
           </aside>
         </div>
       </>}
