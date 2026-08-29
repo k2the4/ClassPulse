@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, RefreshCw } from "lucide-react";
 import SubjectAnalysisNav from "../../../components/SubjectAnalysisNav";
 import { SubjectAnalysis } from "../../../lib/analysis";
 import { RawDataButton } from "../../../components/AnalysisWidgets";
@@ -178,14 +179,34 @@ export default function SubjectOverallPage() {
     if (index === 3) { setRiskLower(0); setRiskUpper(15.9); }
   }
 
-  return <div className="min-h-screen max-w-[1900px] mx-auto px-6 py-7">
-    <div className="flex items-start justify-between mb-5"><div><h1 className="text-lg font-semibold text-slate-900">Subject Analysis</h1>{computedAt && <p className="text-xs text-slate-400 mt-1">Last synced {new Date(computedAt).toLocaleString()}</p>}</div><div className="flex items-center gap-2"><RawDataButton sheetId={sheetId}/><button onClick={() => loadAnalysis(true)} disabled={syncing} className="text-sm bg-[#33228f] text-white rounded-lg px-4 py-2.5 shadow-sm disabled:opacity-50">{syncing ? "Syncing..." : "Sync now"}</button></div></div>
-    {typeof subjectId === "string" && <SubjectAnalysisNav subjectId={subjectId}/>} 
-    {error && <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg p-4 mt-4">{error}</div>}
-    {loading && !data && <div className="text-sm text-slate-500 py-10">Loading overall analysis...</div>}
-    {data && <>
-      <div className="flex items-center gap-2 mt-4 mb-3"><button onClick={() => setView("internal")} className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === "internal" ? "bg-[#3d2aa0] text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>Internal Marks</button><button onClick={() => setView("risk")} className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === "risk" ? "bg-[#3d2aa0] text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>At Risk</button></div>
-      {view === "internal" ? <>
+  return <div className="analysis-layout">
+    <aside className="analysis-sidebar">
+      <div className="analysis-brand"><span className="analysis-brand__mark"><BarChart3 size={18} /></span><span>ClassPulse</span></div>
+      <nav className="analysis-side-nav">
+        <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
+        <a href="/classes"><BookOpen size={18} />Class Analysis</a>
+        <a className="is-active" href={typeof subjectId === "string" ? `/subject-analysis/${subjectId}/overall` : "#"}><GraduationCap size={18} />Subject Analysis</a>
+      </nav>
+      <RawDataButton sheetId={sheetId} />
+      <div className="analysis-side-footer">ClassPulse Teacher Portal</div>
+    </aside>
+
+    <main className="analysis-page">
+      <header className="analysis-topbar">
+        <div className="analysis-title-row"><h1>Subject Analysis</h1>{computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}</div>
+        <div className="analysis-top-actions"><button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}><RefreshCw size={15} className={syncing ? "animate-spin" : ""} />{syncing ? "Syncing..." : "Sync now"}</button></div>
+      </header>
+
+      {typeof subjectId === "string" && <SubjectAnalysisNav subjectId={subjectId}/>} 
+      <div className="analysis-view-switch">
+        <button onClick={() => setView("internal")} className={view === "internal" ? "is-active" : ""}>Internal Marks</button>
+        <button onClick={() => setView("risk")} className={view === "risk" ? "is-active" : ""}>At Risk</button>
+      </div>
+
+      {error && <div className="analysis-panel" style={{ padding: 14, marginBottom: 16, color: "#b42318" }}>{error}</div>}
+      {loading && !data && <div style={{ padding: 40, color: "#667085", fontSize: 13 }}>Loading overall analysis...</div>}
+
+      {data && view === "internal" ? <>
         <div className="grid grid-cols-1 xl:grid-cols-[0.82fr_1fr] gap-2 mb-2 items-start">
           <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
             <div className="flex items-center justify-between mb-2"><div><h3 className="text-sm font-semibold text-slate-900">Applied Components Summary</h3><p className="text-[10px] text-slate-500 mt-0.5">Choose components and set their weightage.</p></div><span className={`text-[11px] font-semibold ${selectedTotal === TARGET ? "text-emerald-600" : "text-amber-600"}`}>Selected total: {selectedTotal}/40</span></div>
@@ -198,11 +219,11 @@ export default function SubjectOverallPage() {
           </section>
         </div>
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"><div className="px-3 py-2 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-900">Internal Marks Data</h3><p className="text-[10px] text-slate-500 mt-0.5">Basic marks use the selected components. Moderated marks are calculated from the configured rank criteria.</p></div><div className="max-h-[620px] overflow-y-auto overflow-x-hidden"><table className="w-full table-fixed border-collapse text-[10px]"><colgroup><col className="w-[2.5%]"/><col className="w-[16%]"/><col className="w-[13%]"/><col className="w-[7.5%]"/><col className="w-[7.5%]"/><col className="w-[7.5%]"/><col className="w-[9%]"/><col className="w-[7.5%]"/><col className="w-[7.5%]"/><col className="w-[9%]"/><col className="w-[10%]"/></colgroup><thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-center px-0.5 py-2 font-semibold">#</th><th className="text-left px-1.5 py-2 font-semibold">Name</th><th className="text-center px-1 py-2 font-semibold">Enrollment</th>{HEADERS.map(h => <th key={h.key} className="text-center px-0.5 py-2 font-semibold leading-3">{h.label}</th>)}</tr></thead><tbody>{sortedRows.map((row,index) => <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"><td className="text-center px-0.5 py-1.5 text-slate-400 tabular-nums">{index+1}</td><td className="px-1.5 py-1.5 text-slate-800 font-medium truncate" title={row.name}>{row.name}</td><td className="text-center px-1 py-1.5 text-slate-500 truncate tabular-nums">{row.enrollmentNo}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.assignment}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.presentation}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.attendance}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.moderatedAttendanceWeighted}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.midsem1}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.midsem2}</td><td className={`text-center px-0.5 py-1.5 ${scoreClass(row.basic)} tabular-nums`}>{row.basic}</td><td className={`text-center px-0.5 py-1.5 ${scoreClass(row.moderated)} tabular-nums`}>{row.moderated}</td></tr>)}</tbody></table></div></section>
-      </> : <>
+      </> : data && <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4"><section className="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between mb-3"><div><h3 className="text-base font-semibold text-slate-900">At-Risk Filters</h3><p className="text-xs text-slate-500 mt-0.5">Filter students by any calculated internal-mark value.</p></div><select value={riskColumn} onChange={e => setRiskColumn(e.target.value as ColumnKey)} className="border border-slate-200 rounded-lg px-2.5 py-2 text-xs"><option value="basic">Basic</option><option value="moderated">Moderated</option><option value="assignment">Assignment</option><option value="presentation">Presentation</option><option value="attendance">Attendance</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></div><div className="grid grid-cols-2 gap-3 max-w-sm"><label className="text-xs text-slate-500">Lower bound<input type="number" min="0" max="40" value={riskLower} onChange={e => setRiskLower(num(e.target.value,riskLower))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label><label className="text-xs text-slate-500">Upper bound<input type="number" min="0" max="40" value={riskUpper} onChange={e => setRiskUpper(num(e.target.value,riskUpper))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/></label></div><div className="grid grid-cols-4 gap-2 mt-4">{riskDistribution.map((item,index)=><button key={item.name} onClick={()=>selectRiskRange(index)} className="rounded-lg border border-slate-200 p-2.5 text-left hover:bg-slate-50"><div className="text-xs text-slate-500">{item.name}</div><div className="text-lg font-semibold text-slate-900 mt-0.5">{item.value}</div></button>)}</div></section><section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><h3 className="text-base font-semibold text-slate-900">Distribution</h3><div className="h-52 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={riskDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}>{riskDistribution.map((_,i)=><Cell key={i} fill={COLORS[i]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer></div></section></div>
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"><div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div><h3 className="text-base font-semibold text-slate-900">Filtered Students</h3><p className="text-xs text-slate-500 mt-0.5">Showing {filteredRiskRows.length} of {baseRows.length} students.</p></div><span className="text-xs rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{filteredRiskRows.length} Students</span></div><div className="max-h-[620px] overflow-y-auto overflow-x-hidden"><table className="w-full table-fixed text-[11px] border-collapse"><colgroup><col className="w-[16%]"/><col className="w-[20%]"/><col className="w-[12%]"/><col className="w-[12%]"/><col className="w-[12%]"/><col className="w-[14%]"/><col className="w-[14%]"/></colgroup><thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-left px-3 py-2.5">Enrollment</th><th className="text-left px-3 py-2.5">Student</th><th className="text-center px-2 py-2.5">Marks</th><th className="text-center px-2 py-2.5">Moderated</th><th className="text-center px-2 py-2.5">Rank</th><th className="text-center px-2 py-2.5">Tier</th><th className="text-center px-2 py-2.5">Status</th></tr></thead><tbody>{filteredRiskRows.map(row=><tr key={row.enrollmentNo} className="border-b border-slate-100"><td className="px-3 py-2 text-slate-500 truncate">{row.enrollmentNo}</td><td className="px-3 py-2 font-medium text-slate-800 truncate">{row.name}</td><td className={`text-center px-2 py-2 ${scoreClass(row.basic)}`}>{row.basic}</td><td className={`text-center px-2 py-2 ${scoreClass(row.moderated)}`}>{row.moderated}</td><td className="text-center px-2 py-2 text-slate-600">{row.rank}</td><td className="text-center px-2 py-2 text-slate-600">{criteria.findIndex(c=>row.rank>=c.from&&row.rank<=c.to)+1||"—"}</td><td className="text-center px-2 py-2"><span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] ${row.basic<16?"bg-red-50 text-red-600":row.basic<24?"bg-amber-50 text-amber-700":"bg-emerald-50 text-emerald-700"}`}>{row.basic<16?"Critical Risk":row.basic<24?"Needs Attention":"Good"}</span></td></tr>)}</tbody></table></div></section>
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm mt-3 overflow-hidden"><div className="px-4 py-3 border-b border-slate-100"><h3 className="text-base font-semibold text-slate-900">Top Students in Filter</h3></div><div className="grid grid-cols-1 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">{topFive.map(row=><div key={row.enrollmentNo} className="p-3"><div className="text-xs font-semibold text-slate-800 truncate">{row.name}</div><div className={`text-lg mt-1 ${scoreClass(columnValue(row,riskColumn))}`}>{columnValue(row,riskColumn)}</div></div>)}</div></section>
       </>}
-    </>}
+    </main>
   </div>;
 }
