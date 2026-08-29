@@ -46,7 +46,7 @@ export default function SubjectAnalysisNav({ subjectId }: Props) {
         /* Overall uses the application's existing global sidebar. */
         .overall-page div[class*="max-w-[1900px]"] {
           max-width: none;
-          padding: 18px 28px 28px 223px;
+          padding: 18px 28px 28px 0;
         }
 
         .overall-page div[class*="max-w-[1900px]"] > div[class*="items-start"][class*="justify-between"] {
