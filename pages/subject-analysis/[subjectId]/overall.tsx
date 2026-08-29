@@ -103,7 +103,6 @@ export default function SubjectOverallPage() {
   useEffect(() => { loadAnalysis(); }, [subjectId]);
 
   const selectedTotal = useMemo(() => round1(draftBasicColumns.reduce((sum, key) => sum + draftWeights[key], 0)), [draftBasicColumns, draftWeights]);
-
   const baseRows = useMemo(() => {
     const preliminary = (data?.students || []).map((s: any, originalIndex: number) => ({
       enrollmentNo: s.enrollmentNo, name: s.name, originalIndex,
@@ -136,18 +135,12 @@ export default function SubjectOverallPage() {
     if (sortDirection === "none") return rows.sort((a, b) => a.originalIndex - b.originalIndex);
     return rows.sort((a: any, b: any) => ((sortDirection === "asc" ? a[sortColumn] - b[sortColumn] : b[sortColumn] - a[sortColumn]) || a.name.localeCompare(b.name)));
   }, [baseRows, sortColumn, sortDirection]);
-
   const filteredRiskRows = useMemo(() => {
-    const lo = Math.min(riskLower, riskUpper);
-    const hi = Math.max(riskLower, riskUpper);
-    const rows = baseRows.filter(row => {
-      const value = columnValue(row, riskColumn);
-      return value >= lo && value <= hi;
-    });
+    const lo = Math.min(riskLower, riskUpper); const hi = Math.max(riskLower, riskUpper);
+    const rows = baseRows.filter(row => { const value = columnValue(row, riskColumn); return value >= lo && value <= hi; });
     if (sortDirection === "none") return rows.sort((a, b) => a.originalIndex - b.originalIndex);
     return rows.sort((a: any, b: any) => ((sortDirection === "asc" ? a[riskColumn] - b[riskColumn] : b[riskColumn] - a[riskColumn]) || a.name.localeCompare(b.name)));
   }, [baseRows, riskColumn, riskLower, riskUpper, sortDirection]);
-
   const topFive = useMemo(() => [...filteredRiskRows].sort((a, b) => columnValue(b, riskColumn) - columnValue(a, riskColumn)).slice(0, 5), [filteredRiskRows, riskColumn]);
   const riskDistribution = useMemo(() => [
     { name: "Above 32", value: baseRows.filter(r => r.basic > 32).length },
@@ -157,89 +150,46 @@ export default function SubjectOverallPage() {
   ], [baseRows]);
 
   function updateWeight(key: WeightKey, value: string) { setDraftWeights(current => ({ ...current, [key]: num(value, current[key]) })); }
-  function toggleBasic(key: WeightKey) {
-    setDraftBasicColumns(current => {
-      if (current.includes(key)) return current.filter(x => x !== key);
-      if (key === "attendance") return [...current.filter(x => x !== "moderatedAttendance"), key];
-      if (key === "moderatedAttendance") return [...current.filter(x => x !== "attendance"), key];
-      return [...current, key];
-    });
-  }
-  function applyWeights() {
-    if (selectedTotal <= 0) return;
-    setApplyingWeights(true);
-    const applied = normalize(draftBasicColumns, draftWeights);
-    setBasicColumns(draftBasicColumns); setWeights(applied); setDraftWeights(applied);
-    window.setTimeout(() => setApplyingWeights(false), 250);
-  }
+  function toggleBasic(key: WeightKey) { setDraftBasicColumns(current => { if (current.includes(key)) return current.filter(x => x !== key); if (key === "attendance") return [...current.filter(x => x !== "moderatedAttendance"), key]; if (key === "moderatedAttendance") return [...current.filter(x => x !== "attendance"), key]; return [...current, key]; }); }
+  function applyWeights() { if (selectedTotal <= 0) return; setApplyingWeights(true); const applied = normalize(draftBasicColumns, draftWeights); setBasicColumns(draftBasicColumns); setWeights(applied); setDraftWeights(applied); window.setTimeout(() => setApplyingWeights(false), 250); }
   function updateCriteria(i: number, field: keyof Criteria, value: string) {
-    setCriteria(current => {
-      const next = current.map(row => ({ ...row })); const parsed = num(value, next[i][field]);
-      if (field === "from") return current;
-      if (field === "to") next[i].to = Math.max(next[i].from, Math.floor(parsed)); else next[i][field] = parsed;
-      next[0].from = 1;
-      for (let index = 1; index < next.length; index++) { next[index].from = next[index - 1].to + 1; if (next[index].to < next[index].from) next[index].to = next[index].from; }
-      return next;
-    });
+    setCriteria(current => { const next = current.map(row => ({ ...row })); const parsed = num(value, next[i][field]); if (field === "from") return current; if (field === "to") next[i].to = Math.max(next[i].from, Math.floor(parsed)); else next[i][field] = parsed; next[0].from = 1; for (let index = 1; index < next.length; index++) { next[index].from = next[index - 1].to + 1; if (next[index].to < next[index].from) next[index].to = next[index].from; } return next; });
   }
 
   return <div className="analysis-layout">
     <aside className="analysis-sidebar">
       <div className="analysis-brand"><span className="analysis-brand__mark"><BarChart3 size={18} /></span><span>ClassPulse</span></div>
-      <nav className="analysis-side-nav">
-        <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
-        <a href="/classes"><BookOpen size={18} />Class Analysis</a>
-        <a className="is-active" href={typeof subjectId === "string" ? `/subject-analysis/${subjectId}/overall` : "#"}><GraduationCap size={18} />Subject Analysis</a>
-      </nav>
+      <nav className="analysis-side-nav"><a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a><a href="/classes"><BookOpen size={18} />Class Analysis</a><a className="is-active" href={typeof subjectId === "string" ? `/subject-analysis/${subjectId}/overall` : "#"}><GraduationCap size={18} />Subject Analysis</a></nav>
       <RawDataButton sheetId={sheetId} />
       <div className="analysis-side-footer">ClassPulse Teacher Portal</div>
     </aside>
-
     <main className="analysis-page">
-      <header className="analysis-topbar">
-        <div className="analysis-title-row"><h1>Subject Analysis</h1>{computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}</div>
-        <div className="analysis-top-actions"><button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}><RefreshCw size={15} className={syncing ? "animate-spin" : ""} />{syncing ? "Syncing..." : "Sync now"}</button></div>
-      </header>
-
+      <header className="analysis-topbar"><div className="analysis-title-row"><h1>Subject Analysis</h1>{computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}</div><div className="analysis-top-actions"><button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}><RefreshCw size={15} className={syncing ? "animate-spin" : ""} />{syncing ? "Syncing..." : "Sync now"}</button></div></header>
       {typeof subjectId === "string" && <SubjectAnalysisNav subjectId={subjectId}/>} 
-      <div className="analysis-view-switch">
-        <button onClick={() => setView("internal")} className={view === "internal" ? "is-active" : ""}>Internal Marks</button>
-        <button onClick={() => setView("risk")} className={view === "risk" ? "is-active" : ""}>At Risk</button>
-      </div>
-
+      <div className="analysis-view-switch"><button onClick={() => setView("internal")} className={view === "internal" ? "is-active" : ""}>Internal Marks</button><button onClick={() => setView("risk")} className={view === "risk" ? "is-active" : ""}>At Risk</button></div>
       {error && <div className="analysis-panel" style={{ padding: 14, marginBottom: 16, color: "#b42318" }}>{error}</div>}
       {loading && !data && <div style={{ padding: 40, color: "#667085", fontSize: 13 }}>Loading overall analysis...</div>}
-
       {data && view === "internal" ? <>
         <div className="grid grid-cols-1 xl:grid-cols-[0.82fr_1fr] gap-2 mb-2 items-start">
-          <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
-            <div className="flex items-center justify-between mb-2"><div><h3 className="text-sm font-semibold text-slate-900">Applied Components Summary</h3><p className="text-[10px] text-slate-500 mt-0.5">Choose components and set their weightage.</p></div><span className={`text-[11px] font-semibold ${selectedTotal === TARGET ? "text-emerald-600" : "text-amber-600"}`}>Selected total: {selectedTotal}/40</span></div>
-            <div className="grid grid-cols-3 grid-rows-2 gap-1.5">{COMPONENTS.map(({ key, label }) => { const checked = draftBasicColumns.includes(key); return <label key={key} className={`min-w-0 rounded-lg border p-1.5 cursor-pointer transition ${checked ? "border-violet-200 bg-violet-50/60" : "border-slate-200 bg-white"}`}><div className="flex items-center gap-1.5 min-w-0"><input type="checkbox" checked={checked} onChange={() => toggleBasic(key)} className="h-3.5 w-3.5 accent-[#4a35b3] shrink-0"/><span className="text-[11px] font-medium text-slate-700 truncate">{label}</span></div><input aria-label={`${label} weightage`} type="number" min="0" step="0.1" value={draftWeights[key]} onChange={e => updateWeight(key, e.target.value)} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-800 outline-none focus:border-violet-400"/></label>; })}</div>
-            <div className="flex items-center justify-between mt-2 gap-2"><p className="text-[10px] leading-3.5 text-slate-400">Only checked components count. Weightage is normalized to exactly 40 when applied.</p><button onClick={applyWeights} disabled={applyingWeights || selectedTotal <= 0} className="shrink-0 bg-[#3d2aa0] text-white text-xs font-semibold rounded-lg px-3 py-1.5 shadow-sm disabled:opacity-50">{applyingWeights ? "Applying..." : "Apply"}</button></div>
-          </section>
-          <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
-            <div className="flex items-start justify-between gap-2 mb-1.5"><div><h3 className="text-sm font-semibold text-slate-900">Moderated Marks Criteria</h3><p className="text-[10px] leading-3.5 text-slate-500 mt-0.5">Rank ranges map continuously to a marks range. Marks are defined from and to.</p></div><div className="flex gap-1.5 shrink-0"><select value="Moderate" onChange={() => undefined} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] text-slate-700 bg-white"><option>Moderate</option></select><select value={sortDirection} onChange={e => setSortDirection(e.target.value as SortDirection)} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] text-slate-700 bg-white"><option value="none">No sort</option><option value="asc">Low to high</option><option value="desc">High to low</option></select></div></div>
-            <div className="grid grid-cols-2 gap-1.5">{criteria.map((tier, index) => <div key={index} className="rounded-lg border border-slate-200 overflow-hidden"><div className="bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-slate-800">Tier {index + 1}</div><div className="grid grid-cols-4 divide-x divide-slate-200">{(["from","to","minMarks","maxMarks"] as const).map(field => <div key={field} className="p-1"><label className="block text-[8px] uppercase tracking-wide text-slate-400 mb-0.5">{field === "minMarks" ? "Marks from" : field === "maxMarks" ? "Marks to" : field}</label><input type="number" value={tier[field]} onChange={e => updateCriteria(index, field, e.target.value)} className="w-full min-w-0 rounded-md border border-slate-200 px-1.5 py-1.5 text-[11px] text-slate-800"/></div>)}</div></div>)}</div>
-          </section>
+          <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm"><div className="flex items-center justify-between mb-2"><div><h3 className="text-sm font-semibold text-slate-900">Applied Components Summary</h3><p className="text-[10px] text-slate-500 mt-0.5">Choose components and set their weightage.</p></div><span className={`text-[11px] font-semibold ${selectedTotal === TARGET ? "text-emerald-600" : "text-amber-600"}`}>Selected total: {selectedTotal}/40</span></div><div className="grid grid-cols-3 grid-rows-2 gap-1.5">{COMPONENTS.map(({ key, label }) => { const checked = draftBasicColumns.includes(key); return <label key={key} className={`min-w-0 rounded-lg border p-1.5 cursor-pointer transition ${checked ? "border-violet-200 bg-violet-50/60" : "border-slate-200 bg-white"}`}><div className="flex items-center gap-1.5 min-w-0"><input type="checkbox" checked={checked} onChange={() => toggleBasic(key)} className="h-3.5 w-3.5 accent-[#4a35b3] shrink-0"/><span className="text-[11px] font-medium text-slate-700 truncate">{label}</span></div><input aria-label={`${label} weightage`} type="number" min="0" step="0.1" value={draftWeights[key]} onChange={e => updateWeight(key, e.target.value)} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-800 outline-none focus:border-violet-400"/></label>; })}</div><div className="flex items-center justify-between mt-2 gap-2"><p className="text-[10px] leading-3.5 text-slate-400">Only checked components count. Weightage is normalized to exactly 40 when applied.</p><button onClick={applyWeights} disabled={applyingWeights || selectedTotal <= 0} className="shrink-0 bg-[#3d2aa0] text-white text-xs font-semibold rounded-lg px-3 py-1.5 shadow-sm disabled:opacity-50">{applyingWeights ? "Applying..." : "Apply"}</button></div></section>
+          <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm"><div className="flex items-start justify-between gap-2 mb-1.5"><div><h3 className="text-sm font-semibold text-slate-900">Moderated Marks Criteria</h3><p className="text-[10px] leading-3.5 text-slate-500 mt-0.5">Rank ranges map continuously to a marks range. Marks are defined from and to.</p></div><div className="flex gap-1.5 shrink-0"><select value="Moderate" onChange={() => undefined} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] text-slate-700 bg-white"><option>Moderate</option></select><select value={sortDirection} onChange={e => setSortDirection(e.target.value as SortDirection)} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] text-slate-700 bg-white"><option value="none">No sort</option><option value="asc">Low to high</option><option value="desc">High to low</option></select></div></div><div className="grid grid-cols-2 gap-1.5">{criteria.map((tier, index) => <div key={index} className="rounded-lg border border-slate-200 overflow-hidden"><div className="bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-slate-800">Tier {index + 1}</div><div className="grid grid-cols-4 divide-x divide-slate-200">{(["from","to","minMarks","maxMarks"] as const).map(field => <div key={field} className="p-1"><label className="block text-[8px] uppercase tracking-wide text-slate-400 mb-0.5">{field === "minMarks" ? "Marks from" : field === "maxMarks" ? "Marks to" : field}</label><input type="number" value={tier[field]} onChange={e => updateCriteria(index, field, e.target.value)} className="w-full min-w-0 rounded-md border border-slate-200 px-1.5 py-1.5 text-[11px] text-slate-800"/></div>)}</div></div>)}</div></section>
         </div>
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"><div className="px-3 py-2 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-900">Internal Marks Data</h3><p className="text-[10px] text-slate-500 mt-0.5">Basic marks use the selected components. Moderated marks are calculated from the configured rank criteria.</p></div><div className="max-h-[620px] overflow-y-auto overflow-x-hidden"><table className="w-full table-fixed border-collapse text-[10px]"><colgroup><col className="w-[2.5%]"/><col className="w-[16%]"/><col className="w-[13%]"/><col className="w-[7.5%]"/><col className="w-[7.5%]"/><col className="w-[7.5%]"/><col className="w-[9%]"/><col className="w-[7.5%]"/><col className="w-[7.5%]"/><col className="w-[9%]"/><col className="w-[10%]"/></colgroup><thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-center px-0.5 py-2 font-semibold">#</th><th className="text-left px-1.5 py-2 font-semibold">Name</th><th className="text-center px-1 py-2 font-semibold">Enrollment</th>{HEADERS.map(h => <th key={h.key} className="text-center px-0.5 py-2 font-semibold leading-3">{h.label}</th>)}</tr></thead><tbody>{sortedRows.map((row,index) => <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"><td className="text-center px-0.5 py-1.5 text-slate-400 tabular-nums">{index+1}</td><td className="px-1.5 py-1.5 text-slate-800 font-medium truncate" title={row.name}>{row.name}</td><td className="text-center px-1 py-1.5 text-slate-500 truncate tabular-nums">{row.enrollmentNo}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.assignment}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.presentation}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.attendance}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.moderatedAttendanceWeighted}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.midsem1}</td><td className="text-center px-0.5 py-1.5 text-slate-700 tabular-nums">{row.midsem2}</td><td className={`text-center px-0.5 py-1.5 ${scoreClass(row.basic)} tabular-nums`}>{row.basic}</td><td className={`text-center px-0.5 py-1.5 ${scoreClass(row.moderated)} tabular-nums`}>{row.moderated}</td></tr>)}</tbody></table></div></section>
       </> : data && <>
         <div className="at-risk-layout">
-          <section className="at-risk-filter rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="shrink-0"><h3 className="text-sm font-semibold text-slate-900">At-Risk Filters</h3><p className="text-[10px] text-slate-500 mt-0.5">Choose a mark column, range and sort.</p></div>
-              <div className="flex-1 min-w-[180px]"><label className="block text-[10px] text-slate-500 mb-1">Column</label><select value={riskColumn} onChange={e => setRiskColumn(e.target.value as ColumnKey)} className="border border-slate-200 rounded-lg px-2.5 py-2 text-xs"><option value="basic">Basic</option><option value="moderated">Moderated</option><option value="assignment">Assignment</option><option value="presentation">Presentation</option><option value="attendance">Attendance</option><option value="moderatedAttendance">Moderated Att.</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></div>
-              <label className="w-[150px]"><span className="block text-[10px] text-slate-500 mb-1">Lower bound</span><input type="number" min="0" max="40" value={riskLower} onChange={e => setRiskLower(num(e.target.value,riskLower))} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs"/></label>
-              <label className="w-[150px]"><span className="block text-[10px] text-slate-500 mb-1">Upper bound</span><input type="number" min="0" max="40" value={riskUpper} onChange={e => setRiskUpper(num(e.target.value,riskUpper))} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs"/></label>
-              <div className="w-[150px]"><label className="block text-[10px] text-slate-500 mb-1">Sort</label><select value={sortDirection} onChange={e => setSortDirection(e.target.value as SortDirection)} className="border border-slate-200 rounded-lg px-2.5 py-2 text-xs"><option value="none">No sort</option><option value="asc">Low to high</option><option value="desc">High to low</option></select></div>
+          <section className="at-risk-filter rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="at-risk-filter-inner">
+              <div className="at-risk-filter-title"><h3>At-Risk Filters</h3><p>Choose a mark column, range and sort.</p></div>
+              <label><span>Column</span><select value={riskColumn} onChange={e => setRiskColumn(e.target.value as ColumnKey)}><option value="basic">Basic</option><option value="moderated">Moderated</option><option value="assignment">Assignment</option><option value="presentation">Presentation</option><option value="attendance">Attendance</option><option value="moderatedAttendance">Moderated Att.</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></label>
+              <label><span>Lower bound</span><input type="number" min="0" max="40" value={riskLower} onChange={e => setRiskLower(num(e.target.value,riskLower))}/></label>
+              <label><span>Upper bound</span><input type="number" min="0" max="40" value={riskUpper} onChange={e => setRiskUpper(num(e.target.value,riskUpper))}/></label>
+              <label><span>Sort</span><select value={sortDirection} onChange={e => setSortDirection(e.target.value as SortDirection)}><option value="none">No sort</option><option value="asc">Low to high</option><option value="desc">High to low</option></select></label>
             </div>
           </section>
-
           <section className="at-risk-table rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-slate-900">Filtered Students</h3><p className="text-[10px] text-slate-500 mt-0.5">Showing {filteredRiskRows.length} of {baseRows.length} students.</p></div><span className="text-[10px] rounded-full bg-slate-100 px-2 py-1 text-slate-600">{filteredRiskRows.length} Students</span></div>
-            <div className="max-h-[620px] overflow-y-auto overflow-x-hidden"><table className="w-full table-fixed text-[10px] border-collapse"><colgroup><col className="w-[16%]"/><col className="w-[20%]"/><col className="w-[12%]"/><col className="w-[12%]"/><col className="w-[12%]"/><col className="w-[14%]"/><col className="w-[14%]"/></colgroup><thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-left px-2 py-2">Enrollment</th><th className="text-left px-2 py-2">Student</th><th className="text-center px-1 py-2">Marks</th><th className="text-center px-1 py-2">Moderated</th><th className="text-center px-1 py-2">Rank</th><th className="text-center px-1 py-2">Tier</th><th className="text-center px-1 py-2">Status</th></tr></thead><tbody>{filteredRiskRows.map(row=><tr key={row.enrollmentNo} className="border-b border-slate-100"><td className="px-2 py-1.5 text-slate-500 truncate">{row.enrollmentNo}</td><td className="px-2 py-1.5 font-medium text-slate-800 truncate">{row.name}</td><td className={`text-center px-1 py-1.5 ${scoreClass(row.basic)}`}>{row.basic}</td><td className={`text-center px-1 py-1.5 ${scoreClass(row.moderated)}`}>{row.moderated}</td><td className="text-center px-1 py-1.5 text-slate-600">{row.rank}</td><td className="text-center px-1 py-1.5 text-slate-600">{criteria.findIndex(c=>row.rank>=c.from&&row.rank<=c.to)+1||"—"}</td><td className="text-center px-1 py-1.5"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] ${row.basic<16?"bg-red-50 text-red-600":row.basic<24?"bg-amber-50 text-amber-700":"bg-emerald-50 text-emerald-700"}`}>{row.basic<16?"Critical Risk":row.basic<24?"Needs Attention":"Good"}</span></td></tr>)}</tbody></table></div>
+            <div className="max-h-[620px] overflow-y-auto overflow-x-hidden"><table className="w-full table-fixed text-[10px] border-collapse"><colgroup><col className="w-[18%]"/><col className="w-[24%]"/><col className="w-[12%]"/><col className="w-[12%]"/><col className="w-[10%]"/><col className="w-[10%]"/><col className="w-[14%]"/></colgroup><thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-left px-2 py-2">Enrollment</th><th className="text-left px-2 py-2">Student</th><th className="text-center px-1 py-2">Marks</th><th className="text-center px-1 py-2">Moderated</th><th className="text-center px-1 py-2">Rank</th><th className="text-center px-1 py-2">Tier</th><th className="text-center px-1 py-2">Status</th></tr></thead><tbody>{filteredRiskRows.map(row=><tr key={row.enrollmentNo} className="border-b border-slate-100"><td className="px-2 py-1.5 text-slate-500 truncate">{row.enrollmentNo}</td><td className="px-2 py-1.5 font-medium text-slate-800 truncate">{row.name}</td><td className={`text-center px-1 py-1.5 ${scoreClass(row.basic)}`}>{row.basic}</td><td className={`text-center px-1 py-1.5 ${scoreClass(row.moderated)}`}>{row.moderated}</td><td className="text-center px-1 py-1.5 text-slate-600">{row.rank}</td><td className="text-center px-1 py-1.5 text-slate-600">{criteria.findIndex(c=>row.rank>=c.from&&row.rank<=c.to)+1||"—"}</td><td className="text-center px-1 py-1.5"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] ${row.basic<16?"bg-red-50 text-red-600":row.basic<24?"bg-amber-50 text-amber-700":"bg-emerald-50 text-emerald-700"}`}>{row.basic<16?"Critical Risk":row.basic<24?"Needs Attention":"Good"}</span></td></tr>)}</tbody></table></div>
           </section>
-
           <aside className="at-risk-side-stack">
             <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><h3 className="text-sm font-semibold text-slate-900">Distribution</h3><div className="h-52 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={riskDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}>{riskDistribution.map((_,i)=><Cell key={i} fill={COLORS[i]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer></div></section>
             <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"><div className="px-3 py-2 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-900">Top Students in Filter</h3></div><div className="grid grid-cols-1 divide-y divide-slate-100">{topFive.map(row=><div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3"><div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div><div className={`text-sm shrink-0 ${scoreClass(columnValue(row,riskColumn))}`}>{columnValue(row,riskColumn)}</div></div>)}</div></section>
