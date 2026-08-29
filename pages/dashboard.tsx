@@ -4,14 +4,33 @@ import { authOptions } from "../lib/authOptions";
 import { prisma } from "../lib/prisma";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { useMemo, useState } from "react";
+
+interface ClassOption {
+  id: string;
+  label: string;
+}
+
+interface SubjectOption {
+  id: string;
+  classId: string;
+  label: string;
+}
 
 interface Props {
   teacherName: string;
-  sections: { id: string; label: string }[];
-  subjects: { id: string; label: string }[];
+  classes: ClassOption[];
+  subjects: SubjectOption[];
 }
 
-export default function Dashboard({ teacherName, sections, subjects }: Props) {
+export default function Dashboard({ teacherName, classes, subjects }: Props) {
+  const [selectedClassId, setSelectedClassId] = useState(classes[0]?.id || "");
+
+  const selectedSubjects = useMemo(
+    () => subjects.filter((subject) => subject.classId === selectedClassId),
+    [subjects, selectedClassId]
+  );
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-gray-100 bg-white">
@@ -37,19 +56,19 @@ export default function Dashboard({ teacherName, sections, subjects }: Props) {
           <section className="bg-white rounded-2xl border border-gray-100 p-6">
             <h3 className="font-medium text-gray-900 mb-1">Class Analysis</h3>
             <p className="text-sm text-gray-500 mb-4">
-              Combined attendance and exam performance for a whole class/section.
+              Select one of the classes assigned to you.
             </p>
             <div className="space-y-2">
-              {sections.map((s) => (
+              {classes.map((classOption) => (
                 <Link
-                  key={s.id}
-                  href={`/section-analysis/${s.id}`}
+                  key={classOption.id}
+                  href={`/class-analysis/${classOption.id}`}
                   className="block text-sm rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50"
                 >
-                  {s.label}
+                  {classOption.label}
                 </Link>
               ))}
-              {sections.length === 0 && (
+              {classes.length === 0 && (
                 <p className="text-sm text-gray-400">No classes assigned yet.</p>
               )}
             </div>
@@ -58,20 +77,38 @@ export default function Dashboard({ teacherName, sections, subjects }: Props) {
           <section className="bg-white rounded-2xl border border-gray-100 p-6">
             <h3 className="font-medium text-gray-900 mb-1">Subject Analysis</h3>
             <p className="text-sm text-gray-500 mb-4">
-              Detailed attendance, marks, and student reports for one subject.
+              First choose a class, then choose one of its assigned subjects.
             </p>
+
+            {classes.length > 0 && (
+              <select
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 mb-3"
+              >
+                {classes.map((classOption) => (
+                  <option key={classOption.id} value={classOption.id}>
+                    {classOption.label}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <div className="space-y-2">
-              {subjects.map((s) => (
+              {selectedSubjects.map((subject) => (
                 <Link
-                  key={s.id}
-                  href={`/subject-analysis/${s.id}`}
+                  key={subject.id}
+                  href={`/subject-analysis/${subject.id}`}
                   className="block text-sm rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50"
                 >
-                  {s.label}
+                  {subject.label}
                 </Link>
               ))}
-              {subjects.length === 0 && (
-                <p className="text-sm text-gray-400">No subjects assigned yet.</p>
+              {classes.length === 0 && (
+                <p className="text-sm text-gray-400">No classes assigned yet.</p>
+              )}
+              {classes.length > 0 && selectedSubjects.length === 0 && (
+                <p className="text-sm text-gray-400">No subjects assigned for this class yet.</p>
               )}
             </div>
           </section>
@@ -79,6 +116,14 @@ export default function Dashboard({ teacherName, sections, subjects }: Props) {
       </main>
     </div>
   );
+}
+
+function formatClassLabel(department: string, semester: number, sectionName: string) {
+  // The application presents a class as Department + class number + Semester.
+  // For the current ECE 2 proof-of-concept, the existing legacy section "A"
+  // represents class 2. The UI must not expose "Section A" as part of the class name.
+  const classNumber = department === "ECE" && semester === 7 && sectionName === "A" ? "2" : sectionName;
+  return `${department}${classNumber} Sem ${semester}`;
 }
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
@@ -90,8 +135,9 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const userId = (session.user as any).id;
   const role = (session.user as any).role;
 
-  // Sections the teacher can view: they proctor the class, or teach a
-  // subject within that section.
+  // A class is visible when the teacher is its proctor or teaches at least
+  // one subject in the class. The UI presents the class as a single unit;
+  // internal Section records remain an implementation detail for now.
   const sectionsRaw =
     role === "ADMIN"
       ? await prisma.section.findMany({ include: { class: { include: { department: true } } } })
@@ -105,6 +151,19 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
           include: { class: { include: { department: true } } },
         });
 
+  // Collapse the internal section records into teacher-visible classes.
+  const classMap = new Map<string, ClassOption>();
+  for (const section of sectionsRaw) {
+    classMap.set(section.class.id, {
+      id: section.class.id,
+      label: formatClassLabel(
+        section.class.department.name,
+        section.class.semester,
+        section.name
+      ),
+    });
+  }
+
   const subjectsRaw = await prisma.subject.findMany({
     where: role === "ADMIN" ? {} : { assignments: { some: { teacherId: userId } } },
     include: { section: { include: { class: true } } },
@@ -113,13 +172,11 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   return {
     props: {
       teacherName: session.user.name || session.user.email,
-      sections: sectionsRaw.map((s) => ({
-        id: s.id,
-        label: `${s.class.department.name} — ${s.class.program}, Sem ${s.class.semester}, Section ${s.name}`,
-      })),
-      subjects: subjectsRaw.map((s) => ({
-        id: s.id,
-        label: `${s.name} (${s.code}) — Section ${s.section.name}`,
+      classes: Array.from(classMap.values()),
+      subjects: subjectsRaw.map((subject) => ({
+        id: subject.id,
+        classId: subject.section.classId,
+        label: `${subject.name} (${subject.code})`,
       })),
     },
   };
