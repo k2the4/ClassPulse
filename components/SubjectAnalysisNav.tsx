@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { BarChart3, FileText, GraduationCap, LayoutDashboard, BookOpen } from "lucide-react";
+import { BarChart3, FileText, GraduationCap, LayoutDashboard } from "lucide-react";
 
 type Props = { subjectId: string };
 
@@ -23,25 +23,17 @@ export default function SubjectAnalysisNav({ subjectId }: Props) {
 
   return (
     <>
-      {isOverall && (
-        <aside className="analysis-sidebar" aria-label="ClassPulse navigation">
-          <div className="analysis-brand"><span className="analysis-brand__mark"><BarChart3 size={18} /></span><span>ClassPulse</span></div>
-          <nav className="analysis-side-nav">
-            <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
-            <a href="/classes"><BookOpen size={18} />Class Analysis</a>
-            <a className="is-active" href={`/subject-analysis/${subjectId}/overall`}><GraduationCap size={18} />Subject Analysis</a>
-          </nav>
-          <div className="analysis-side-footer">ClassPulse Teacher Portal</div>
-        </aside>
-      )}
-
       <nav className="subject-analysis-nav" aria-label="Subject analysis sections">
         <div className="subject-analysis-nav__rail">
           {items.map(({ label, icon: Icon, path }) => {
             const href = `/subject-analysis/${subjectId}/${path}`;
             const active = router.pathname.endsWith(`/${path}`);
             return (
-              <Link key={path} href={href} className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}>
+              <Link
+                key={path}
+                href={href}
+                className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}
+              >
                 <Icon size={17} strokeWidth={1.8} />
                 <span>{label}</span>
               </Link>
@@ -51,6 +43,7 @@ export default function SubjectAnalysisNav({ subjectId }: Props) {
       </nav>
 
       {isOverall && <style jsx global>{`
+        /* Overall uses the application's existing global sidebar. */
         .overall-page div[class*="max-w-[1900px]"] {
           max-width: none;
           padding: 18px 28px 28px 223px;
@@ -149,15 +142,6 @@ export default function SubjectAnalysisNav({ subjectId }: Props) {
           max-width: 26px;
           padding-left: 0;
           padding-right: 0;
-        }
-
-        @media (max-width: 1100px) {
-          .overall-page div[class*="max-w-[1900px]"] {
-            padding-left: 18px;
-          }
-          .overall-page .analysis-sidebar {
-            display: none;
-          }
         }
       `}</style>}
     </>
