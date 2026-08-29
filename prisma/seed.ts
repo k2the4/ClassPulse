@@ -55,19 +55,24 @@ async function main() {
     data: { teacherId: teacher.id, subjectId: subject.id },
   });
 
-  // Section-level combined sheet (required — one per section).
+  // ECE 2 Sem 7 combined section sheet. Subject Analysis prefers this
+  // section-level link, so all subjects read from the same current sheet.
+  const ece2Sem7SheetId =
+    "1T9F-99yjdoe99hh16urc1eQHZuiMZuTemzXk3s9sHeY";
+
   await prisma.sheetLink.create({
     data: {
       sectionId: section.id,
-      sheetId: "1DM3brNxfdWl0I4r9cbffjh_PlXaWaTsM",
+      sheetId: ece2Sem7SheetId,
     },
   });
 
-  // Subject-level sheet (optional per subject).
+  // Keep the optional subject-level link aligned with the same current
+  // proof-of-concept sheet rather than leaving the old sheet configured.
   await prisma.sheetLink.create({
     data: {
       subjectId: subject.id,
-      sheetId: "118662A6Ifl2GDZKnh120v2jNylUiMWGNYThfRXSDX6U",
+      sheetId: ece2Sem7SheetId,
     },
   });
 
@@ -75,8 +80,8 @@ async function main() {
   console.log("  teacher: geetanjali@demo.edu / changeme123");
   console.log("  admin:   admin@demo.edu / changeme123");
   console.log("");
-  console.log("1DM3brNxfdWl0I4r9cbffjh_PlXaWaTsM");
-  console.log("in prisma/seed.ts with your real combined-section sheet's ID, then re-seed.");
+  console.log("ECE 2 Sem 7 sheet:");
+  console.log(ece2Sem7SheetId);
 }
 
 main()
