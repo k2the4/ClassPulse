@@ -17,6 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const cls = await prisma.class.findUnique({
     where: { id: classId },
     include: {
+      department: true,
       sections: {
         include: {
           students: true,
@@ -39,7 +40,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return {
         subjectId: subj.id,
         subjectName: subj.name,
-        section: sec.name,
         classAverage: snapshot?.classAverageCurrMonth ?? null,
         passRate: snapshot?.midsemPassRate ?? null,
         computedAt: subj.snapshots[0]?.computedAt ?? null,
@@ -47,8 +47,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   );
 
+  // The teacher-facing class name is the single class identity used by
+  // ClassPulse: department + class number + semester. Internal Section
+  // records are not exposed in the UI.
+  const classNumber = cls.sections.length === 1 ? cls.sections[0].name : "";
+  const className = `${cls.department.name}${classNumber} Sem ${cls.semester}`;
+
   return res.status(200).json({
-    className: `${cls.program} — ${cls.year}, Sem ${cls.semester}`,
+    className,
     totalStudents,
     subjects,
   });
