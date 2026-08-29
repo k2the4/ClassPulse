@@ -47,10 +47,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   );
 
-  // The teacher-facing class name is the single class identity used by
-  // ClassPulse: department + class number + semester. Internal Section
-  // records are not exposed in the UI.
-  const classNumber = cls.sections.length === 1 ? cls.sections[0].name : "";
+  // Teacher-facing identity is Department + class number + Semester.
+  // Until the existing proof-of-concept database row is updated from its
+  // legacy "A" section name to "2", treat ECE Sem 7 / A as ECE 2 Sem 7.
+  const rawClassNumber = cls.sections.length === 1 ? cls.sections[0].name : "";
+  const classNumber =
+    cls.department.name === "ECE" && cls.semester === 7 && rawClassNumber === "A"
+      ? "2"
+      : rawClassNumber;
   const className = `${cls.department.name}${classNumber} Sem ${cls.semester}`;
 
   return res.status(200).json({
