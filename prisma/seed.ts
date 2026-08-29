@@ -1,14 +1,14 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
-
 type SubjectSeed = {
   name: string;
   code: string;
 };
 
-// These are the theory subjects supplied for the ECE curriculum.
+const prisma = new PrismaClient();
+
+// Theory subjects supplied for the ECE curriculum.
 // Labs are intentionally excluded for now.
 const subjectsBySemester: Record<number, SubjectSeed[]> = {
   1: [
@@ -63,7 +63,7 @@ const subjectsBySemester: Record<number, SubjectSeed[]> = {
     { name: "DA", code: "DA 338 T" },
   ],
   7: [
-    // The timetable supplied identifies these by these abbreviations only.
+    // The supplied timetable identifies these subjects by these abbreviations only.
     { name: "MLDA", code: "MLDA" },
     { name: "IOT", code: "IOT" },
     { name: "PR", code: "PR" },
@@ -89,12 +89,12 @@ async function main() {
     create: { id: "demo-college", name: "Demo Institute of Technology" },
   });
 
-  const dept = await prisma.department.findFirst({
+  const existingDepartment = await prisma.department.findFirst({
     where: { collegeId: college.id, name: "ECE" },
   });
 
   const eceDepartment =
-    dept ??
+    existingDepartment ??
     (await prisma.department.create({
       data: { name: "ECE", collegeId: college.id },
     }));
@@ -139,12 +139,20 @@ async function main() {
   // Semester 8 intentionally has no regular subjects.
   for (const batch of eceBatches) {
     for (let semester = 1; semester <= 7; semester += 1) {
+      const program = `B.Tech ${batch}`;
+      const isLegacyEce2Sem7 = batch === "ECE 2" && semester === 7;
+
+      // The original demo seed created "B.Tech ECE" for Sem 7.
+      // Reuse that record as ECE 2 instead of leaving a duplicate class behind.
       const existingClass = await prisma.class.findFirst({
         where: {
           departmentId: eceDepartment.id,
-          program: `B.Tech ${batch}`,
           academicYear: "2026-27",
           semester,
+          OR: [
+            { program },
+            ...(isLegacyEce2Sem7 ? [{ program: "B.Tech ECE" }] : []),
+          ],
         },
       });
 
@@ -153,7 +161,7 @@ async function main() {
         (await prisma.class.create({
           data: {
             departmentId: eceDepartment.id,
-            program: `B.Tech ${batch}`,
+            program,
             academicYear: "2026-27",
             year: yearForSemester(semester),
             semester,
@@ -161,12 +169,21 @@ async function main() {
           },
         }));
 
-      const existingSection = await prisma.section.findFirst({
-        where: { classId: cls.id, name: "A" },
-      });
+      if (cls.program !== program) {
+        await prisma.class.update({
+          where: { id: cls.id },
+          data: {
+            program,
+            year: yearForSemester(semester),
+            proctorId: semester === 7 && batch === "ECE 2" ? teacher.id : cls.proctorId,
+          },
+        });
+      }
 
       const section =
-        existingSection ??
+        (await prisma.section.findFirst({
+          where: { classId: cls.id, name: "A" },
+        })) ??
         (await prisma.section.create({
           data: {
             classId: cls.id,
@@ -174,6 +191,13 @@ async function main() {
             strength: batch === "ECE 2" && semester === 7 ? 65 : 0,
           },
         }));
+
+      if (batch === "ECE 2" && semester === 7) {
+        await prisma.section.update({
+          where: { id: section.id },
+          data: { strength: 65 },
+        });
+      }
 
       for (const subject of subjectsBySemester[semester]) {
         const existingSubject = await prisma.subject.findFirst({
