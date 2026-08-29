@@ -1,0 +1,51 @@
+/* Overall Analysis layout fixes */
+.overall-analysis-root { min-width: 0 !important; overflow-x: hidden !important; }
+
+.overall-analysis-root input,
+.overall-analysis-root select {
+  min-width: 0 !important;
+  height: 34px !important;
+  padding: 7px 9px !important;
+  border-radius: 9px !important;
+  font-size: 12px !important;
+}
+
+.overall-analysis-root table {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+
+.overall-analysis-root table th,
+.overall-analysis-root table td {
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 8px 7px !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.overall-analysis-root table th:first-child,
+.overall-analysis-root table td:first-child { width: 15% !important; }
+.overall-analysis-root table th:nth-child(2),
+.overall-analysis-root table td:nth-child(2) { width: 13% !important; }
+.overall-analysis-root table th:nth-child(n+3),
+.overall-analysis-root table td:nth-child(n+3) { width: 9% !important; }
+
+.overall-analysis-root .overflow-x-auto { overflow-x: hidden !important; }
+.overall-analysis-root .overflow-x-auto > table { min-width: 0 !important; }
+.overall-analysis-root .grid { min-width: 0; }
+.overall-analysis-root .grid > * { min-width: 0; }
+
+@media (max-width: 1100px) {
+  .overall-analysis-root table th,
+  .overall-analysis-root table td {
+    padding: 7px 5px !important;
+    font-size: 10px !important;
+  }
+}
