@@ -12,6 +12,11 @@ enum Role {
   TEACHER
 }
 
+enum SubjectType {
+  THEORY
+  LAB
+}
+
 model College {
   id          String       @id @default(cuid())
   name        String
@@ -89,6 +94,7 @@ model Subject {
   id           String       @id @default(cuid())
   name         String
   code         String
+  type         SubjectType  @default(THEORY)
   section      Section      @relation(fields: [sectionId], references: [id])
   sectionId    String
   sheetLink    SheetLink?

@@ -8,7 +8,7 @@
     "start": "next start",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts && ts-node prisma/fix-geetanjali-assignments.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
@@ -35,6 +35,6 @@
     "wait-on": "^9.1.0"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts && ts-node prisma/fix-geetanjali-assignments.ts"
   }
 }
