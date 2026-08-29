@@ -49,7 +49,6 @@ export default function ClassAnalysisPage() {
             <thead>
               <tr className="text-left text-gray-400 border-b border-gray-100">
                 <th className="py-3 px-4">Subject</th>
-                <th className="py-3 px-4">Section</th>
                 <th className="py-3 px-4">Class Average</th>
                 <th className="py-3 px-4">Pass Rate</th>
                 <th className="py-3 px-4">Last Synced</th>
@@ -60,7 +59,6 @@ export default function ClassAnalysisPage() {
               {data.subjects.map((s) => (
                 <tr key={s.subjectId} className="border-b border-gray-50">
                   <td className="py-3 px-4 text-gray-900">{s.subjectName}</td>
-                  <td className="py-3 px-4 text-gray-500">{s.section}</td>
                   <td className="py-3 px-4">
                     {s.classAverage !== null ? `${s.classAverage}%` : "—"}
                   </td>
