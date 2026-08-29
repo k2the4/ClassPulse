@@ -8,13 +8,13 @@ import { RawDataButton } from "../../../components/AnalysisWidgets";
 type View = "internal" | "risk";
 type SortDirection = "none" | "asc" | "desc";
 type ColumnKey = "assignment" | "presentation" | "attendance" | "moderatedAttendance" | "midsem1" | "midsem2" | "basic" | "moderated";
-type WeightKey = "assignment" | "presentation" | "attendance" | "midsem1" | "midsem2";
+type WeightKey = "assignment" | "presentation" | "attendance" | "moderatedAttendance" | "midsem1" | "midsem2";
 type Weights = Record<WeightKey, number>;
 type Criteria = { from: number; to: number; minMarks: number; maxMarks: number };
 
 const TARGET = 40;
 const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#ef4444"];
-const DEFAULT_WEIGHTS: Weights = { assignment: 5, presentation: 5, attendance: 10, midsem1: 10, midsem2: 10 };
+const DEFAULT_WEIGHTS: Weights = { assignment: 5, presentation: 5, attendance: 10, moderatedAttendance: 10, midsem1: 10, midsem2: 10 };
 const DEFAULT_CRITERIA: Criteria[] = [
   { from: 1, to: 10, minMarks: 38, maxMarks: 40 },
   { from: 11, to: 25, minMarks: 35, maxMarks: 38 },
@@ -28,6 +28,7 @@ const COMPONENTS: { key: WeightKey; label: string }[] = [
   { key: "attendance", label: "Attendance" },
   { key: "midsem1", label: "Midsem 1" },
   { key: "midsem2", label: "Midsem 2" },
+  { key: "moderatedAttendance", label: "Moderated Att." },
 ];
 
 const HEADERS: { key: ColumnKey; label: string }[] = [
@@ -90,7 +91,7 @@ export default function SubjectOverallPage() {
   const [view, setView] = useState<View>("internal");
   const [weights, setWeights] = useState<Weights>(DEFAULT_WEIGHTS);
   const [draftWeights, setDraftWeights] = useState<Weights>(DEFAULT_WEIGHTS);
-  const [basicColumns, setBasicColumns] = useState<WeightKey[]>(["assignment", "presentation", "attendance", "midsem1", "midsem2"]);
+  const [basicColumns, setBasicColumns] = useState<WeightKey[]>(["assignment", "presentation", "moderatedAttendance", "midsem1", "midsem2"]);
   const [criteria, setCriteria] = useState<Criteria[]>(DEFAULT_CRITERIA);
   const [sortColumn, setSortColumn] = useState<ColumnKey>("moderated");
   const [sortDirection, setSortDirection] = useState<SortDirection>("none");
@@ -147,9 +148,10 @@ export default function SubjectOverallPage() {
 
     const withBasic = preliminary.map(row => {
       const moderatedAttendance = attendanceMap.get(row.enrollmentNo) ?? 0;
-      const values: Record<string, number> = { ...row, moderatedAttendance };
+      const moderatedAttendanceWeighted = weighted(moderatedAttendance, 10, weights.moderatedAttendance);
+      const values: Record<string, number> = { ...row, moderatedAttendance: moderatedAttendanceWeighted };
       const basic = round1(basicColumns.reduce((sum, key) => sum + (Number(values[key]) || 0), 0));
-      return { ...row, moderatedAttendance, basic };
+      return { ...row, moderatedAttendance, moderatedAttendanceWeighted, basic };
     });
 
     const rankedBasic = [...withBasic].sort((a, b) => b.basic - a.basic || a.originalIndex - b.originalIndex);
@@ -192,7 +194,12 @@ export default function SubjectOverallPage() {
   }
 
   function toggleBasic(key: WeightKey) {
-    setBasicColumns(current => current.includes(key) ? current.filter(x => x !== key) : [...current, key]);
+    setBasicColumns(current => {
+      if (current.includes(key)) return current.filter(x => x !== key);
+      if (key === "attendance") return [...current.filter(x => x !== "moderatedAttendance"), key];
+      if (key === "moderatedAttendance") return [...current.filter(x => x !== "attendance"), key];
+      return [...current, key];
+    });
   }
 
   function applyWeights() {
@@ -247,35 +254,30 @@ export default function SubjectOverallPage() {
     </div>
 
     {typeof subjectId === "string" && <SubjectAnalysisNav subjectId={subjectId}/>} 
-    {error && <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg p-4 mt-5">{error}</div>}
+    {error && <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg p-4 mt-4">{error}</div>}
     {loading && !data && <div className="text-sm text-slate-500 py-10">Loading overall analysis...</div>}
 
     {data && <>
-      <div className="mt-5 mb-4">
-        <h2 className="text-xl font-semibold text-slate-900">Overall Analysis</h2>
-        <p className="text-sm text-slate-500 mt-1">Configure internal marks, moderation, ranking and at-risk filtering for this subject.</p>
-      </div>
-
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mt-4 mb-3">
         <button onClick={() => setView("internal")} className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === "internal" ? "bg-[#3d2aa0] text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>Internal Marks</button>
         <button onClick={() => setView("risk")} className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === "risk" ? "bg-[#3d2aa0] text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>At Risk</button>
       </div>
 
       {view === "internal" ? <>
-        <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-3 mb-4 items-start">
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
+        <div className="grid grid-cols-1 xl:grid-cols-[0.92fr_1.08fr] gap-3 mb-3 items-start">
+          <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+            <div className="flex items-center justify-between mb-2.5">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Applied Components Summary</h3>
                 <p className="text-xs text-slate-500 mt-0.5">Choose components and set their weightage.</p>
               </div>
               <span className={`text-xs font-semibold ${selectedTotal === TARGET ? "text-emerald-600" : "text-amber-600"}`}>Selected total: {selectedTotal}/40</span>
             </div>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 grid-rows-2 gap-2">
               {COMPONENTS.map(({ key, label }) => {
                 const checked = basicColumns.includes(key);
-                return <label key={key} className={`rounded-lg border p-2.5 cursor-pointer transition ${checked ? "border-violet-200 bg-violet-50/60" : "border-slate-200 bg-white"}`}>
-                  <div className="flex items-center gap-2 min-w-0">
+                return <label key={key} className={`min-w-0 rounded-lg border p-2.5 cursor-pointer transition ${checked ? "border-violet-200 bg-violet-50/60" : "border-slate-200 bg-white"}`}>
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <input type="checkbox" checked={checked} onChange={() => toggleBasic(key)} className="h-4 w-4 accent-[#4a35b3] shrink-0" />
                     <span className="text-xs font-medium text-slate-700 truncate">{label}</span>
                   </div>
@@ -283,13 +285,13 @@ export default function SubjectOverallPage() {
                 </label>;
               })}
             </div>
-            <div className="flex items-center justify-between mt-3 gap-3">
+            <div className="flex items-center justify-between mt-2.5 gap-3">
               <p className="text-[11px] leading-4 text-slate-400">Only checked components count. Weightage is normalized to exactly 40 when applied.</p>
               <button onClick={applyWeights} disabled={applyingWeights || selectedTotal <= 0} className="shrink-0 bg-[#3d2aa0] text-white text-sm font-semibold rounded-lg px-4 py-2 shadow-sm disabled:opacity-50">{applyingWeights ? "Applying..." : "Apply"}</button>
             </div>
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+          <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="flex items-start justify-between gap-3 mb-2">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Moderated Marks Criteria</h3>
@@ -322,28 +324,31 @@ export default function SubjectOverallPage() {
           <div className="max-h-[620px] overflow-y-auto overflow-x-hidden">
             <table className="w-full table-fixed border-collapse text-[11px]">
               <colgroup>
-                <col className="w-[15%]"/><col className="w-[12%]"/>
-                <col className="w-[9%]"/><col className="w-[9%]"/><col className="w-[9%]"/><col className="w-[10%]"/><col className="w-[9%]"/><col className="w-[9%]"/><col className="w-[8%]"/><col className="w-[10%]"/>
+                <col className="w-[4%]"/><col className="w-[14%]"/><col className="w-[11%]"/>
+                <col className="w-[8%]"/><col className="w-[8%]"/><col className="w-[8%]"/><col className="w-[10%]"/>
+                <col className="w-[8%]"/><col className="w-[8%]"/><col className="w-[9%]"/><col className="w-[10%]"/>
               </colgroup>
               <thead className="sticky top-0 bg-white z-10">
                 <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="text-left px-3 py-2.5 font-semibold">Name</th>
-                  <th className="text-left px-2 py-2.5 font-semibold">Enrollment</th>
-                  {HEADERS.map(h => <th key={h.key} className="text-center px-1 py-2.5 font-semibold">{h.label}</th>)}
+                  <th className="text-center px-1 py-2.5 font-semibold">#</th>
+                  <th className="text-left px-2 py-2.5 font-semibold">Name</th>
+                  <th className="text-center px-1 py-2.5 font-semibold">Enrollment</th>
+                  {HEADERS.map(h => <th key={h.key} className="text-center px-1 py-2.5 font-semibold leading-3">{h.label}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {sortedRows.map(row => <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
-                  <td className="px-3 py-2 text-slate-800 font-medium truncate" title={row.name}>{row.name}</td>
-                  <td className="px-2 py-2 text-slate-500 truncate">{row.enrollmentNo}</td>
-                  <td className="text-center px-1 py-2 text-slate-700">{row.assignment}</td>
-                  <td className="text-center px-1 py-2 text-slate-700">{row.presentation}</td>
-                  <td className="text-center px-1 py-2 text-slate-700">{row.attendance}</td>
-                  <td className="text-center px-1 py-2 text-slate-700">{row.moderatedAttendance}</td>
-                  <td className="text-center px-1 py-2 text-slate-700">{row.midsem1}</td>
-                  <td className="text-center px-1 py-2 text-slate-700">{row.midsem2}</td>
-                  <td className={`text-center px-1 py-2 ${scoreClass(row.basic)}`}>{row.basic}</td>
-                  <td className={`text-center px-1 py-2 ${scoreClass(row.moderated)}`}>{row.moderated}</td>
+                {sortedRows.map((row, index) => <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
+                  <td className="text-center px-1 py-2 text-slate-400 tabular-nums">{index + 1}</td>
+                  <td className="px-2 py-2 text-slate-800 font-medium truncate" title={row.name}>{row.name}</td>
+                  <td className="text-center px-1 py-2 text-slate-500 truncate tabular-nums">{row.enrollmentNo}</td>
+                  <td className="text-center px-1 py-2 text-slate-700 tabular-nums">{row.assignment}</td>
+                  <td className="text-center px-1 py-2 text-slate-700 tabular-nums">{row.presentation}</td>
+                  <td className="text-center px-1 py-2 text-slate-700 tabular-nums">{row.attendance}</td>
+                  <td className="text-center px-1 py-2 text-slate-700 tabular-nums">{row.moderatedAttendanceWeighted}</td>
+                  <td className="text-center px-1 py-2 text-slate-700 tabular-nums">{row.midsem1}</td>
+                  <td className="text-center px-1 py-2 text-slate-700 tabular-nums">{row.midsem2}</td>
+                  <td className={`text-center px-1 py-2 ${scoreClass(row.basic)} tabular-nums`}>{row.basic}</td>
+                  <td className={`text-center px-1 py-2 ${scoreClass(row.moderated)} tabular-nums`}>{row.moderated}</td>
                 </tr>)}
               </tbody>
             </table>
