@@ -11,7 +11,6 @@ import {
   BookOpen,
   CalendarDays,
   CheckCircle2,
-  ClipboardCheck,
   Clock3,
   Database,
   FileText,
@@ -184,12 +183,11 @@ export default function Dashboard({ teacherName, sections, subjects }: Props) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {quickActions.map((action) => {
                 const Icon = action.icon;
-                const isAnalysis = action.title === "Class Analysis" || action.title === "Subject Analysis";
-                const href = isAnalysis
-                  ? action.title === "Class Analysis"
-                    ? sections[0]?.id ? `/section-analysis/${sections[0].id}` : "/section-analysis"
-                    : subjects[0]?.id ? `/subject-analysis/${subjects[0].id}` : "/subject-analysis"
-                  : action.href;
+                const href = action.title === "Class Analysis"
+                  ? sections[0]?.id ? `/section-analysis/${sections[0].id}` : "/section-analysis"
+                  : action.title === "Subject Analysis"
+                    ? "/subject-analysis"
+                    : action.href;
 
                 return (
                   <Link key={action.title} href={href} className="group flex min-h-[116px] items-center gap-4 rounded-xl border border-[#e6e6e5] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[#d9d2ff] hover:shadow-[0_8px_24px_rgba(57,38,143,0.08)]">
@@ -237,15 +235,14 @@ export default function Dashboard({ teacherName, sections, subjects }: Props) {
               <div className="flex items-center justify-between border-b border-[#eeeeeb] px-5 py-5 sm:px-6">
                 <div>
                   <h2 className="text-lg font-bold">Recent Activity</h2>
-                  <p className="mt-1 text-xs text-[#7b8498]">Your latest actions in ClassPulse.</p>
+                  <p className="mt-1 text-xs text-[#7b8498]">Your latest updates and actions.</p>
                 </div>
-                <button type="button" className="text-xs font-semibold text-[#5b4ee6]">View all activity <ArrowRight size={13} className="ml-1 inline" /></button>
               </div>
-              <div className="px-5 sm:px-6">
-                {recentActivity.map((activity) => {
+              <div className="divide-y divide-[#eeeeeb] px-5 sm:px-6">
+                {recentActivity.map((activity, index) => {
                   const Icon = activity.icon;
                   return (
-                    <div key={activity.text} className="flex items-center gap-3 border-b border-[#eeeeeb] py-4 last:border-0">
+                    <div key={`${activity.text}-${index}`} className="flex items-center gap-3 py-4">
                       <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${activity.tone}`}><Icon size={17} /></span>
                       <p className="min-w-0 flex-1 text-xs font-medium leading-5 text-[#3f485d]">{activity.text}</p>
                       <span className="shrink-0 text-[10px] font-medium text-[#8991a2]">{activity.time}</span>
