@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  const college = await prisma.college.create({ data: { name: "Demo Institute of Technology" } });
+  const college = await prisma.college.create({ data: { name: "Demo Institute of Technology" });
 
   const dept = await prisma.department.create({
     data: { name: "ECE", collegeId: college.id },
@@ -22,7 +22,7 @@ async function main() {
     },
   });
 
-  const admin = await prisma.user.create({
+  await prisma.user.create({
     data: {
       name: "College Admin",
       email: "admin@demo.edu",
@@ -43,35 +43,40 @@ async function main() {
     },
   });
 
+  // ClassPulse's teacher-facing identity is ECE 2 Sem 7. The existing
+  // Section model remains an internal storage boundary; "2" is the class
+  // number here, not a user-facing "Section A" label.
   const section = await prisma.section.create({
-    data: { classId: cls.id, name: "A", strength: 65 },
+    data: { classId: cls.id, name: "2", strength: 65 },
   });
 
-  const subject = await prisma.subject.create({
-    data: { name: "Data Analysis", code: "DA 338 T", sectionId: section.id },
-  });
+  const subjects = [
+    { code: "MLDA", name: "Machine Learning and Data Analytics Frameworks" },
+    { code: "IOT", name: "Internet of Things" },
+    { code: "PR", name: "Pattern Recognition" },
+    { code: "PE", name: "Principles of Entrepreneurship" },
+    { code: "USL", name: "Unsupervised Learning" },
+    { code: "SL", name: "Supervised and Deep Learning" },
+  ];
 
-  await prisma.assignment.create({
-    data: { teacherId: teacher.id, subjectId: subject.id },
-  });
+  for (const subject of subjects) {
+    const created = await prisma.subject.create({
+      data: { ...subject, sectionId: section.id },
+    });
 
-  // ECE 2 Sem 7 combined section sheet. Subject Analysis prefers this
-  // section-level link, so all subjects read from the same current sheet.
+    await prisma.assignment.create({
+      data: { teacherId: teacher.id, subjectId: created.id },
+    });
+  }
+
+  // ECE 2 Sem 7 combined sheet. Subject and class analysis both resolve
+  // through this section-level link, so the old Sem 6 sheet is not used.
   const ece2Sem7SheetId =
     "1T9F-99yjdoe99hh16urc1eQHZuiMZuTemzXk3s9sHeY";
 
   await prisma.sheetLink.create({
     data: {
       sectionId: section.id,
-      sheetId: ece2Sem7SheetId,
-    },
-  });
-
-  // Keep the optional subject-level link aligned with the same current
-  // proof-of-concept sheet rather than leaving the old sheet configured.
-  await prisma.sheetLink.create({
-    data: {
-      subjectId: subject.id,
       sheetId: ece2Sem7SheetId,
     },
   });
