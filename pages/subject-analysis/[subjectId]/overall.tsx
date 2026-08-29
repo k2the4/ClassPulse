@@ -66,6 +66,12 @@ function scoreClass(value: number, max = 40) {
   if (ratio >= 0.6) return "text-amber-600 font-semibold";
   return "text-red-500 font-semibold";
 }
+function riskStatus(value: number) {
+  if (value > 32) return { label: "Excellent", className: "bg-emerald-50 text-emerald-700" };
+  if (value >= 24) return { label: "Good", className: "bg-green-50 text-green-700" };
+  if (value >= 16) return { label: "Needs Attention", className: "bg-amber-50 text-amber-700" };
+  return { label: "Critical Risk", className: "bg-red-50 text-red-600" };
+}
 
 export default function SubjectOverallPage() {
   const router = useRouter();
@@ -88,6 +94,10 @@ export default function SubjectOverallPage() {
   const [riskColumn, setRiskColumn] = useState<ColumnKey>("basic");
   const [riskLower, setRiskLower] = useState(0);
   const [riskUpper, setRiskUpper] = useState(40);
+  const [draftRiskColumn, setDraftRiskColumn] = useState<ColumnKey>("basic");
+  const [draftRiskLower, setDraftRiskLower] = useState(0);
+  const [draftRiskUpper, setDraftRiskUpper] = useState(40);
+  const [draftSortDirection, setDraftSortDirection] = useState<SortDirection>("none");
 
   async function loadAnalysis(sync = false) {
     if (!subjectId || typeof subjectId !== "string") return;
@@ -143,17 +153,31 @@ export default function SubjectOverallPage() {
   }, [baseRows, riskColumn, riskLower, riskUpper, sortDirection]);
   const topFive = useMemo(() => [...filteredRiskRows].sort((a, b) => columnValue(b, riskColumn) - columnValue(a, riskColumn)).slice(0, 5), [filteredRiskRows, riskColumn]);
   const riskDistribution = useMemo(() => [
-    { name: "Above 32", value: baseRows.filter(r => r.basic > 32).length },
-    { name: "24–32", value: baseRows.filter(r => r.basic >= 24 && r.basic <= 32).length },
-    { name: "16–24", value: baseRows.filter(r => r.basic >= 16 && r.basic < 24).length },
-    { name: "Below 16", value: baseRows.filter(r => r.basic < 16).length },
-  ], [baseRows]);
+    { name: "Excellent", value: baseRows.filter(r => columnValue(r, riskColumn) > 32) .length, lower: 32.0001, upper: 40 },
+    { name: "Good", value: baseRows.filter(r => { const v = columnValue(r, riskColumn); return v >= 24 && v <= 32; }).length, lower: 24, upper: 32 },
+    { name: "Needs Attention", value: baseRows.filter(r => { const v = columnValue(r, riskColumn); return v >= 16 && v < 24; }).length, lower: 16, upper: 23.9999 },
+    { name: "Critical Risk", value: baseRows.filter(r => columnValue(r, riskColumn) < 16).length, lower: 0, upper: 15.9999 },
+  ], [baseRows, riskColumn]);
 
   function updateWeight(key: WeightKey, value: string) { setDraftWeights(current => ({ ...current, [key]: num(value, current[key]) })); }
   function toggleBasic(key: WeightKey) { setDraftBasicColumns(current => { if (current.includes(key)) return current.filter(x => x !== key); if (key === "attendance") return [...current.filter(x => x !== "moderatedAttendance"), key]; if (key === "moderatedAttendance") return [...current.filter(x => x !== "attendance"), key]; return [...current, key]; }); }
   function applyWeights() { if (selectedTotal <= 0) return; setApplyingWeights(true); const applied = normalize(draftBasicColumns, draftWeights); setBasicColumns(draftBasicColumns); setWeights(applied); setDraftWeights(applied); window.setTimeout(() => setApplyingWeights(false), 250); }
   function updateCriteria(i: number, field: keyof Criteria, value: string) {
     setCriteria(current => { const next = current.map(row => ({ ...row })); const parsed = num(value, next[i][field]); if (field === "from") return current; if (field === "to") next[i].to = Math.max(next[i].from, Math.floor(parsed)); else next[i][field] = parsed; next[0].from = 1; for (let index = 1; index < next.length; index++) { next[index].from = next[index - 1].to + 1; if (next[index].to < next[index].from) next[index].to = next[index].from; } return next; });
+  }
+  function applyRiskFilters() {
+    const lo = Math.min(draftRiskLower, draftRiskUpper);
+    const hi = Math.max(draftRiskLower, draftRiskUpper);
+    setRiskColumn(draftRiskColumn);
+    setRiskLower(lo);
+    setRiskUpper(hi);
+    setSortDirection(draftSortDirection);
+  }
+  function selectDistributionBucket(index: number) {
+    const bucket = riskDistribution[index];
+    if (!bucket) return;
+    setDraftRiskLower(bucket.lower);
+    setDraftRiskUpper(bucket.upper);
   }
 
   return <div className="analysis-layout">
@@ -180,18 +204,19 @@ export default function SubjectOverallPage() {
           <section className="at-risk-filter rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="at-risk-filter-inner">
               <div className="at-risk-filter-title"><h3>At-Risk Filters</h3><p>Choose a mark column, range and sort.</p></div>
-              <label><span>Column</span><select value={riskColumn} onChange={e => setRiskColumn(e.target.value as ColumnKey)}><option value="basic">Basic</option><option value="moderated">Moderated</option><option value="assignment">Assignment</option><option value="presentation">Presentation</option><option value="attendance">Attendance</option><option value="moderatedAttendance">Moderated Att.</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></label>
-              <label><span>Lower bound</span><input type="number" min="0" max="40" value={riskLower} onChange={e => setRiskLower(num(e.target.value,riskLower))}/></label>
-              <label><span>Upper bound</span><input type="number" min="0" max="40" value={riskUpper} onChange={e => setRiskUpper(num(e.target.value,riskUpper))}/></label>
-              <label><span>Sort</span><select value={sortDirection} onChange={e => setSortDirection(e.target.value as SortDirection)}><option value="none">No sort</option><option value="asc">Low to high</option><option value="desc">High to low</option></select></label>
+              <label><span>Column</span><select value={draftRiskColumn} onChange={e => setDraftRiskColumn(e.target.value as ColumnKey)}><option value="basic">Basic</option><option value="moderated">Moderated</option><option value="assignment">Assignment</option><option value="presentation">Presentation</option><option value="attendance">Attendance</option><option value="moderatedAttendance">Moderated Att.</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option></select></label>
+              <label><span>Lower bound</span><input type="number" min="0" max="40" value={draftRiskLower} onChange={e => setDraftRiskLower(num(e.target.value,draftRiskLower))}/></label>
+              <label><span>Upper bound</span><input type="number" min="0" max="40" value={draftRiskUpper} onChange={e => setDraftRiskUpper(num(e.target.value,draftRiskUpper))}/></label>
+              <label><span>Sort</span><select value={draftSortDirection} onChange={e => setDraftSortDirection(e.target.value as SortDirection)}><option value="none">No sort</option><option value="asc">Low to high</option><option value="desc">High to low</option></select></label>
+              <button type="button" onClick={applyRiskFilters} className="at-risk-apply">Apply</button>
             </div>
           </section>
           <section className="at-risk-table rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-slate-900">Filtered Students</h3><p className="text-[10px] text-slate-500 mt-0.5">Showing {filteredRiskRows.length} of {baseRows.length} students.</p></div><span className="text-[10px] rounded-full bg-slate-100 px-2 py-1 text-slate-600">{filteredRiskRows.length} Students</span></div>
-            <div className="max-h-[620px] overflow-y-auto overflow-x-hidden"><table className="w-full table-fixed text-[10px] border-collapse"><colgroup><col className="w-[18%]"/><col className="w-[24%]"/><col className="w-[12%]"/><col className="w-[12%]"/><col className="w-[10%]"/><col className="w-[10%]"/><col className="w-[14%]"/></colgroup><thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-left px-2 py-2">Enrollment</th><th className="text-left px-2 py-2">Student</th><th className="text-center px-1 py-2">Marks</th><th className="text-center px-1 py-2">Moderated</th><th className="text-center px-1 py-2">Rank</th><th className="text-center px-1 py-2">Tier</th><th className="text-center px-1 py-2">Status</th></tr></thead><tbody>{filteredRiskRows.map(row=><tr key={row.enrollmentNo} className="border-b border-slate-100"><td className="px-2 py-1.5 text-slate-500 truncate">{row.enrollmentNo}</td><td className="px-2 py-1.5 font-medium text-slate-800 truncate">{row.name}</td><td className={`text-center px-1 py-1.5 ${scoreClass(row.basic)}`}>{row.basic}</td><td className={`text-center px-1 py-1.5 ${scoreClass(row.moderated)}`}>{row.moderated}</td><td className="text-center px-1 py-1.5 text-slate-600">{row.rank}</td><td className="text-center px-1 py-1.5 text-slate-600">{criteria.findIndex(c=>row.rank>=c.from&&row.rank<=c.to)+1||"—"}</td><td className="text-center px-1 py-1.5"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] ${row.basic<16?"bg-red-50 text-red-600":row.basic<24?"bg-amber-50 text-amber-700":"bg-emerald-50 text-emerald-700"}`}>{row.basic<16?"Critical Risk":row.basic<24?"Needs Attention":"Good"}</span></td></tr>)}</tbody></table></div>
+            <div className="max-h-[620px] overflow-y-auto overflow-x-hidden"><table className="w-full table-fixed text-[10px] border-collapse"><colgroup>{sortDirection !== "none" && <col className="w-[7%]"/>}<col className="w-[18%]"/><col className="w-[27%]"/><col className="w-[13%]"/><col className="w-[13%]"/><col className="w-[14%]"/></colgroup><thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500">{sortDirection !== "none" && <th className="text-center px-1 py-2">Rank</th>}<th className="text-left px-2 py-2">Enrollment</th><th className="text-left px-2 py-2">Student</th><th className="text-center px-1 py-2">Marks</th><th className="text-center px-1 py-2">Moderated</th><th className="text-center px-1 py-2">Status</th></tr></thead><tbody>{filteredRiskRows.map((row,index)=>{ const status = riskStatus(columnValue(row,riskColumn)); return <tr key={row.enrollmentNo} className="border-b border-slate-100"><>{sortDirection !== "none" && <td className="text-center px-1 py-1.5 text-slate-600">{index + 1}</td>}<td className="px-2 py-1.5 text-slate-500 truncate">{row.enrollmentNo}</td><td className="px-2 py-1.5 font-medium text-slate-800 truncate">{row.name}</td><td className={`text-center px-1 py-1.5 ${scoreClass(row.basic)}`}>{row.basic}</td><td className={`text-center px-1 py-1.5 ${scoreClass(row.moderated)}`}>{row.moderated}</td><td className="text-center px-1 py-1.5"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] ${status.className}`}>{status.label}</span></td></tr>})}</tbody></table></div>
           </section>
           <aside className="at-risk-side-stack">
-            <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><h3 className="text-sm font-semibold text-slate-900">Distribution</h3><div className="h-52 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={riskDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}>{riskDistribution.map((_,i)=><Cell key={i} fill={COLORS[i]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer></div></section>
+            <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><h3 className="text-sm font-semibold text-slate-900">Distribution</h3><p className="mt-0.5 text-[10px] text-slate-500">Click a segment to stage that score range in the filters.</p><div className="h-52 mt-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={riskDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`} labelLine={false} onClick={(_, index) => selectDistributionBucket(index)}>{riskDistribution.map((_,i)=><Cell key={i} fill={COLORS[i]} cursor="pointer"/>)}</Pie><Tooltip formatter={(value: number) => [`${value} students`, "Count"]}/></PieChart></ResponsiveContainer></div></section>
             <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"><div className="px-3 py-2 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-900">Top Students in Filter</h3></div><div className="grid grid-cols-1 divide-y divide-slate-100">{topFive.map(row=><div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3"><div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div><div className={`text-sm shrink-0 ${scoreClass(columnValue(row,riskColumn))}`}>{columnValue(row,riskColumn)}</div></div>)}</div></section>
           </aside>
         </div>
