@@ -13,14 +13,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const role = (session.user as any).role;
 
   // The analysis UI is section-based, but older dashboard/class-analysis links
-  // used a class id. Resolve either form here so navigation cannot break access.
-  const section = await prisma.section.findUnique({ where: { id: requestedId } });
-  const resolvedSection = section || await prisma.section.findFirst({ where: { classId: requestedId } });
+  // may still provide a class id. Resolve a direct section id first. If the id
+  // is a class id, resolve to a section the current teacher is actually allowed
+  // to view instead of blindly selecting the first section in that class.
+  let resolvedSection = await prisma.section.findUnique({
+    where: { id: requestedId },
+  });
+
   if (!resolvedSection) {
-    return res.status(404).json({ error: "Section not found" });
+    if (role === "ADMIN") {
+      resolvedSection = await prisma.section.findFirst({
+        where: { classId: requestedId },
+      });
+    } else {
+      resolvedSection = await prisma.section.findFirst({
+        where: {
+          classId: requestedId,
+          OR: [
+            { class: { proctorId: userId } },
+            {
+              subjects: {
+                some: {
+                  assignments: {
+                    some: { teacherId: userId },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
   }
+
+  if (!resolvedSection) {
+    return res.status(404).json({ error: "Section not found or not assigned to you" });
+  }
+
   const sectionId = resolvedSection.id;
 
+  // Keep the existing authorization check for direct section URLs as the final
+  // guard. This does not weaken access; it only fixes legacy class-id routing.
   const allowed = await assertTeacherCanViewSection(userId, role, sectionId);
   if (!allowed) {
     return res.status(403).json({ error: "Not authorized for this section" });
