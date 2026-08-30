@@ -1,680 +1,268 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
-
+import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, RefreshCw } from "lucide-react";
 import AnalysisNav from "../../../components/AnalysisNav";
+import { RawDataButton } from "../../../components/AnalysisWidgets";
 import { SectionAnalysis } from "../../../lib/analysisClass";
-import { RawDataButton, StatCard, GradeBadge, RankedList } from "../../../components/AnalysisWidgets";
 
-type AcademicView = "midsem1" | "midsem2" | "combined" | "summary";
-type ExamKey = "midsem1" | "midsem2" | "combined" | "max";
+type AcademicView = "midsem1" | "midsem2";
+type Tier = "Excellent" | "Good" | "Needs Attention" | "Critical Risk";
 
-const TIER_COLORS: Record<string, string> = {
-  Excellent: "#10b981",
-  Good: "#3b82f6",
+const TIER_COLORS: Record<Tier, string> = {
+  Excellent: "#2563eb",
+  Good: "#15966a",
   "Needs Attention": "#f59e0b",
   "Critical Risk": "#ef4444",
 };
 
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
+const round1 = (n: number) => Math.round(n * 10) / 10;
+const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+
+function median(values: number[]) {
+  if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0 ? sorted[mid] : round1((sorted[mid - 1] + sorted[mid]) / 2);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : round1((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
-}
-
-// Grades a single exam score against its own max, same thresholds used
-// throughout the app (Excellent/Good/Needs Attention/Critical Risk).
-function gradeFor(marks: number, max: number): string {
+function tierFor(marks: number, max: number): Tier {
   if (max <= 0) return "Critical Risk";
-  const pct = (marks / max) * 100;
-  if (pct >= 80) return "Excellent";
-  if (pct >= 60) return "Good";
-  if (pct >= 40) return "Needs Attention";
+  const percentage = (marks / max) * 100;
+  if (percentage >= 80) return "Excellent";
+  if (percentage >= 60) return "Good";
+  if (percentage >= 40) return "Needs Attention";
   return "Critical Risk";
+}
+
+function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-[#e6e5e2] bg-white px-5 py-4 shadow-[0_8px_28px_rgba(31,35,49,0.04)]">
+      <div className="text-[11px] font-semibold text-[#6f7890]">{label}</div>
+      <div className="mt-1 text-[25px] font-extrabold tracking-[-1px] text-[#17223b]">{value}</div>
+      <div className="mt-1 text-[10px] text-[#98a2b3]">{detail}</div>
+    </div>
+  );
 }
 
 export default function AcademicPage() {
   const router = useRouter();
   const { sectionId } = router.query;
-
   const [view, setView] = useState<AcademicView>("midsem1");
-
   const [data, setData] = useState<SectionAnalysis | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [computedAt, setComputedAt] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+  const [selectedTier, setSelectedTier] = useState<Tier | null>(null);
 
-  // Combined view controls
-  const [gradeBasis, setGradeBasis] = useState<ExamKey>("combined");
-  const [sortDir, setSortDir] = useState<"desc" | "asc" | "none">("desc");
-
-  // Summary (filter) view controls
-  const [filterExam, setFilterExam] = useState<"midsem1" | "midsem2" | "both">("both");
-  const [lowerBound, setLowerBound] = useState(0);
-  const [upperBound, setUpperBound] = useState(100);
-
-  async function loadAnalysis() {
+  async function loadAnalysis(sync = false) {
     if (!sectionId || typeof sectionId !== "string") return;
-    setLoading(true);
+    sync ? setSyncing(true) : setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/analysis/section/${sectionId}`);
+      const res = await fetch(`/api/analysis/section/${sectionId}${sync ? "?sync=1" : ""}`);
       const json = await res.json();
-      if (!res.ok) {
-        setError(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to load academic analysis");
-        return;
-      }
+      if (!res.ok) throw new Error(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to load academic analysis");
       setData(json.data);
-      setComputedAt(json.computedAt);
+      setComputedAt(json.computedAt || "");
       setSheetId(json.sheetId || null);
     } catch (e: any) {
       setError(e.message || "Failed to load academic analysis");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function syncAnalysis() {
-    if (!sectionId || typeof sectionId !== "string") return;
-    setSyncing(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/analysis/section/${sectionId}?sync=1`);
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to sync analysis");
-        return;
-      }
-      setData(json.data);
-      setComputedAt(json.computedAt);
-      setSheetId(json.sheetId || null);
-    } catch (e: any) {
-      setError(e.message || "Failed to sync analysis");
-    } finally {
       setSyncing(false);
     }
   }
 
-  useEffect(() => {
-    loadAnalysis();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionId]);
+  useEffect(() => { loadAnalysis(); }, [sectionId]);
+  useEffect(() => { setSelectedTier(null); }, [view]);
 
   const students = data?.students || [];
 
-  // ---------- Single-exam view (MidSem 1 / MidSem 2) ----------
-  function useSingleExamStats(examKey: "midsem1" | "midsem2") {
-    return useMemo(() => {
-      const rows = students
-        .map((s: any) => ({
-          enrollmentNo: s.enrollmentNo,
-          name: s.name,
-          marks: examKey === "midsem1" ? s.examMarks.midsem1 : s.examMarks.midsem2,
-          max: examKey === "midsem1" ? s.examMarks.midsem1Max : s.examMarks.midsem2Max,
-          subjects: examKey === "midsem1" ? s.examMarks.midsem1Subjects : s.examMarks.midsem2Subjects,
-        }))
-        .filter((r: any) => r.marks !== null);
+  const activeStats = useMemo(() => {
+    const exam = view === "midsem1" ? "midsem1" : "midsem2";
+    const rows = students.map((student: any) => {
+      const marks = student.examMarks?.[exam] ?? null;
+      const max = student.examMarks?.[`${exam}Max`] || 0;
+      const subjects = student.examMarks?.[`${exam}Subjects`] || [];
+      return { enrollmentNo: student.enrollmentNo, name: student.name, marks, max, subjects };
+    }).filter((row: any) => row.marks !== null);
 
-      const marksList = rows.map((r: any) => r.marks as number);
-      const max = rows[0]?.max || 1;
-      const subjectCodes: string[] = rows[0]?.subjects?.map((s: any) => s.code) || [];
-
-      const classAverage = marksList.length ? round1(marksList.reduce((a, b) => a + b, 0) / marksList.length) : 0;
-      const classMedian = median(marksList);
-      const highest = marksList.length ? Math.max(...marksList) : 0;
-      // Pass = at least 40% of the exam's total max marks (consistent with the
-      // 12/30-per-subject rule, scaled up across however many subjects this exam has).
-      const passRate = marksList.length
-        ? Math.round((rows.filter((r: any) => r.marks >= max * 0.4).length / marksList.length) * 100)
-        : 0;
-
-      const tiers = { Excellent: 0, Good: 0, "Needs Attention": 0, "Critical Risk": 0 } as Record<string, number>;
-      rows.forEach((r: any) => {
-        tiers[gradeFor(r.marks, max)]++;
-      });
-
-      const sorted = [...rows].sort((a: any, b: any) => b.marks - a.marks);
-
-      return { rows, max, subjectCodes, classAverage, classMedian, highest, passRate, tiers, sorted };
-    }, [students, examKey]);
-  }
-
-  const midsem1Stats = useSingleExamStats("midsem1");
-  const midsem2Stats = useSingleExamStats("midsem2");
-
-  function renderSingleExamView(examLabel: string, stats: ReturnType<typeof useSingleExamStats>) {
-    const pieData = Object.entries(stats.tiers).map(([name, value]) => ({
-      name,
-      value,
-      color: TIER_COLORS[name],
-    }));
-
-    return (
-      <>
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">{examLabel}</h2>
-          <p className="text-sm text-gray-500 mt-1">Marks, class stats, and top/at-risk students for {examLabel}.</p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <section className="bg-white rounded-2xl border border-gray-100 p-6">
-            <h3 className="font-medium text-gray-900 mb-4">Data Sheet</h3>
-            <p className="text-xs text-gray-400 mb-3">Pass mark per subject: 12/30 (40%)</p>
-            <div className="max-h-[650px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-400 border-b border-gray-100">
-                    <th className="py-2 pr-3 sticky left-0 bg-white">Name</th>
-                    {stats.subjectCodes.map((code: string) => (
-                      <th key={code} className="py-2 pr-3 whitespace-nowrap">
-                        {code}
-                      </th>
-                    ))}
-                    <th className="py-2 pr-3 whitespace-nowrap">Total</th>
-                    <th className="py-2">%age</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.rows.map((r: any) => {
-                    const pct = stats.max > 0 ? Math.round((r.marks / stats.max) * 100) : 0;
-                    return (
-                      <tr key={r.enrollmentNo} className="border-b border-gray-50">
-                        <td className="py-2 pr-3 text-gray-900 whitespace-nowrap sticky left-0 bg-white">
-                          {r.name}
-                        </td>
-                        {(r.subjects || []).map((s: any) => (
-                          <td
-                            key={s.code}
-                            className={`py-2 pr-3 ${
-                              s.marks === null ? "text-gray-400" : s.pass ? "text-emerald-600" : "text-red-500"
-                            }`}
-                          >
-                            {s.marks === null ? "—" : s.marks}
-                          </td>
-                        ))}
-                        <td className="py-2 pr-3 font-medium text-gray-900">{r.marks}</td>
-                        <td className="py-2">{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <StatCard label="Class Average" value={stats.classAverage} />
-              <StatCard label="Class Median" value={stats.classMedian} />
-              <StatCard label="Highest Score" value={stats.highest} />
-              <StatCard label="Pass Rate" value={`${stats.passRate}%`} />
-            </div>
-
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Performance Tier</h3>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                {Object.entries(stats.tiers).map(([name, count]) => (
-                  <div
-                    key={name}
-                    className="rounded-lg p-3 text-center"
-                    style={{ backgroundColor: `${TIER_COLORS[name]}22` }}
-                  >
-                    <p className="text-xs text-gray-600">{name}</p>
-                    <p className="text-lg font-semibold" style={{ color: TIER_COLORS[name] }}>
-                      {count}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                    {pieData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </section>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <RankedList
-                  title="Top 5 Highest Scorers"
-                  positive
-                  items={stats.sorted.slice(0, 5).map((r: any) => ({ name: r.name, marks: r.marks }))}
-                />
-              </section>
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <RankedList
-                  title="Bottom 5 At-Risk Students"
-                  positive={false}
-                  items={[...stats.sorted]
-                    .reverse()
-                    .slice(0, 5)
-                    .map((r: any) => ({ name: r.name, marks: r.marks }))}
-                />
-              </section>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // ---------- Combined view ----------
-  const combinedRows = useMemo(() => {
-    return students.map((s: any) => {
-      const values: Record<ExamKey, number> = {
-        midsem1: s.examMarks.midsem1 ?? 0,
-        midsem2: s.examMarks.midsem2 ?? 0,
-        combined: s.examMarks.combined,
-        max: s.examMarks.max,
-      };
-      const basisValue = values[gradeBasis];
-      const basisMax = Math.max(s.examMarks.midsem1Max, s.examMarks.midsem2Max) || 1;
-      return {
-        enrollmentNo: s.enrollmentNo,
-        name: s.name,
-        email: s.email,
-        midsem1: s.examMarks.midsem1,
-        midsem2: s.examMarks.midsem2,
-        combined: s.examMarks.combined,
-        max: s.examMarks.max,
-        grade: gradeFor(basisValue, basisMax),
-        sortValue: basisValue,
-      };
-    });
-  }, [students, gradeBasis]);
-
-  const sortedCombinedRows = useMemo(() => {
-    if (sortDir === "none") return combinedRows;
-    const sorted = [...combinedRows].sort((a, b) => a.sortValue - b.sortValue);
-    return sortDir === "desc" ? sorted.reverse() : sorted;
-  }, [combinedRows, sortDir]);
-
-  const combinedGradeCounts = useMemo(() => {
-    const counts = { Excellent: 0, Good: 0, "Needs Attention": 0, "Critical Risk": 0 } as Record<string, number>;
-    combinedRows.forEach((r) => counts[r.grade]++);
-    return counts;
-  }, [combinedRows]);
-
-  const combinedTop5 = useMemo(
-    () => [...combinedRows].sort((a, b) => b.sortValue - a.sortValue).slice(0, 5),
-    [combinedRows]
-  );
-
-  const combinedBottom5 = useMemo(
-    () => [...combinedRows].sort((a, b) => a.sortValue - b.sortValue).slice(0, 5),
-    [combinedRows]
-  );
-
-  // ---------- Summary (filter) view ----------
-  // Per-subject filter: for each student, check every subject's mark (in
-  // whichever exam(s) are selected) against the bounds. One result row per
-  // matching student+subject+exam — a student can appear more than once if
-  // they fall in range on multiple subjects.
-  const filteredSummaryRows = useMemo(() => {
-    const rows: { enrollmentNo: string; name: string; exam: string; subject: string; marks: number }[] = [];
-
-    students.forEach((s: any) => {
-      const examsToCheck: { label: string; subjects: any[] }[] = [];
-      if (filterExam === "midsem1" || filterExam === "both") {
-        examsToCheck.push({ label: "Midsem 1", subjects: s.examMarks.midsem1Subjects || [] });
-      }
-      if (filterExam === "midsem2" || filterExam === "both") {
-        examsToCheck.push({ label: "Midsem 2", subjects: s.examMarks.midsem2Subjects || [] });
-      }
-
-      examsToCheck.forEach((exam) => {
-        exam.subjects.forEach((subj: any) => {
-          if (subj.marks === null) return;
-          if (subj.marks >= lowerBound && subj.marks <= upperBound) {
-            rows.push({
-              enrollmentNo: s.enrollmentNo,
-              name: s.name,
-              exam: exam.label,
-              subject: subj.code,
-              marks: subj.marks,
-            });
-          }
-        });
-      });
-    });
-
-    return rows;
-  }, [students, filterExam, lowerBound, upperBound]);
-
-  const summaryStats = useMemo(() => {
-    const combinedValues = students.map((s: any) => s.examMarks.combined);
-    const overallAverage = combinedValues.length
-      ? round1(combinedValues.reduce((a: number, b: number) => a + b, 0) / combinedValues.length)
-      : 0;
-    const highest = combinedValues.length ? Math.max(...combinedValues) : 0;
-    const lowest = combinedValues.length ? Math.min(...combinedValues) : 0;
-    const passCount = combinedValues.filter((v: number) => v > 0).length;
-    const passRate = combinedValues.length ? Math.round((passCount / combinedValues.length) * 100) : 0;
-
-    const midsem1Values = students.map((s: any) => s.examMarks.midsem1 ?? 0);
-    const midsem2Values = students.map((s: any) => s.examMarks.midsem2 ?? 0);
-    const midsem1Avg = midsem1Values.length
-      ? round1(midsem1Values.reduce((a: number, b: number) => a + b, 0) / midsem1Values.length)
-      : 0;
-    const midsem2Avg = midsem2Values.length
-      ? round1(midsem2Values.reduce((a: number, b: number) => a + b, 0) / midsem2Values.length)
-      : 0;
-
-    const changes = students
-      .map((s: any) => ({
-        name: s.name,
-        change: round1((s.examMarks.midsem2 ?? 0) - (s.examMarks.midsem1 ?? 0)),
-      }))
-      .sort((a, b) => b.change - a.change);
+    const marks = rows.map((row: any) => Number(row.marks));
+    const max = rows[0]?.max || 0;
+    const counts = { Excellent: 0, Good: 0, "Needs Attention": 0, "Critical Risk": 0 } as Record<Tier, number>;
+    rows.forEach((row: any) => counts[tierFor(Number(row.marks), max)]++);
 
     return {
-      overallAverage,
-      highest,
-      lowest,
-      passRate,
-      midsem1Avg,
-      midsem2Avg,
-      increases: changes.slice(0, 5),
-      decreases: [...changes].reverse().slice(0, 5),
+      rows,
+      max,
+      subjectCodes: rows[0]?.subjects?.map((subject: any) => subject.code) || [],
+      average: marks.length ? round1(marks.reduce((a, b) => a + b, 0) / marks.length) : 0,
+      median: median(marks),
+      highest: marks.length ? Math.max(...marks) : 0,
+      passRate: marks.length ? Math.round(rows.filter((row: any) => Number(row.marks) >= max * 0.4).length / marks.length * 100) : 0,
+      counts,
+      sorted: [...rows].sort((a: any, b: any) => Number(b.marks) - Number(a.marks)),
     };
-  }, [students]);
+  }, [students, view]);
+
+  const displayedRows = selectedTier
+    ? activeStats.rows.filter((row: any) => tierFor(Number(row.marks), activeStats.max) === selectedTier)
+    : activeStats.rows;
+
+  const totalStudents = students.length;
+  const activeLabel = view === "midsem1" ? "Midsem 1" : "Midsem 2";
+  const tierEntries = Object.entries(activeStats.counts) as [Tier, number][];
+  const highestNames = activeStats.rows.filter((row: any) => Number(row.marks) === activeStats.highest).map((row: any) => row.name);
 
   return (
-    <div className="min-h-screen max-w-[1700px] mx-auto px-8 py-10">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-lg font-semibold text-gray-900">Class / Section Analysis</h1>
-          {computedAt && (
-            <p className="text-xs text-gray-400 mt-1">Last synced {new Date(computedAt).toLocaleString()}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <RawDataButton sheetId={sheetId} />
-          <button
-            onClick={syncAnalysis}
-            disabled={syncing}
-            className="text-sm bg-gray-900 text-white rounded-lg px-4 py-2 disabled:opacity-50"
-          >
-            {syncing ? "Syncing..." : "Sync now"}
-          </button>
-        </div>
-      </div>
+    <div className="analysis-layout min-h-screen bg-[#fffdf8] text-[#17223b]">
+      <aside className="analysis-sidebar">
+        <div className="analysis-brand"><span className="analysis-brand__mark"><BarChart3 size={18} /></span><span>ClassPulse</span></div>
+        <nav className="analysis-side-nav">
+          <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
+          <a className="is-active" href={typeof sectionId === "string" ? `/class-analysis/${sectionId}` : "#"}><BookOpen size={18} />Class Analysis</a>
+          <a href="/subject-analysis"><GraduationCap size={18} />Subject Analysis</a>
+        </nav>
+        <RawDataButton sheetId={sheetId} />
+        <div className="analysis-side-footer">ClassPulse Teacher Portal</div>
+      </aside>
 
-      {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
-
-      <div className="flex gap-2 mb-8 flex-wrap">
-        {(
-          [
-            { key: "midsem1", label: "Midsem 1" },
-            { key: "midsem2", label: "Midsem 2" },
-            { key: "combined", label: "Combined" },
-            { key: "summary", label: "Summary" },
-          ] as { key: AcademicView; label: string }[]
-        ).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setView(tab.key)}
-            className={`text-sm px-4 py-2 rounded-lg font-medium ${
-              view === tab.key ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {error && <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg p-4 mb-6">{error}</div>}
-      {loading && !data && <div className="text-sm text-gray-500 py-10">Loading academic analysis...</div>}
-
-      {data && view === "midsem1" && renderSingleExamView("Midsem 1", midsem1Stats)}
-      {data && view === "midsem2" && renderSingleExamView("Midsem 2", midsem2Stats)}
-
-      {data && view === "combined" && (
-        <>
-          <div className="mb-6 flex items-end justify-between flex-wrap gap-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Midsem Combined</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Choose which numbers grade students, then sort to see who's ahead or behind.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Grade / Sort By</label>
-                <select
-                  value={gradeBasis}
-                  onChange={(e) => setGradeBasis(e.target.value as ExamKey)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
-                >
-                  <option value="midsem1">Midsem 1</option>
-                  <option value="midsem2">Midsem 2</option>
-                  <option value="combined">Combined (average)</option>
-                  <option value="max">Max (better of the two)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Order</label>
-                <select
-                  value={sortDir}
-                  onChange={(e) => setSortDir(e.target.value as "desc" | "asc" | "none")}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
-                >
-                  <option value="none">No Sort (Enrollment Order)</option>
-                  <option value="desc">Highest to Lowest</option>
-                  <option value="asc">Lowest to Highest</option>
-                </select>
-              </div>
-            </div>
+      <main className="analysis-page">
+        <header className="analysis-topbar">
+          <div className="analysis-title-row">
+            <h1>Class / Section Analysis</h1>
+            {computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}
           </div>
+          <div className="analysis-top-actions">
+            <button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}>
+              <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Syncing..." : "Sync now"}
+            </button>
+          </div>
+        </header>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">All Students</h3>
-              <div className="max-h-[600px] overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-400 border-b border-gray-100">
-                      {sortDir !== "none" && <th className="py-2 pr-3 w-10">Rank</th>}
-                      <th className="py-2 pr-3">Name</th>
-                      <th className="py-2 pr-3">1st</th>
-                      <th className="py-2 pr-3">2nd</th>
-                      <th className="py-2 pr-3">Combined</th>
-                      <th className="py-2 pr-3">Max</th>
-                      <th className="py-2">Grade</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedCombinedRows.map((r, i) => (
-                      <tr key={r.enrollmentNo} className="border-b border-gray-50">
-                        {sortDir !== "none" && (
-                          <td className="py-2 pr-3 text-gray-400 font-medium">{i + 1}</td>
-                        )}
-                        <td className="py-2 pr-3 text-gray-900 whitespace-nowrap">{r.name}</td>
-                        <td className="py-2 pr-3 text-gray-500">{r.midsem1 ?? "—"}</td>
-                        <td className="py-2 pr-3 text-gray-500">{r.midsem2 ?? "—"}</td>
-                        <td className="py-2 pr-3">{r.combined}</td>
-                        <td className="py-2 pr-3">{r.max}</td>
-                        <td className="py-2">
-                          <GradeBadge grade={r.grade} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
+
+        <div className="analysis-view-switch">
+          <button className={view === "midsem1" ? "is-active" : ""} onClick={() => setView("midsem1")}>Midsem 1</button>
+          <button className={view === "midsem2" ? "is-active" : ""} onClick={() => setView("midsem2")}>Midsem 2</button>
+        </div>
+
+        {error && <div className="analysis-panel" style={{ padding: 14, marginBottom: 16, color: "#b42318" }}>{error}</div>}
+        {loading && !data && <div style={{ padding: 40, color: "#667085", fontSize: 13 }}>Loading academic analysis...</div>}
+
+        {data && (
+          <>
+            <section className="analysis-hero">
+              <div className="analysis-hero-copy">
+                <h2>{activeLabel}</h2>
+                <p>Marks across all subjects, class statistics, and performance tiers.</p>
               </div>
+              <Metric label="Class Average" value={`${activeStats.average}/${activeStats.max || 0}`} detail="class average across subjects" />
+              <Metric label="Class Median" value={`${activeStats.median}/${activeStats.max || 0}`} detail="middle class score" />
+              <Metric label="Pass Rate" value={`${activeStats.passRate}%`} detail="students at or above 40%" />
             </section>
 
-            <div className="space-y-6">
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <h3 className="font-medium text-gray-900 mb-4">Grade Distribution</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart
-                    data={Object.entries(combinedGradeCounts).map(([name, count]) => ({ name, count }))}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" fontSize={11} />
-                    <YAxis fontSize={12} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {Object.keys(combinedGradeCounts).map((name, i) => (
-                        <Cell key={i} fill={TIER_COLORS[name]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </section>
-
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <RankedList
-                  title="Top 5 Highest Scorers"
-                  positive
-                  items={combinedTop5.map((r) => ({ name: r.name, marks: r.sortValue }))}
-                />
-              </section>
-
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <RankedList
-                  title="Bottom 5"
-                  positive={false}
-                  items={combinedBottom5.map((r) => ({ name: r.name, marks: r.sortValue }))}
-                />
-              </section>
-            </div>
-          </div>
-        </>
-      )}
-
-      {data && view === "summary" && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Academic Summary</h2>
-            <p className="text-sm text-gray-500 mt-1">Filter students by marks range, and see who's improving.</p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="space-y-6">
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <h3 className="font-medium text-gray-900 mb-4">Filter Criteria</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <section className="analysis-content-grid academic-content-grid">
+              <section className="analysis-panel analysis-table-panel">
+                <div className="analysis-panel-head">
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-2">Exam</label>
-                    <select
-                      value={filterExam}
-                      onChange={(e) => setFilterExam(e.target.value as any)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
-                    >
-                      <option value="both">Both Midsem 1 &amp; 2</option>
-                      <option value="midsem1">Midsem 1</option>
-                      <option value="midsem2">Midsem 2</option>
-                    </select>
+                    <h3>Data Sheet</h3>
+                    <p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>
+                      Pass mark: 40%{selectedTier ? ` · Filtered: ${selectedTier}` : ""}
+                    </p>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-2">Lower Bound</label>
-                    <input
-                      type="number"
-                      value={lowerBound}
-                      onChange={(e) => setLowerBound(Number(e.target.value))}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-2">Upper Bound</label>
-                    <input
-                      type="number"
-                      value={upperBound}
-                      onChange={(e) => setUpperBound(Number(e.target.value))}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                    />
-                  </div>
+                  {selectedTier && <button className="analysis-secondary" onClick={() => setSelectedTier(null)}>Clear filter</button>}
+                </div>
+
+                <div className="overflow-auto">
+                  <table className="w-full min-w-[760px] border-collapse text-[12px]">
+                    <thead>
+                      <tr className="border-b border-[#edf0f4] text-left text-[10px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">
+                        <th className="sticky left-0 z-10 bg-white px-3 py-3">Student Name</th>
+                        {activeStats.subjectCodes.map((code: string) => <th key={code} className="whitespace-nowrap px-3 py-3">{code}</th>)}
+                        <th className="whitespace-nowrap px-3 py-3">Total</th>
+                        <th className="whitespace-nowrap px-3 py-3">%age</th>
+                        <th className="whitespace-nowrap px-3 py-3">Tier</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedRows.map((row: any) => {
+                        const pct = activeStats.max > 0 ? Math.round(Number(row.marks) / activeStats.max * 100) : 0;
+                        const tier = tierFor(Number(row.marks), activeStats.max);
+                        return (
+                          <tr key={row.enrollmentNo} className="border-b border-[#f0f1f3] last:border-0">
+                            <td className="sticky left-0 z-10 bg-white px-3 py-3 font-semibold text-[#17223b]">
+                              <div className="flex items-center gap-2">
+                                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#eeebff] text-[9px] font-extrabold text-[#5b4ee6]">{initials(row.name)}</span>
+                                <span className="whitespace-nowrap">{row.name}</span>
+                              </div>
+                            </td>
+                            {activeStats.subjectCodes.map((code: string) => {
+                              const subject = (row.subjects || []).find((item: any) => item.code === code);
+                              return <td key={code} className={`px-3 py-3 ${subject?.marks === null || subject?.marks === undefined ? "text-[#98a2b3]" : subject.pass === false ? "font-semibold text-[#ef4444]" : "text-[#15966a]"}`}>{subject?.marks ?? "—"}</td>;
+                            })}
+                            <td className="px-3 py-3 font-bold text-[#17223b]">{row.marks}</td>
+                            <td className="px-3 py-3 text-[#626b80]">{pct}%</td>
+                            <td className="px-3 py-3"><button onClick={() => setSelectedTier(tier)} className="rounded-full px-2.5 py-1 text-[9px] font-bold" style={{ backgroundColor: `${TIER_COLORS[tier]}18`, color: TIER_COLORS[tier] }}>{tier}</button></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </section>
 
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <h3 className="font-medium text-gray-900 mb-4">
-                  Filtered Results <span className="text-gray-400 font-normal">({filteredSummaryRows.length})</span>
-                </h3>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-400 border-b border-gray-100">
-                      <th className="py-2 pr-3">Name</th>
-                      <th className="py-2 pr-3">Subject</th>
-                      <th className="py-2 pr-3">Exam</th>
-                      <th className="py-2">Marks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSummaryRows.map((r, i) => (
-                      <tr key={`${r.enrollmentNo}-${r.exam}-${r.subject}-${i}`} className="border-b border-gray-50">
-                        <td className="py-2 pr-3 text-gray-900">{r.name}</td>
-                        <td className="py-2 pr-3 text-gray-500">{r.subject}</td>
-                        <td className="py-2 pr-3 text-gray-500">{r.exam}</td>
-                        <td className="py-2">{r.marks}</td>
-                      </tr>
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <Metric label="Class Average" value={activeStats.average} detail={`out of ${activeStats.max || 0}`} />
+                  <Metric label="Class Median" value={activeStats.median} detail="middle class score" />
+                  <Metric label="Highest Score" value={activeStats.highest} detail={highestNames.length ? highestNames[0] : "top score"} />
+                  <Metric label="Pass Rate" value={`${activeStats.passRate}%`} detail={`${activeStats.rows.length} students assessed`} />
+                </div>
+
+                <section className="analysis-panel p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <h3>Performance Tier</h3>
+                      <p className="mt-1 text-[10px] text-[#98a2b3]">Click a tier to filter the data sheet.</p>
+                    </div>
+                    <span className="text-[10px] text-[#98a2b3]">{totalStudents} Students</span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {tierEntries.map(([tier, count]) => (
+                      <button key={tier} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition ${selectedTier === tier ? "border-[#cfc7ff] bg-[#f6f4ff]" : "border-[#edf0f4] bg-white hover:bg-[#fafaff]"}`}>
+                        <span className="flex items-center gap-2.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TIER_COLORS[tier] }} /><span className="text-[11px] font-semibold text-[#344054]">{tier}</span></span>
+                        <span className="text-[12px] font-extrabold" style={{ color: TIER_COLORS[tier] }}>{count}</span>
+                      </button>
                     ))}
-                    {filteredSummaryRows.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="py-6 text-center text-gray-400">
-                          No students match this filter.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </section>
-            </div>
-
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <StatCard label="Overall Class Average" value={summaryStats.overallAverage} />
-                <StatCard label="Highest Combined Score" value={summaryStats.highest} />
-                <StatCard label="Lowest Combined Score" value={summaryStats.lowest} />
-                <StatCard label="Overall Pass Rate" value={`${summaryStats.passRate}%`} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <StatCard label="Midsem 1 Average" value={summaryStats.midsem1Avg} />
-                <StatCard label="Midsem 2 Average" value={summaryStats.midsem2Avg} />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                  <RankedList title="Marks Increase (Top 5)" positive items={summaryStats.increases.map((s) => ({ name: s.name, marks: s.change }))} />
+                  </div>
+                  <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#f0f1f4]">
+                    {tierEntries.map(([tier, count]) => <span key={tier} className="inline-block h-full" style={{ width: `${activeStats.rows.length ? count / activeStats.rows.length * 100 : 0}%`, background: TIER_COLORS[tier] }} />)}
+                  </div>
                 </section>
-                <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                  <RankedList
-                    title="Marks Decrease (Top 5)"
-                    positive={false}
-                    items={summaryStats.decreases.map((s) => ({ name: s.name, marks: s.change }))}
-                  />
-                </section>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <section className="analysis-panel p-5">
+                    <h3 className="text-[13px] font-bold text-[#17223b]">Top 5 Highest Scorers</h3>
+                    <div className="mt-3 space-y-2">
+                      {activeStats.sorted.slice(0, 5).map((row: any, index: number) => <div key={row.enrollmentNo} className="flex items-center justify-between border-b border-[#f0f1f3] pb-2 last:border-0"><span className="text-[10px] font-semibold text-[#344054]">{index + 1}. {row.name}</span><span className="text-[10px] font-extrabold text-[#15966a]">{row.marks}</span></div>)}
+                    </div>
+                  </section>
+                  <section className="analysis-panel p-5">
+                    <h3 className="text-[13px] font-bold text-[#17223b]">Bottom 5 At-Risk Students</h3>
+                    <div className="mt-3 space-y-2">
+                      {activeStats.sorted.slice(-5).reverse().map((row: any, index: number) => <div key={row.enrollmentNo} className="flex items-center justify-between border-b border-[#f0f1f3] pb-2 last:border-0"><span className="text-[10px] font-semibold text-[#344054]">{index + 1}. {row.name}</span><span className="text-[10px] font-extrabold text-[#ef4444]">{row.marks}</span></div>)}
+                    </div>
+                  </section>
+                </div>
               </div>
-            </div>
-          </div>
-        </>
-      )}
+            </section>
+          </>
+        )}
+      </main>
     </div>
   );
 }
