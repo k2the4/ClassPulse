@@ -3,10 +3,10 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 
-// The selector is class-based, while the existing analysis implementation is
-// section-based internally. A ClassPulse "class" currently maps to its
-// assigned section (for example ECE-2 Sem 7 -> section 2 of that class).
-// Resolve that section here and hand off to the existing analysis UI.
+// Class Analysis is a class-level entry point into the existing section-based
+// analysis UI. A class can contain multiple sections, so never blindly pick
+// the first section: resolve the section the signed-in user is actually
+// allowed to view.
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const classId = typeof ctx.params?.classId === "string" ? ctx.params.classId : "";
 
@@ -22,42 +22,44 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const userId = (session.user as any).id as string;
   const role = (session.user as any).role as string;
 
-  const cls = await prisma.class.findUnique({
-    where: { id: classId },
-    include: {
-      sections: {
-        orderBy: { name: "asc" },
-        select: { id: true },
-      },
-    },
-  });
-
-  if (!cls || cls.sections.length === 0) {
-    return { notFound: true };
-  }
-
-  // Match the same access rules used by the existing section analysis:
-  // admin, class proctor, or teacher assigned to a subject in this class.
-  if (role !== "ADMIN") {
-    const isProctor = cls.proctorId === userId;
-    const teachesInClass = await prisma.assignment.findFirst({
-      where: {
-        teacherId: userId,
-        subject: { section: { classId } },
-      },
+  if (role === "ADMIN") {
+    const section = await prisma.section.findFirst({
+      where: { classId },
+      orderBy: { name: "asc" },
       select: { id: true },
     });
 
-    if (!isProctor && !teachesInClass) {
-      return { notFound: true };
-    }
+    if (!section) return { notFound: true };
+
+    return {
+      redirect: {
+        destination: `/section-analysis/${section.id}/attendance`,
+        permanent: false,
+      },
+    };
   }
 
-  const sectionId = cls.sections[0].id;
+  // Prefer a section the teacher teaches. This is important when a class has
+  // multiple sections: the section-analysis API enforces section-level access.
+  const assignedSection = await prisma.section.findFirst({
+    where: {
+      classId,
+      OR: [
+        { class: { proctorId: userId } },
+        { subjects: { some: { assignments: { some: { teacherId: userId } } } } },
+      ],
+    },
+    orderBy: { name: "asc" },
+    select: { id: true },
+  });
+
+  if (!assignedSection) {
+    return { notFound: true };
+  }
 
   return {
     redirect: {
-      destination: `/section-analysis/${sectionId}/attendance`,
+      destination: `/section-analysis/${assignedSection.id}/attendance`,
       permanent: false,
     },
   };
