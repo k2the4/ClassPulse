@@ -7,7 +7,6 @@ import {
   Database,
   LayoutDashboard,
   LogOut,
-  RefreshCw,
   GraduationCap,
   FileText,
 } from "lucide-react";
@@ -20,26 +19,10 @@ export default function AnalysisNav({ sectionId }: Props) {
   const router = useRouter();
 
   const items = [
-    {
-      label: "Attendance",
-      href: `/section-analysis/${sectionId}/attendance`,
-      icon: BarChart3,
-    },
-    {
-      label: "Academic",
-      href: `/section-analysis/${sectionId}/academic`,
-      icon: GraduationCap,
-    },
-    {
-      label: "Overall",
-      href: `/section-analysis/${sectionId}/overall`,
-      icon: LayoutDashboard,
-    },
-    {
-      label: "Student Report",
-      href: `/section-analysis/${sectionId}/students`,
-      icon: FileText,
-    },
+    { label: "Attendance", href: `/section-analysis/${sectionId}/attendance`, icon: BarChart3 },
+    { label: "Academic", href: `/section-analysis/${sectionId}/academic`, icon: GraduationCap },
+    { label: "Overall", href: `/section-analysis/${sectionId}/overall`, icon: LayoutDashboard },
+    { label: "Student Report", href: `/section-analysis/${sectionId}/students`, icon: FileText },
   ];
 
   const sidebarItems = [
@@ -48,8 +31,6 @@ export default function AnalysisNav({ sectionId }: Props) {
     { label: "Subject Analysis", href: "/subject-analysis", icon: BookOpen },
     { label: "Raw Data", href: "/raw-data", icon: Database },
   ];
-
-  const initials = "F";
 
   return (
     <>
@@ -72,9 +53,7 @@ export default function AnalysisNav({ sectionId }: Props) {
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-3 rounded-xl px-3 py-3 transition-colors ${
-                  active
-                    ? "bg-[#eeeaff] font-semibold text-[#38258e]"
-                    : "hover:bg-[#f6f4ff] hover:text-[#38258e]"
+                  active ? "bg-[#eeeaff] font-semibold text-[#38258e]" : "hover:bg-[#f6f4ff] hover:text-[#38258e]"
                 }`}
               >
                 <Icon size={18} />
@@ -87,9 +66,7 @@ export default function AnalysisNav({ sectionId }: Props) {
         <div className="mt-auto">
           <div className="mx-4 border-t border-[#eeeeeb] py-4">
             <div className="flex items-center gap-3 px-2">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eeeaff] text-xs font-bold text-[#4b36a7]">
-                {initials}
-              </span>
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eeeaff] text-xs font-bold text-[#4b36a7]">F</span>
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-[#17223b]">Faculty</p>
                 <p className="text-[11px] text-[#8991a2]">Teacher Portal</p>
@@ -110,7 +87,6 @@ export default function AnalysisNav({ sectionId }: Props) {
         {items.map((item) => {
           const Icon = item.icon;
           const active = router.asPath === item.href;
-
           return (
             <Link
               key={item.href}
@@ -129,67 +105,33 @@ export default function AnalysisNav({ sectionId }: Props) {
       </nav>
 
       <style jsx global>{`
-        body:has(.classpulse-analysis-sidebar) {
-          background: #f7f6f2 !important;
-          color: #17223b;
-        }
-
-        body:has(.classpulse-analysis-sidebar) #__next {
-          padding-left: 220px;
-        }
-
+        body:has(.classpulse-analysis-sidebar) { background: #f7f6f2 !important; color: #17223b; }
+        body:has(.classpulse-analysis-sidebar) #__next { padding-left: 220px; }
         body:has(.classpulse-analysis-sidebar) main > div {
           max-width: none !important;
           margin: 0 !important;
           min-height: 100vh;
           padding: 34px 38px 48px !important;
-          background:
-            radial-gradient(circle at 82% 5%, rgba(91, 78, 230, 0.09), transparent 27%),
-            linear-gradient(135deg, #fbfaf7 0%, #f7f6f2 58%, #f2f4f6 100%);
+          background: radial-gradient(circle at 82% 5%, rgba(91,78,230,.09), transparent 27%), linear-gradient(135deg, #fbfaf7 0%, #f7f6f2 58%, #f2f4f6 100%);
         }
-
         body:has(.classpulse-analysis-sidebar) main section.bg-white {
           border: 1px solid #e1e3ea !important;
           border-radius: 18px !important;
-          box-shadow: 0 8px 28px rgba(31, 35, 49, 0.055) !important;
+          box-shadow: 0 8px 28px rgba(31,35,49,.055) !important;
         }
-
-        body:has(.classpulse-analysis-sidebar) main .bg-gray-900 {
-          background: #30227d !important;
-        }
-
-        body:has(.classpulse-analysis-sidebar) main .bg-gray-100 {
-          background: #f5f4f8 !important;
-        }
-
+        body:has(.classpulse-analysis-sidebar) main .bg-gray-900 { background: #30227d !important; }
+        body:has(.classpulse-analysis-sidebar) main .bg-gray-100 { background: #f5f4f8 !important; }
         body:has(.classpulse-analysis-sidebar) main .border-gray-100,
-        body:has(.classpulse-analysis-sidebar) main .border-gray-200 {
-          border-color: #e5e3ea !important;
-        }
-
+        body:has(.classpulse-analysis-sidebar) main .border-gray-200 { border-color: #e5e3ea !important; }
         body:has(.classpulse-analysis-sidebar) main input,
         body:has(.classpulse-analysis-sidebar) main select,
-        body:has(.classpulse-analysis-sidebar) main textarea {
-          border-color: #dfe1e8;
-          border-radius: 11px;
-        }
-
+        body:has(.classpulse-analysis-sidebar) main textarea { border-color: #dfe1e8; border-radius: 11px; }
         body:has(.classpulse-analysis-sidebar) main input:focus,
         body:has(.classpulse-analysis-sidebar) main select:focus,
-        body:has(.classpulse-analysis-sidebar) main textarea:focus {
-          outline: none;
-          border-color: #6b5be7;
-          box-shadow: 0 0 0 3px rgba(107, 91, 231, 0.10);
-        }
-
+        body:has(.classpulse-analysis-sidebar) main textarea:focus { outline: none; border-color: #6b5be7; box-shadow: 0 0 0 3px rgba(107,91,231,.10); }
         @media (max-width: 1023px) {
-          body:has(.classpulse-analysis-sidebar) #__next {
-            padding-left: 0;
-          }
-
-          body:has(.classpulse-analysis-sidebar) main > div {
-            padding: 24px 20px 36px !important;
-          }
+          body:has(.classpulse-analysis-sidebar) #__next { padding-left: 0; }
+          body:has(.classpulse-analysis-sidebar) main > div { padding: 24px 20px 36px !important; }
         }
       `}</style>
     </>
