@@ -1,0 +1,28 @@
+.academic-content-grid {
+  grid-template-columns: minmax(0, 1.5fr) minmax(340px, 1fr) !important;
+}
+
+.academic-content-grid .analysis-table-panel {
+  min-width: 0;
+}
+
+.academic-content-grid .analysis-table-panel > .overflow-auto {
+  overflow-x: hidden;
+}
+
+.academic-content-grid .analysis-table-panel table {
+  width: 100%;
+  min-width: 0 !important;
+  table-layout: fixed;
+}
+
+.academic-content-grid .analysis-table-panel th:first-child,
+.academic-content-grid .analysis-table-panel td:first-child {
+  width: 24%;
+}
+
+@media (max-width: 1100px) {
+  .academic-content-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
