@@ -4,6 +4,7 @@ import GlobalButtonLoading from "../components/GlobalButtonLoading";
 import "../styles/globals.css";
 import "../app/globals.css";
 import "../styles/overall-analysis-fixes.css";
+import "../styles/academic-table-fix.css";
 
 export default function App({ Component, pageProps: { session, ...pageProps } }: AppProps) {
   return (
