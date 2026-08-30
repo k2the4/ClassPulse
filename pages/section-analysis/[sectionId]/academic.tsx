@@ -50,7 +50,9 @@ export default function AcademicPage() {
     const rows = students.map((student: any) => {
       if (view === "combined") {
         const combinedMarks = student.examMarks?.combined ?? null;
-        const combinedMax = student.examMarks?.max || student.examMarks?.midsem1Max || student.examMarks?.midsem2Max || 0;
+        // Combined is the average of the two exams, so its maximum is the
+        // exam maximum itself (not the student's higher score).
+        const combinedMax = Math.max(student.examMarks?.midsem1Max || 0, student.examMarks?.midsem2Max || 0);
         const midsem1Subjects = student.examMarks?.midsem1Subjects || [];
         const midsem2Subjects = student.examMarks?.midsem2Subjects || [];
         const subjectMap = new Map<string, { code: string; marks: number | null; max: number; pass: boolean }>();
