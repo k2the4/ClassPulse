@@ -131,7 +131,11 @@ export default function AcademicPage() {
           marks = student.examMarks?.midsem2 ?? null;
           max = student.examMarks?.midsem2Max || 0;
         } else if (scoreBasis === "max") {
-          max = Math.max(student.examMarks?.midsem1Max || 0, student.examMarks?.midsem2Max || 0, student.examMarks?.max || 0);
+          const midsem1 = student.examMarks?.midsem1;
+          const midsem2 = student.examMarks?.midsem2;
+          const available = [midsem1, midsem2].filter((value: any): value is number => value !== null && value !== undefined);
+          marks = available.length ? Math.max(...available) : null;
+          max = Math.max(student.examMarks?.midsem1Max || 0, student.examMarks?.midsem2Max || 0);
         }
 
         return { enrollmentNo: student.enrollmentNo, name: student.name, marks, max, subjects: Array.from(subjectMap.values()) };
