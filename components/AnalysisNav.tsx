@@ -117,6 +117,11 @@ export default function AnalysisNav({ sectionId }: Props) {
           background: radial-gradient(circle at 82% 5%, rgba(91,78,230,.09), transparent 27%), linear-gradient(135deg, #fbfaf7 0%, #f7f6f2 58%, #f2f4f6 100%);
         }
 
+        body:has(.classpulse-analysis-sidebar) #__next .classpulse-attendance-page > div > .mb-7 {
+          margin-top: 12px !important;
+          margin-bottom: 18px !important;
+        }
+
         body:has(.classpulse-analysis-sidebar) #__next .bg-white {
           border-color: #e1e3ea !important;
           border-radius: 18px !important;
