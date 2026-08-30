@@ -1,710 +1,285 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/router";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
-
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AlertCircle, BarChart3, BookOpen, Download, Gauge, GraduationCap, LayoutDashboard, Mail, RefreshCw, Search, SlidersHorizontal, Sparkles, Users } from "lucide-react";
 import AnalysisNav from "../../../components/AnalysisNav";
+import { RawDataButton } from "../../../components/AnalysisWidgets";
 import { SectionAnalysis } from "../../../lib/analysisClass";
-import { RawDataButton, StatCard } from "../../../components/AnalysisWidgets";
 
-type AttendanceView = "trend" | "risk" | "summary";
+type AttendanceView = "trend" | "risk";
 
-const BUCKET_COLORS = {
-  above75: "#10b981", // Good Standing
-  to74: "#3b82f6", // Satisfactory
-  to49: "#f59e0b", // Needs Attention
-  below30: "#ef4444", // Critical Risk
-};
+const round1 = (n: number) => Math.round(n * 10) / 10;
+const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 
-export default function AttendancePage() {
+export default function ClassAttendancePage() {
   const router = useRouter();
   const { sectionId } = router.query;
-
   const [view, setView] = useState<AttendanceView>("trend");
-
   const [data, setData] = useState<SectionAnalysis | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [computedAt, setComputedAt] = useState("");
-
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
-
-  // Month selection (Trend tab)
   const [previousMonth, setPreviousMonth] = useState("");
   const [currentMonth, setCurrentMonth] = useState("");
   const [trendCriteria, setTrendCriteria] = useState(5);
-
-  // At Risk filter state
+  const [search, setSearch] = useState("");
   const [lowerBound, setLowerBound] = useState(0);
   const [upperBound, setUpperBound] = useState(100);
   const [riskTrendFilter, setRiskTrendFilter] = useState("All");
   const [riskMonth, setRiskMonth] = useState<"previous" | "current">("current");
+  const [copied, setCopied] = useState(false);
 
-  async function loadAnalysis(selectedPrevious?: string, selectedCurrent?: string, criteria?: number) {
+  async function loadAnalysis(sync = false, previous = previousMonth, current = currentMonth, criteria = trendCriteria) {
     if (!sectionId || typeof sectionId !== "string") return;
-
-    setLoading(true);
+    sync ? setSyncing(true) : setLoading(true);
     setError("");
-
     try {
       const params = new URLSearchParams();
-      if (selectedPrevious) params.set("previousMonth", selectedPrevious);
-      if (selectedCurrent) params.set("currentMonth", selectedCurrent);
-      if (criteria !== undefined) params.set("trendCriteria", String(criteria));
-
-      const query = params.toString();
-      const res = await fetch(`/api/analysis/section/${sectionId}${query ? `?${query}` : ""}`);
-      const json = await res.json();
-
-      if (!res.ok) {
-        setError(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to load attendance analysis");
-        return;
-      }
-
+      if (sync) params.set("sync", "1");
+      if (previous) params.set("previousMonth", previous);
+      if (current) params.set("currentMonth", current);
+      params.set("trendCriteria", String(criteria));
+      const response = await fetch(`/api/analysis/section/${sectionId}?${params.toString()}`);
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to load attendance analysis");
       setData(json.data);
-      setComputedAt(json.computedAt);
+      setComputedAt(json.computedAt || "");
       setSheetId(json.sheetId || null);
-
-      if (json.data?.monthsUsed) {
-        if (!previousMonth && json.data.monthsUsed.previous) setPreviousMonth(json.data.monthsUsed.previous);
-        if (!currentMonth && json.data.monthsUsed.current) setCurrentMonth(json.data.monthsUsed.current);
-      }
+      setPreviousMonth(previous || json.data?.monthsUsed?.previous || "");
+      setCurrentMonth(current || json.data?.monthsUsed?.current || "");
     } catch (e: any) {
       setError(e.message || "Failed to load attendance analysis");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function syncAnalysis() {
-    if (!sectionId || typeof sectionId !== "string") return;
-
-    setSyncing(true);
-    setError("");
-
-    try {
-      const params = new URLSearchParams({
-        sync: "1",
-        previousMonth,
-        currentMonth,
-        trendCriteria: String(trendCriteria),
-      });
-
-      const res = await fetch(`/api/analysis/section/${sectionId}?${params.toString()}`);
-      const json = await res.json();
-
-      if (!res.ok) {
-        setError(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to sync analysis");
-        return;
-      }
-
-      setData(json.data);
-      setComputedAt(json.computedAt);
-      setSheetId(json.sheetId || null);
-    } catch (e: any) {
-      setError(e.message || "Failed to sync analysis");
-    } finally {
       setSyncing(false);
     }
   }
 
-  function applyTrendSettings() {
-    loadAnalysis(previousMonth, currentMonth, trendCriteria);
+  useEffect(() => { loadAnalysis(); }, [sectionId]);
+
+  const students = data?.students || [];
+  const availableMonths = data?.availableMonths || [];
+  const previousAverage = students.length ? round1(students.reduce((sum, s) => sum + s.attendancePct.prevMonth, 0) / students.length) : 0;
+  const currentAverage = students.length ? round1(students.reduce((sum, s) => sum + s.attendancePct.currMonth, 0) / students.length) : 0;
+  const averageChange = round1(currentAverage - previousAverage);
+  const improvingCount = students.filter((s) => s.attendancePct.trend === "Increasing").length;
+  const filteredStudents = useMemo(() => students.filter((s) => s.name.toLowerCase().includes(search.toLowerCase())), [students, search]);
+  const riskResults = useMemo(() => students.filter((s) => {
+    const attendance = riskMonth === "current" ? s.attendancePct.currMonth : s.attendancePct.prevMonth;
+    return attendance >= lowerBound && attendance <= upperBound && (riskTrendFilter === "All" || s.attendancePct.trend === riskTrendFilter);
+  }), [students, lowerBound, upperBound, riskTrendFilter, riskMonth]);
+  const riskEmails = riskResults.map((s) => s.email).filter(Boolean);
+  const riskLowCount = riskResults.filter((s) => (riskMonth === "current" ? s.attendancePct.currMonth : s.attendancePct.prevMonth) < 50).length;
+  const riskDecreasingCount = riskResults.filter((s) => s.attendancePct.trend === "Decreasing").length;
+
+  const trendData = [
+    { name: "Increasing", count: data?.trendCounts.increasing || 0, color: "#16a56a" },
+    { name: "Decreasing", count: data?.trendCounts.decreasing || 0, color: "#ef4444" },
+    { name: "Stable", count: data?.trendCounts.stable || 0, color: "#4d75d0" },
+  ];
+  const attendanceDistribution = [
+    { name: "Below 30%", count: data?.attendanceBuckets.below30 || 0, color: "#ef4444" },
+    { name: "30% to 49%", count: data?.attendanceBuckets.to49 || 0, color: "#f97316" },
+    { name: "50% to 74%", count: data?.attendanceBuckets.to74 || 0, color: "#f59e0b" },
+    { name: "75% and above", count: data?.attendanceBuckets.above75 || 0, color: "#15966a" },
+  ];
+
+  function openRisk(options: { trend?: string; lower?: number; upper?: number }) {
+    setRiskTrendFilter(options.trend || "All");
+    setLowerBound(options.lower ?? 0);
+    setUpperBound(options.upper ?? 100);
+    setView("risk");
   }
 
-  useEffect(() => {
-    loadAnalysis();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionId]);
-
-  const availableMonths = data?.availableMonths || [];
-
-  const trendData = data
-    ? [
-        { name: "Increasing", count: data.trendCounts?.increasing || 0 },
-        { name: "Decreasing", count: data.trendCounts?.decreasing || 0 },
-        { name: "Stable", count: data.trendCounts?.stable || 0 },
-      ]
-    : [];
-
-  const attendanceBuckets = data?.attendanceBuckets ?? {
-    below30: 0,
-    to49: 0,
-    to74: 0,
-    above75: 0,
-  };
-
-  const attendanceDistribution = data
-    ? [
-        { name: "Below 30%", count: attendanceBuckets.below30 },
-        { name: "30% to 49%", count: attendanceBuckets.to49 },
-        { name: "50% to 74%", count: attendanceBuckets.to74 },
-        { name: "75% and above", count: attendanceBuckets.above75 },
-      ]
-    : [];
-
-  // ---- At Risk: filtered students ----
-  const riskResults = useMemo(() => {
-    if (!data) return [];
-    return data.students.filter((s: any) => {
-      const pct = riskMonth === "current" ? s.attendancePct?.currMonth ?? 0 : s.attendancePct?.prevMonth ?? 0;
-      const inBounds = pct >= lowerBound && pct <= upperBound;
-      const trendMatches = riskTrendFilter === "All" || (s.attendancePct?.trend || "Stable") === riskTrendFilter;
-      return inBounds && trendMatches;
-    });
-  }, [data, lowerBound, upperBound, riskTrendFilter, riskMonth]);
-
-  const riskEmails = riskResults.map((s: any) => s.email).filter(Boolean);
-  const riskEmailsText = riskEmails.join("; ");
-
-  const [copied, setCopied] = useState(false);
   async function copyEmails() {
     try {
-      await navigator.clipboard.writeText(riskEmailsText);
+      await navigator.clipboard.writeText(riskEmails.join("; "));
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard API unavailable — the textarea below still lets them select+copy manually
-    }
+      setTimeout(() => setCopied(false), 1800);
+    } catch {}
   }
 
-  const mailtoHref = `mailto:?bcc=${encodeURIComponent(riskEmails.join(","))}&subject=${encodeURIComponent(
-    "Attendance Alert"
-  )}&body=${encodeURIComponent(
-    "This is a reminder regarding your recent attendance. Please make sure to attend upcoming classes."
-  )}`;
+  return <div className="analysis-layout">
+    <aside className="analysis-sidebar">
+      <div className="analysis-brand"><span className="analysis-brand__mark"><BarChart3 size={18} /></span><span>ClassPulse</span></div>
+      <nav className="analysis-side-nav">
+        <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
+        <a className="is-active" href={typeof sectionId === "string" ? `/section-analysis/${sectionId}/attendance` : "#"}><BookOpen size={18} />Class Analysis</a>
+        <a href={typeof sectionId === "string" ? `/subject-analysis/${sectionId}/attendance` : "/subject-analysis"}><GraduationCap size={18} />Subject Analysis</a>
+      </nav>
+      <div className="analysis-side-footer">ClassPulse Teacher Portal</div>
+    </aside>
 
-  // ---- Summary: top movers (by attendance change), computed client-side ----
-  const topMovers = useMemo(() => {
-    if (!data) return { improved: [], declined: [] };
-    const withChange = data.students.map((s: any) => ({
-      name: s.name,
-      change: round1((s.attendancePct?.currMonth ?? 0) - (s.attendancePct?.prevMonth ?? 0)),
-    }));
-    const sorted = [...withChange].sort((a, b) => b.change - a.change);
-    return {
-      improved: sorted.slice(0, 5),
-      declined: [...sorted].reverse().slice(0, 5),
-    };
-  }, [data]);
-
-  function round1(n: number) {
-    return Math.round(n * 10) / 10;
-  }
-
-  const donutData = data
-    ? [
-        {
-          name: "Good Standing (75%+)",
-          value: attendanceBuckets.above75,
-          color: BUCKET_COLORS.above75,
-        },
-        {
-          name: "Satisfactory (50-74%)",
-          value: attendanceBuckets.to74,
-          color: BUCKET_COLORS.to74,
-        },
-        {
-          name: "Needs Attention (30-49%)",
-          value: attendanceBuckets.to49,
-          color: BUCKET_COLORS.to49,
-        },
-        {
-          name: "Critical Risk (<30%)",
-          value: attendanceBuckets.below30,
-          color: BUCKET_COLORS.below30,
-        },
-      ]
-    : [];
-
-  const compareBarData = data
-    ? [
-        { name: data.monthsUsed?.previous || "Previous", value: data.classAveragePrevMonth },
-        { name: data.monthsUsed?.current || "Current", value: data.classAverageCurrMonth },
-      ]
-    : [];
-
-  return (
-    <div className="min-h-screen max-w-[1700px] mx-auto px-8 py-10">
-      {/* HEADER */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-lg font-semibold text-gray-900">Class / Section Analysis</h1>
-          {computedAt && (
-            <p className="text-xs text-gray-400 mt-1">Last synced {new Date(computedAt).toLocaleString()}</p>
-          )}
+    <main className="analysis-page">
+      <header className="analysis-topbar">
+        <div className="analysis-title-row">
+          <h1>Class / Section Analysis</h1>
+          {computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="analysis-top-actions">
           <RawDataButton sheetId={sheetId} />
-          <button
-            onClick={syncAnalysis}
-            disabled={syncing}
-            className="text-sm bg-gray-900 text-white rounded-lg px-4 py-2 disabled:opacity-50"
-          >
+          <button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}>
+            <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
             {syncing ? "Syncing..." : "Sync now"}
           </button>
         </div>
-      </div>
+      </header>
 
       {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
-
-      {/* ATTENDANCE SUB-NAV: Trend / At Risk / Summary */}
-      <div className="flex gap-2 mb-8">
-        {(["trend", "risk", "summary"] as AttendanceView[]).map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`text-sm px-4 py-2 rounded-lg font-medium capitalize ${
-              view === v ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {v === "risk" ? "At Risk" : v}
-          </button>
-        ))}
+      <div className="analysis-view-switch">
+        <button className={view === "trend" ? "is-active" : ""} onClick={() => setView("trend")}>Trend</button>
+        <button className={view === "risk" ? "is-active" : ""} onClick={() => setView("risk")}>At Risk</button>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg p-4 mb-6">{error}</div>}
-      {loading && !data && <div className="text-sm text-gray-500 py-10">Loading attendance analysis...</div>}
+      {error && <div className="analysis-panel" style={{ padding: 14, marginBottom: 16, color: "#b42318", display: "flex", gap: 8 }}><AlertCircle size={17} />{error}</div>}
+      {loading && !data && <div style={{ padding: 40, color: "#667085", fontSize: 13 }}>Loading attendance analysis...</div>}
 
-      {data && view === "trend" && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Attendance Trend</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Compare attendance between two months and identify increasing, decreasing, and stable students.
-            </p>
+      {data && view === "trend" && <>
+        <section className="analysis-hero">
+          <div className="analysis-hero-copy">
+            <h2>Attendance Trend</h2>
+            <p>Compare attendance between two months and identify increasing, decreasing, and stable students.</p>
+          </div>
+          <Metric icon={<Users size={19} />} label={`Class Average (${previousMonth || "Previous"})`} value={`${previousAverage}%`} change={averageChange} />
+          <Metric icon={<Gauge size={19} />} label={`Class Average (${currentMonth || "Current"})`} value={`${currentAverage}%`} change={averageChange} />
+          <Metric icon={<Sparkles size={19} />} label="Students Improving" value={improvingCount} detail={`${students.length ? round1((improvingCount / students.length) * 100) : 0}% of total students`} good />
+        </section>
+
+        <section className="analysis-panel analysis-settings">
+          <h3>Trend Comparison Settings</h3>
+          <div className="analysis-settings-grid">
+            <div><label>First Month</label><select value={previousMonth} onChange={(e) => setPreviousMonth(e.target.value)}>{availableMonths.map((month) => <option key={month}>{month}</option>)}</select></div>
+            <div><label>Second Month</label><select value={currentMonth} onChange={(e) => setCurrentMonth(e.target.value)}>{availableMonths.map((month) => <option key={month}>{month}</option>)}</select></div>
+            <div><label>Trend Criteria (%)</label><input type="number" min="0" max="100" value={trendCriteria} onChange={(e) => setTrendCriteria(Number(e.target.value))} /></div>
+            <button className="analysis-primary" onClick={() => loadAnalysis(false, previousMonth, currentMonth, trendCriteria)} disabled={loading || !previousMonth || !currentMonth || previousMonth === currentMonth}><SlidersHorizontal size={15} />{loading ? "Applying..." : "Apply Comparison"}</button>
+          </div>
+          <div className="analysis-note"><AlertCircle size={14} />Trend calculation: a change of <strong>±{trendCriteria} percentage points</strong> or more is Increasing or Decreasing.</div>
+        </section>
+
+        <section className="analysis-content-grid">
+          <div className="analysis-panel analysis-table-panel">
+            <div className="analysis-panel-head">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}><h3>Student Trend Analysis</h3><span className="analysis-count">{students.length} Students</span></div>
+              <div style={{ position: "relative" }}>
+                <Search size={15} style={{ position: "absolute", left: 10, top: 11, color: "#98a2b3" }} />
+                <input placeholder="Search student..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: 32, width: 200, height: 38 }} />
+              </div>
+            </div>
+            <div className="analysis-table-wrap">
+              <table className="analysis-table">
+                <thead><tr><th>Student Name</th><th>{data.monthsUsed.previous || "Month 1"}</th><th>{data.monthsUsed.current || "Month 2"}</th><th>Change</th><th>Trend</th></tr></thead>
+                <tbody>{filteredStudents.map((student) => {
+                  const previous = student.attendancePct.prevMonth;
+                  const current = student.attendancePct.currMonth;
+                  const change = round1(current - previous);
+                  const trend = student.attendancePct.trend;
+                  return <tr key={student.enrollmentNo}>
+                    <td><span className="student-cell"><span className="student-avatar">{initials(student.name)}</span>{student.name}</span></td>
+                    <td>{previous}%</td><td>{current}%</td>
+                    <td className={change > 0 ? "change-up" : change < 0 ? "change-down" : ""}>{change > 0 ? "+" : ""}{change}%</td>
+                    <td><span className={`trend-badge ${trend === "Increasing" ? "trend-up" : trend === "Decreasing" ? "trend-down" : "trend-stable"}`}>{trend === "Increasing" ? "↑ " : trend === "Decreasing" ? "↓ " : "− "}{trend}</span></td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
           </div>
 
-          <section className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-            <h3 className="font-medium text-gray-900 mb-5">Trend Comparison Settings</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2">First Month</label>
-                <select
-                  value={previousMonth}
-                  onChange={(e) => setPreviousMonth(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white"
-                >
-                  <option value="">Select month</option>
-                  {availableMonths.map((m: string) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2">Second Month</label>
-                <select
-                  value={currentMonth}
-                  onChange={(e) => setCurrentMonth(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white"
-                >
-                  <option value="">Select month</option>
-                  {availableMonths.map((m: string) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2">Trend Criteria (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={trendCriteria}
-                  onChange={(e) => setTrendCriteria(Number(e.target.value))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
-                />
-              </div>
-              <button
-                onClick={applyTrendSettings}
-                disabled={!previousMonth || !currentMonth || previousMonth === currentMonth}
-                className="bg-gray-900 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-40"
-              >
-                Apply Comparison
-              </button>
-            </div>
-            <div className="mt-5 pt-4 border-t border-gray-100">
-              <p className="text-xs text-gray-500">
-                Trend calculation: a change of{" "}
-                <span className="font-semibold text-gray-700">±{trendCriteria} percentage points</span> or more is
-                classified as Increasing or Decreasing. Smaller changes are classified as Stable.
-              </p>
-            </div>
-          </section>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6 order-2 lg:order-1 lg:col-span-1">
-              <h3 className="font-medium text-gray-900 mb-4">Student Trend Analysis</h3>
-              <div className="max-h-[600px] overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-400 border-b border-gray-100">
-                      <th className="py-3 pr-3">Name</th>
-                      <th className="py-3 pr-3">{data.monthsUsed?.previous || "Month 1"}</th>
-                      <th className="py-3 pr-3">{data.monthsUsed?.current || "Month 2"}</th>
-                      <th className="py-3 pr-3">Change</th>
-                      <th className="py-3">Trend</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.students.map((student: any) => {
-                      const previous = student.attendancePct?.prevMonth ?? 0;
-                      const current = student.attendancePct?.currMonth ?? 0;
-                      const change = round1(current - previous);
-                      const trend = student.attendancePct?.trend || "Stable";
-                      return (
-                        <tr key={student.enrollmentNo} className="border-b border-gray-50">
-                          <td className="py-3 pr-3 text-gray-900 whitespace-nowrap">{student.name}</td>
-                          <td className="py-3 pr-3 text-gray-500">{previous}%</td>
-                          <td className="py-3 pr-3 text-gray-500">{current}%</td>
-                          <td
-                            className={`py-3 pr-3 font-medium ${
-                              change > 0 ? "text-emerald-600" : change < 0 ? "text-red-500" : "text-gray-500"
-                            }`}
-                          >
-                            {change > 0 ? "+" : ""}
-                            {change}%
-                          </td>
-                          <td className="py-3">
-                            <span
-                              className={`text-xs px-2.5 py-1 rounded-full ${
-                                trend === "Increasing"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : trend === "Decreasing"
-                                  ? "bg-red-50 text-red-600"
-                                  : "bg-gray-100 text-gray-600"
-                              }`}
-                            >
-                              {trend}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <div className="space-y-6 order-1 lg:order-2 lg:col-span-1">
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <h3 className="font-medium text-gray-900 mb-4">Trend Distribution</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" fontSize={11} />
-                    <YAxis fontSize={12} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </section>
-
-              <section className="bg-white rounded-2xl border border-gray-100 p-6">
-                <h3 className="font-medium text-gray-900 mb-4">Attendance Distribution</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={attendanceDistribution}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" fontSize={11} />
-                    <YAxis fontSize={12} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#111827" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </section>
-            </div>
+          <div className="analysis-right-stack">
+            <ChartPanel title="Trend Distribution" subtitle="Click a column to filter those students in At Risk." data={trendData} onBarClick={(entry) => openRisk({ trend: entry?.name || "All" })} />
+            <ChartPanel title="Attendance Distribution" subtitle="Click a column to open that attendance range in At Risk." data={attendanceDistribution} onBarClick={(entry) => {
+              if (entry?.name === "Below 30%") openRisk({ lower: 0, upper: 29.999 });
+              else if (entry?.name === "30% to 49%") openRisk({ lower: 30, upper: 49.999 });
+              else if (entry?.name === "50% to 74%") openRisk({ lower: 50, upper: 74.999 });
+              else openRisk({ lower: 75, upper: 100 });
+            }} />
           </div>
-        </>
-      )}
+        </section>
+      </>}
 
-      {data && view === "risk" && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">At Risk Students</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Filter students by attendance range and trend, then copy or email the list directly.
-            </p>
+      {data && view === "risk" && <>
+        <section className="analysis-hero analysis-risk-hero">
+          <div className="analysis-hero-copy">
+            <h2>At Risk Students</h2>
+            <p>Find students needing attention using attendance range and trend filters.</p>
           </div>
+          <Metric icon={<Users size={19} />} label="Matching Students" value={riskResults.length} detail="Current filter result" good />
+          <Metric icon={<AlertCircle size={19} />} label="Below 50% Attendance" value={riskLowCount} detail="Within selected result" />
+          <Metric icon={<Gauge size={19} />} label="Decreasing Trend" value={riskDecreasingCount} detail="Students whose attendance fell" />
+        </section>
 
-          <section className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-            <h3 className="font-medium text-gray-900 mb-5">Filter Criteria</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2">Lower Bound (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={lowerBound}
-                  onChange={(e) => setLowerBound(Number(e.target.value))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2">Upper Bound (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={upperBound}
-                  onChange={(e) => setUpperBound(Number(e.target.value))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2">Trend</label>
-                <select
-                  value={riskTrendFilter}
-                  onChange={(e) => setRiskTrendFilter(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white"
-                >
-                  <option value="All">All</option>
-                  <option value="Increasing">Increasing</option>
-                  <option value="Decreasing">Decreasing</option>
-                  <option value="Stable">Stable</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2">Month</label>
-                <select
-                  value={riskMonth}
-                  onChange={(e) => setRiskMonth(e.target.value as "previous" | "current")}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white"
-                >
-                  <option value="current">{data.monthsUsed?.current || "Current month"}</option>
-                  <option value="previous">{data.monthsUsed?.previous || "Previous month"}</option>
-                </select>
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 mt-4">
-              Note: filtering only works across the two months currently loaded in Trend settings above — pick a
-              different pair there first if you need a different month here.
-            </p>
-          </section>
+        <section className="analysis-panel analysis-settings">
+          <div className="analysis-panel-head" style={{ marginBottom: 18 }}>
+            <div><h3>Filter Criteria</h3><p style={{ margin: "5px 0 0", color: "#667085", fontSize: 12 }}>Narrow the list before copying addresses or sending alerts.</p></div>
+            <button className="analysis-secondary" onClick={() => { setLowerBound(0); setUpperBound(100); setRiskTrendFilter("All"); setRiskMonth("current"); }}><RefreshCw size={14} />Reset</button>
+          </div>
+          <div className="analysis-settings-grid">
+            <div><label>Lower Bound (%)</label><input type="number" min="0" max="100" value={lowerBound} onChange={(e) => setLowerBound(Math.max(0, Math.min(100, Number(e.target.value))))} /></div>
+            <div><label>Upper Bound (%)</label><input type="number" min="0" max="100" value={upperBound} onChange={(e) => setUpperBound(Math.max(0, Math.min(100, Number(e.target.value))))} /></div>
+            <div><label>Trend</label><select value={riskTrendFilter} onChange={(e) => setRiskTrendFilter(e.target.value)}><option>All</option><option>Increasing</option><option>Decreasing</option><option>Stable</option></select></div>
+            <div><label>Month</label><select value={riskMonth} onChange={(e) => setRiskMonth(e.target.value as "previous" | "current")}><option value="current">{currentMonth}</option><option value="previous">{previousMonth}</option></select></div>
+          </div>
+        </section>
 
-          <section className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-            <h3 className="font-medium text-gray-900 mb-4">
-              Filtered Students <span className="text-gray-400 font-normal">({riskResults.length})</span>
-            </h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-400 border-b border-gray-100">
-                  <th className="py-2 pr-3">Enrollment</th>
-                  <th className="py-2 pr-3">Name</th>
-                  <th className="py-2 pr-3">Email</th>
-                  <th className="py-2 pr-3">Attendance</th>
-                  <th className="py-2">Trend</th>
-                </tr>
-              </thead>
-              <tbody>
-                {riskResults.map((s: any) => (
-                  <tr key={s.enrollmentNo} className="border-b border-gray-50">
-                    <td className="py-2 pr-3 text-gray-500">{s.enrollmentNo}</td>
-                    <td className="py-2 pr-3 text-gray-900">{s.name}</td>
-                    <td className="py-2 pr-3 text-gray-500">{s.email || "—"}</td>
-                    <td className="py-2 pr-3">
-                      {riskMonth === "current" ? s.attendancePct?.currMonth : s.attendancePct?.prevMonth}%
-                    </td>
-                    <td className="py-2">{s.attendancePct?.trend}</td>
-                  </tr>
-                ))}
-                {riskResults.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-gray-400">
-                      No students match this filter.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
+        <section className="analysis-panel analysis-table-panel">
+          <div className="analysis-panel-head">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}><h3>Filtered Students</h3><span className="analysis-count">{riskResults.length} Students</span></div>
+            <div style={{ color: "#667085", fontSize: 12 }}>Attendance: {lowerBound}% – {upperBound}%</div>
+          </div>
+          <div className="analysis-table-wrap">
+            <table className="analysis-table">
+              <thead><tr><th>Student</th><th>Enrollment</th><th>Attendance</th><th>Trend</th><th>Email</th></tr></thead>
+              <tbody>{riskResults.length ? riskResults.map((student) => {
+                const attendance = riskMonth === "current" ? student.attendancePct.currMonth : student.attendancePct.prevMonth;
+                const trend = student.attendancePct.trend;
+                return <tr key={student.enrollmentNo}>
+                  <td><span className="student-cell"><span className="student-avatar">{initials(student.name)}</span>{student.name}</span></td>
+                  <td>{student.enrollmentNo}</td><td className={attendance < 50 ? "change-down" : ""}>{attendance}%</td>
+                  <td><span className={`trend-badge ${trend === "Increasing" ? "trend-up" : trend === "Decreasing" ? "trend-down" : "trend-stable"}`}>{trend}</span></td>
+                  <td>{student.email || "—"}</td>
+                </tr>;
+              }) : <tr><td colSpan={5} style={{ textAlign: "center", padding: 36, color: "#667085" }}>No students match the current filters.</td></tr>}</tbody>
             </table>
-          </section>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-3">Copy to Mail</h3>
-              <textarea
-                readOnly
-                value={riskEmailsText}
-                rows={5}
-                className="w-full text-xs text-gray-700 border border-gray-200 rounded-lg p-3 bg-gray-50"
-              />
-              <button
-                onClick={copyEmails}
-                disabled={riskEmails.length === 0}
-                className="mt-3 text-sm bg-gray-900 text-white rounded-lg px-4 py-2 disabled:opacity-40"
-              >
-                {copied ? "Copied!" : "Copy Emails"}
-              </button>
-            </section>
-
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-3">Send Alert Emails</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Opens your default email app with all {riskEmails.length} filtered students BCC'd, and a starter
-                subject/message you can edit before sending.
-              </p>
-              <a
-                href={mailtoHref}
-                className={`inline-block text-sm rounded-lg px-4 py-2 text-white ${
-                  riskEmails.length === 0 ? "bg-gray-300 pointer-events-none" : "bg-red-600 hover:bg-red-700"
-                }`}
-              >
-                Send Alert Emails ↗
-              </a>
-            </section>
           </div>
-        </>
-      )}
-
-      {data && view === "summary" && (
-        <>
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Attendance Summary</h2>
-            <p className="text-sm text-gray-500 mt-1">Overall class attendance health at a glance.</p>
+          <div className="analysis-insight-actions" style={{ marginTop: 16, justifyContent: "flex-end" }}>
+            <button className="analysis-secondary" onClick={copyEmails} disabled={!riskEmails.length}><Download size={15} />{copied ? "Copied" : "Copy Emails"}</button>
+            <a className="analysis-primary" href={`mailto:?bcc=${encodeURIComponent(riskEmails.join(","))}`} style={{ pointerEvents: riskEmails.length ? "auto" : "none", opacity: riskEmails.length ? 1 : 0.55 }}><Mail size={15} />Send Alert Emails</a>
           </div>
+        </section>
+      </>}
+    </main>
+  </div>;
+}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Total Students" value={data.totalStudents} />
-            <StatCard label="Class Average (Current)" value={`${data.classAverageCurrMonth}%`} />
-            <StatCard label="Class Average (Previous)" value={`${data.classAveragePrevMonth}%`} />
-            <StatCard
-              label="Overall Trend"
-              value={`${data.overallTrendPct > 0 ? "+" : ""}${data.overallTrendPct}%`}
-              positive={data.overallTrendPct >= 0}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Attendance Breakdown</h3>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={95} paddingAngle={2}>
-                    {donutData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </section>
-
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Class Average: Previous vs Current</h3>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={compareBarData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" fontSize={12} />
-                  <YAxis fontSize={12} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </section>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Core Summary</h3>
-              <table className="w-full text-sm">
-                <tbody>
-                  <tr className="border-b border-gray-50">
-                    <td className="py-2 text-gray-600">Good Standing (≥75%)</td>
-                    <td className="py-2 text-right font-medium">{data.attendanceBuckets.above75}</td>
-                  </tr>
-                  <tr className="border-b border-gray-50">
-                    <td className="py-2 text-gray-600">Satisfactory (50-74%)</td>
-                    <td className="py-2 text-right font-medium">{data.attendanceBuckets.to74}</td>
-                  </tr>
-                  <tr className="border-b border-gray-50">
-                    <td className="py-2 text-gray-600">Needs Attention (30-49%)</td>
-                    <td className="py-2 text-right font-medium">{data.attendanceBuckets.to49}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 text-gray-600">Critical Risk (&lt;30%)</td>
-                    <td className="py-2 text-right font-medium">{data.attendanceBuckets.below30}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Attendance Shifts</h3>
-              <table className="w-full text-sm">
-                <tbody>
-                  <tr className="border-b border-gray-50">
-                    <td className="py-2 text-gray-600">Improving Students</td>
-                    <td className="py-2 text-right font-medium text-emerald-600">
-                      {data.trendCounts?.increasing ?? 0}
-                    </td>
-                  </tr>
-                  <tr className="border-b border-gray-50">
-                    <td className="py-2 text-gray-600">Declining Students</td>
-                    <td className="py-2 text-right font-medium text-red-600">{data.trendCounts?.decreasing ?? 0}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 text-gray-600">Stable Students</td>
-                    <td className="py-2 text-right font-medium text-gray-600">{data.trendCounts?.stable ?? 0}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Top 5 Most Improved</h3>
-              <ol className="text-sm space-y-2">
-                {topMovers.improved.map((s, i) => (
-                  <li key={s.name} className="flex justify-between">
-                    <span>
-                      {i + 1}. {s.name}
-                    </span>
-                    <span className="text-emerald-600 font-medium">
-                      {s.change > 0 ? "+" : ""}
-                      {s.change}%
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Top 5 Critical Decliners</h3>
-              <ol className="text-sm space-y-2">
-                {topMovers.declined.map((s, i) => (
-                  <li key={s.name} className="flex justify-between">
-                    <span>
-                      {i + 1}. {s.name}
-                    </span>
-                    <span className="text-red-600 font-medium">
-                      {s.change > 0 ? "+" : ""}
-                      {s.change}%
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          </div>
-        </>
-      )}
+function Metric({ icon, label, value, change, detail, good }: { icon: ReactNode; label: string; value: string | number; change?: number; detail?: string; good?: boolean }) {
+  const changeClass = change !== undefined && change > 0 ? "change-up" : change !== undefined && change < 0 ? "change-down" : "";
+  return <div className="analysis-metric">
+    <div className="analysis-metric-icon">{icon}</div>
+    <div className="analysis-metric-content">
+      <span className="analysis-metric-label">{label}</span>
+      <div className="analysis-metric-value-row">
+        <strong>{value}</strong>
+        {change !== undefined && <small className={changeClass}>{change > 0 ? "↑ +" : change < 0 ? "↓ " : ""}{change}%</small>}
+      </div>
+      {detail && <small className="analysis-metric-detail">{detail}</small>}
     </div>
-  );
+  </div>;
+}
+
+function ChartPanel({ title, subtitle, data, onBarClick }: { title: string; subtitle: string; data: { name: string; count: number; color: string }[]; onBarClick: (entry: { name: string } | undefined) => void }) {
+  return <div className="analysis-panel analysis-chart-panel">
+    <div className="analysis-chart-head"><div><h3>{title}</h3><p>{subtitle}</p></div></div>
+    <div style={{ height: 220 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 18, right: 8, left: -14, bottom: 0 }}>
+          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+          <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+          <Tooltip cursor={{ fill: "rgba(79,70,229,0.05)" }} />
+          <Bar dataKey="count" radius={[4, 4, 0, 0]} onClick={(_, index) => onBarClick(data[index])}>{data.map((entry) => <Cell key={entry.name} fill={entry.color} />)}</Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  </div>;
 }
