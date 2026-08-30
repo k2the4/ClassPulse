@@ -6,6 +6,8 @@ import { RawDataButton } from "../../../components/AnalysisWidgets";
 import { SectionAnalysis } from "../../../lib/analysisClass";
 
 type AcademicView = "midsem1" | "midsem2" | "combined";
+type ScoreBasis = "midsem1" | "midsem2" | "combined" | "max";
+type SortOrder = "none" | "highToLow" | "lowToHigh";
 type Tier = "Excellent" | "Good" | "Needs Attention" | "Critical Risk";
 
 const TIER_COLORS: Record<Tier, string> = {
@@ -34,6 +36,19 @@ function tierFor(marks: number, max: number): Tier {
   return "Critical Risk";
 }
 
+function gradeFor(marks: number, max: number) {
+  if (max <= 0) return "—";
+  const percentage = (marks / max) * 100;
+  if (percentage >= 90) return "A+";
+  if (percentage >= 80) return "A";
+  if (percentage >= 70) return "B+";
+  if (percentage >= 60) return "B";
+  if (percentage >= 50) return "C+";
+  if (percentage >= 40) return "C";
+  if (percentage >= 30) return "D";
+  return "F";
+}
+
 function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
   return (
     <div className="rounded-2xl border border-[#e6e5e2] bg-white px-5 py-4 shadow-[0_8px_28px_rgba(31,35,49,0.04)]">
@@ -48,6 +63,8 @@ export default function AcademicPage() {
   const router = useRouter();
   const { sectionId } = router.query;
   const [view, setView] = useState<AcademicView>("midsem1");
+  const [scoreBasis, setScoreBasis] = useState<ScoreBasis>("combined");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("none");
   const [data, setData] = useState<SectionAnalysis | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [computedAt, setComputedAt] = useState("");
@@ -76,15 +93,15 @@ export default function AcademicPage() {
   }
 
   useEffect(() => { loadAnalysis(); }, [sectionId]);
-  useEffect(() => { setSelectedTier(null); }, [view]);
+  useEffect(() => { setSelectedTier(null); setSortOrder("none"); }, [view]);
 
   const students = data?.students || [];
 
   const activeStats = useMemo(() => {
     const rows = students.map((student: any) => {
       if (view === "combined") {
-        const marks = student.examMarks?.combined ?? null;
-        const max = student.examMarks?.max || student.examMarks?.midsem1Max || student.examMarks?.midsem2Max || 0;
+        const combinedMarks = student.examMarks?.combined ?? null;
+        const combinedMax = student.examMarks?.max || student.examMarks?.midsem1Max || student.examMarks?.midsem2Max || 0;
         const midsem1Subjects = student.examMarks?.midsem1Subjects || [];
         const midsem2Subjects = student.examMarks?.midsem2Subjects || [];
         const subjectMap = new Map<string, { code: string; marks: number | null; max: number; pass: boolean }>();
@@ -96,14 +113,26 @@ export default function AcademicPage() {
             return;
           }
           const values = [existing.marks, subject.marks].filter((value): value is number => value !== null && value !== undefined);
-          const combinedMarks = values.length ? round1(values.reduce((a, b) => a + b, 0) / values.length) : null;
+          const subjectCombined = values.length ? round1(values.reduce((a, b) => a + b, 0) / values.length) : null;
           subjectMap.set(subject.code, {
             code: subject.code,
-            marks: combinedMarks,
+            marks: subjectCombined,
             max: Math.max(existing.max || 0, subject.max || 0),
-            pass: combinedMarks === null ? true : combinedMarks >= Math.max(existing.max || 0, subject.max || 0) * 0.4,
+            pass: subjectCombined === null ? true : subjectCombined >= Math.max(existing.max || 0, subject.max || 0) * 0.4,
           });
         });
+
+        let marks = combinedMarks;
+        let max = combinedMax;
+        if (scoreBasis === "midsem1") {
+          marks = student.examMarks?.midsem1 ?? null;
+          max = student.examMarks?.midsem1Max || 0;
+        } else if (scoreBasis === "midsem2") {
+          marks = student.examMarks?.midsem2 ?? null;
+          max = student.examMarks?.midsem2Max || 0;
+        } else if (scoreBasis === "max") {
+          max = Math.max(student.examMarks?.midsem1Max || 0, student.examMarks?.midsem2Max || 0, student.examMarks?.max || 0);
+        }
 
         return { enrollmentNo: student.enrollmentNo, name: student.name, marks, max, subjects: Array.from(subjectMap.values()) };
       }
@@ -118,7 +147,7 @@ export default function AcademicPage() {
     const marks = rows.map((row: any) => Number(row.marks));
     const max = rows[0]?.max || 0;
     const counts = { Excellent: 0, Good: 0, "Needs Attention": 0, "Critical Risk": 0 } as Record<Tier, number>;
-    rows.forEach((row: any) => counts[tierFor(Number(row.marks), max)]++);
+    rows.forEach((row: any) => counts[tierFor(Number(row.marks), Number(row.max) || max)]++);
 
     const subjectCodes = Array.from(new Set(rows.flatMap((row: any) => (row.subjects || []).map((subject: any) => subject.code))));
 
@@ -129,15 +158,21 @@ export default function AcademicPage() {
       average: marks.length ? round1(marks.reduce((a, b) => a + b, 0) / marks.length) : 0,
       median: median(marks),
       highest: marks.length ? Math.max(...marks) : 0,
-      passRate: marks.length ? Math.round(rows.filter((row: any) => Number(row.marks) >= max * 0.4).length / marks.length * 100) : 0,
+      passRate: marks.length ? Math.round(rows.filter((row: any) => Number(row.marks) >= (Number(row.max) || max) * 0.4).length / marks.length * 100) : 0,
       counts,
       sorted: [...rows].sort((a: any, b: any) => Number(b.marks) - Number(a.marks)),
     };
-  }, [students, view]);
+  }, [students, view, scoreBasis]);
 
-  const displayedRows = selectedTier
-    ? activeStats.rows.filter((row: any) => tierFor(Number(row.marks), activeStats.max) === selectedTier)
+  const filteredRows = selectedTier
+    ? activeStats.rows.filter((row: any) => tierFor(Number(row.marks), Number(row.max) || activeStats.max) === selectedTier)
     : activeStats.rows;
+
+  const displayedRows = useMemo(() => {
+    if (sortOrder === "highToLow") return [...filteredRows].sort((a: any, b: any) => Number(b.marks) - Number(a.marks));
+    if (sortOrder === "lowToHigh") return [...filteredRows].sort((a: any, b: any) => Number(a.marks) - Number(b.marks));
+    return filteredRows;
+  }, [filteredRows, sortOrder]);
 
   const totalStudents = students.length;
   const activeLabel = view === "midsem1" ? "Midsem 1" : view === "midsem2" ? "Midsem 2" : "Combined";
@@ -203,24 +238,48 @@ export default function AcademicPage() {
                       Pass mark: 40%{selectedTier ? ` · Filtered: ${selectedTier}` : ""}
                     </p>
                   </div>
+                  {view === "combined" && (
+                    <div className="flex items-end gap-3">
+                      <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">
+                        Score
+                        <select value={scoreBasis} onChange={(e) => setScoreBasis(e.target.value as ScoreBasis)} className="h-9 min-w-[125px] rounded-xl border border-[#e1e4ea] bg-white px-3 text-[11px] font-semibold normal-case tracking-normal text-[#344054] outline-none focus:border-[#5b4ee6]">
+                          <option value="midsem1">Midsem 1</option>
+                          <option value="midsem2">Midsem 2</option>
+                          <option value="combined">Combined</option>
+                          <option value="max">Max</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">
+                        Sort
+                        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)} className="h-9 min-w-[125px] rounded-xl border border-[#e1e4ea] bg-white px-3 text-[11px] font-semibold normal-case tracking-normal text-[#344054] outline-none focus:border-[#5b4ee6]">
+                          <option value="none">No Sort</option>
+                          <option value="highToLow">High to Low</option>
+                          <option value="lowToHigh">Low to High</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
                   {selectedTier && <button className="analysis-secondary" onClick={() => setSelectedTier(null)}>Clear filter</button>}
                 </div>
 
                 <div className="overflow-auto">
-                  <table className="w-full min-w-[760px] border-collapse text-[12px]">
+                  <table className="w-full min-w-[820px] border-collapse text-[12px]">
                     <thead>
                       <tr className="border-b border-[#edf0f4] text-left text-[10px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">
                         <th className="sticky left-0 z-10 bg-white px-3 py-3">Student Name</th>
                         {activeStats.subjectCodes.map((code: string) => <th key={code} className="whitespace-nowrap px-3 py-3">{code}</th>)}
                         <th className="whitespace-nowrap px-3 py-3">Total</th>
+                        {view === "combined" && <th className="whitespace-nowrap px-3 py-3">Grade</th>}
                         <th className="whitespace-nowrap px-3 py-3">%age</th>
                         <th className="whitespace-nowrap px-3 py-3">Tier</th>
                       </tr>
                     </thead>
                     <tbody>
                       {displayedRows.map((row: any) => {
-                        const pct = activeStats.max > 0 ? Math.round(Number(row.marks) / activeStats.max * 100) : 0;
-                        const tier = tierFor(Number(row.marks), activeStats.max);
+                        const rowMax = Number(row.max) || activeStats.max;
+                        const pct = rowMax > 0 ? Math.round(Number(row.marks) / rowMax * 100) : 0;
+                        const tier = tierFor(Number(row.marks), rowMax);
+                        const grade = gradeFor(Number(row.marks), rowMax);
                         return (
                           <tr key={row.enrollmentNo} className="border-b border-[#f0f1f3] last:border-0">
                             <td className="sticky left-0 z-10 bg-white px-3 py-3 font-semibold text-[#17223b]">
@@ -234,6 +293,7 @@ export default function AcademicPage() {
                               return <td key={code} className={`px-3 py-3 ${subject?.marks === null || subject?.marks === undefined ? "text-[#98a2b3]" : subject.pass === false ? "font-semibold text-[#ef4444]" : "text-[#15966a]"}`}>{subject?.marks ?? "—"}</td>;
                             })}
                             <td className="px-3 py-3 font-bold text-[#17223b]">{row.marks}</td>
+                            {view === "combined" && <td className="px-3 py-3 font-bold text-[#5b4ee6]">{grade}</td>}
                             <td className="px-3 py-3 text-[#626b80]">{pct}%</td>
                             <td className="px-3 py-3"><button onClick={() => setSelectedTier(tier)} className="rounded-full px-2.5 py-1 text-[9px] font-bold" style={{ backgroundColor: `${TIER_COLORS[tier]}18`, color: TIER_COLORS[tier] }}>{tier}</button></td>
                           </tr>
