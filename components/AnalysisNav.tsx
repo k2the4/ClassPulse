@@ -34,17 +34,15 @@ export default function AnalysisNav({ sectionId }: Props) {
 
   return (
     <>
-      <aside className="classpulse-analysis-sidebar fixed inset-y-0 left-0 z-50 hidden w-[220px] shrink-0 flex-col border-r border-[#e7e5e1] bg-white lg:flex">
-        <div className="px-5 pt-6">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#3b2992] text-white shadow-[0_10px_25px_rgba(59,41,146,0.20)]">
-              <BarChart3 size={21} strokeWidth={2.2} />
-            </span>
-            <span className="text-[20px] font-extrabold tracking-[-0.7px] text-[#17223b]">ClassPulse</span>
-          </Link>
-        </div>
+      <aside className="classpulse-analysis-sidebar fixed inset-y-0 left-0 z-50 hidden w-[195px] shrink-0 flex-col border-r border-[rgba(203,213,225,.78)] bg-white/60 px-3 py-[22px] backdrop-blur-[18px] lg:flex">
+        <Link href="/dashboard" className="flex items-center gap-2.5 px-2.5 pb-6 text-base font-bold text-[#172033]">
+          <span className="grid h-[34px] w-[34px] place-items-center rounded-[9px] bg-[linear-gradient(135deg,#251b62,#5544ba)] text-white shadow-[0_8px_20px_rgba(67,52,157,.22)]">
+            <BarChart3 size={18} />
+          </span>
+          <span>ClassPulse</span>
+        </Link>
 
-        <nav className="mt-8 space-y-1 px-3 text-sm font-medium text-[#626b80]">
+        <nav className="grid gap-1.5 text-[13px] font-medium text-[#667085]">
           {sidebarItems.map((item) => {
             const Icon = item.icon;
             const active = item.href === "/class-analysis";
@@ -52,8 +50,10 @@ export default function AnalysisNav({ sectionId }: Props) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-xl px-3 py-3 transition-colors ${
-                  active ? "bg-[#eeeaff] font-semibold text-[#38258e]" : "hover:bg-[#f6f4ff] hover:text-[#38258e]"
+                className={`flex items-center gap-[11px] rounded-[10px] px-3 py-[11px] transition-colors ${
+                  active
+                    ? "bg-[linear-gradient(90deg,rgba(79,70,229,.12),rgba(79,70,229,.04))] font-semibold text-[#312783]"
+                    : "hover:bg-[rgba(79,70,229,.06)] hover:text-[#2d246f]"
                 }`}
               >
                 <Icon size={18} />
@@ -64,8 +64,8 @@ export default function AnalysisNav({ sectionId }: Props) {
         </nav>
 
         <div className="mt-auto">
-          <div className="mx-4 border-t border-[#eeeeeb] py-4">
-            <div className="flex items-center gap-3 px-2">
+          <div className="border-t border-[rgba(203,213,225,.72)] px-2.5 pt-4">
+            <div className="flex items-center gap-3">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eeeaff] text-xs font-bold text-[#4b36a7]">F</span>
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-[#17223b]">Faculty</p>
@@ -75,7 +75,7 @@ export default function AnalysisNav({ sectionId }: Props) {
           </div>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="mx-4 mb-4 flex w-[calc(100%-2rem)] items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-medium text-[#626b80] transition-colors hover:bg-[#f6f4ff] hover:text-[#38258e]"
+            className="mt-3 flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2.5 text-xs font-medium text-[#667085] transition-colors hover:bg-[rgba(79,70,229,.06)] hover:text-[#2d246f]"
           >
             <LogOut size={16} />
             Sign out
@@ -83,55 +83,81 @@ export default function AnalysisNav({ sectionId }: Props) {
         </div>
       </aside>
 
-      <nav className="mb-8 flex overflow-x-auto rounded-2xl border border-[#ddd9ee] bg-white/90 p-1.5 shadow-[0_8px_24px_rgba(31,35,49,0.05)] backdrop-blur">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const active = router.asPath === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-5 py-3 text-sm transition-colors ${
-                active
-                  ? "bg-[#eeeaff] font-semibold text-[#38258e] shadow-[inset_0_0_0_1px_rgba(91,78,230,.16)]"
-                  : "text-[#626b80] hover:bg-[#f7f5ff] hover:text-[#38258e]"
-              }`}
-            >
-              <Icon size={17} />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="subject-analysis-nav" aria-label="Class analysis sections">
+        <div className="subject-analysis-nav__rail">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const active = router.asPath === item.href;
+            return (
+              <Link key={item.href} href={item.href} className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}>
+                <Icon size={17} strokeWidth={1.8} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       <style jsx global>{`
-        body:has(.classpulse-analysis-sidebar) { background: #f7f6f2 !important; color: #17223b; }
-        body:has(.classpulse-analysis-sidebar) #__next { padding-left: 220px; }
+        body:has(.classpulse-analysis-sidebar) {
+          background: #f7f6f2 !important;
+          color: #17223b;
+        }
+
+        body:has(.classpulse-analysis-sidebar) #__next {
+          padding-left: 195px;
+        }
+
         body:has(.classpulse-analysis-sidebar) main > div {
           max-width: none !important;
           margin: 0 !important;
           min-height: 100vh;
-          padding: 34px 38px 48px !important;
+          padding: 18px 28px 28px !important;
           background: radial-gradient(circle at 82% 5%, rgba(91,78,230,.09), transparent 27%), linear-gradient(135deg, #fbfaf7 0%, #f7f6f2 58%, #f2f4f6 100%);
         }
+
         body:has(.classpulse-analysis-sidebar) main section.bg-white {
-          border: 1px solid #e1e3ea !important;
+          border-color: #e1e3ea !important;
           border-radius: 18px !important;
           box-shadow: 0 8px 28px rgba(31,35,49,.055) !important;
         }
-        body:has(.classpulse-analysis-sidebar) main .bg-gray-900 { background: #30227d !important; }
-        body:has(.classpulse-analysis-sidebar) main .bg-gray-100 { background: #f5f4f8 !important; }
+
+        body:has(.classpulse-analysis-sidebar) main .bg-gray-900 {
+          background: #30227d !important;
+        }
+
+        body:has(.classpulse-analysis-sidebar) main .bg-gray-100 {
+          background: #f5f4f8 !important;
+        }
+
         body:has(.classpulse-analysis-sidebar) main .border-gray-100,
-        body:has(.classpulse-analysis-sidebar) main .border-gray-200 { border-color: #e5e3ea !important; }
+        body:has(.classpulse-analysis-sidebar) main .border-gray-200 {
+          border-color: #e5e3ea !important;
+        }
+
         body:has(.classpulse-analysis-sidebar) main input,
         body:has(.classpulse-analysis-sidebar) main select,
-        body:has(.classpulse-analysis-sidebar) main textarea { border-color: #dfe1e8; border-radius: 11px; }
+        body:has(.classpulse-analysis-sidebar) main textarea {
+          border-color: #dfe1e8;
+          border-radius: 11px;
+        }
+
         body:has(.classpulse-analysis-sidebar) main input:focus,
         body:has(.classpulse-analysis-sidebar) main select:focus,
-        body:has(.classpulse-analysis-sidebar) main textarea:focus { outline: none; border-color: #6b5be7; box-shadow: 0 0 0 3px rgba(107,91,231,.10); }
+        body:has(.classpulse-analysis-sidebar) main textarea:focus {
+          outline: none;
+          border-color: #6b5be7;
+          box-shadow: 0 0 0 3px rgba(107,91,231,.10);
+        }
+
         @media (max-width: 1023px) {
-          body:has(.classpulse-analysis-sidebar) #__next { padding-left: 0; }
-          body:has(.classpulse-analysis-sidebar) main > div { padding: 24px 20px 36px !important; }
+          body:has(.classpulse-analysis-sidebar) #__next {
+            padding-left: 0;
+          }
+
+          body:has(.classpulse-analysis-sidebar) main > div {
+            padding: 18px 20px 28px !important;
+          }
         }
       `}</style>
     </>
