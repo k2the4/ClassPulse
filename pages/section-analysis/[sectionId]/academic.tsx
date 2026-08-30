@@ -5,7 +5,7 @@ import AnalysisNav from "../../../components/AnalysisNav";
 import { RawDataButton } from "../../../components/AnalysisWidgets";
 import { SectionAnalysis } from "../../../lib/analysisClass";
 
-type AcademicView = "midsem1" | "midsem2";
+type AcademicView = "midsem1" | "midsem2" | "combined";
 type Tier = "Excellent" | "Good" | "Needs Attention" | "Critical Risk";
 
 const TIER_COLORS: Record<Tier, string> = {
@@ -81,8 +81,34 @@ export default function AcademicPage() {
   const students = data?.students || [];
 
   const activeStats = useMemo(() => {
-    const exam = view === "midsem1" ? "midsem1" : "midsem2";
     const rows = students.map((student: any) => {
+      if (view === "combined") {
+        const marks = student.examMarks?.combined ?? null;
+        const max = student.examMarks?.max || student.examMarks?.midsem1Max || student.examMarks?.midsem2Max || 0;
+        const midsem1Subjects = student.examMarks?.midsem1Subjects || [];
+        const midsem2Subjects = student.examMarks?.midsem2Subjects || [];
+        const subjectMap = new Map<string, { code: string; marks: number | null; max: number; pass: boolean }>();
+
+        [...midsem1Subjects, ...midsem2Subjects].forEach((subject: any) => {
+          const existing = subjectMap.get(subject.code);
+          if (!existing) {
+            subjectMap.set(subject.code, { code: subject.code, marks: subject.marks ?? null, max: subject.max || 0, pass: subject.pass !== false });
+            return;
+          }
+          const values = [existing.marks, subject.marks].filter((value): value is number => value !== null && value !== undefined);
+          const combinedMarks = values.length ? round1(values.reduce((a, b) => a + b, 0) / values.length) : null;
+          subjectMap.set(subject.code, {
+            code: subject.code,
+            marks: combinedMarks,
+            max: Math.max(existing.max || 0, subject.max || 0),
+            pass: combinedMarks === null ? true : combinedMarks >= Math.max(existing.max || 0, subject.max || 0) * 0.4,
+          });
+        });
+
+        return { enrollmentNo: student.enrollmentNo, name: student.name, marks, max, subjects: Array.from(subjectMap.values()) };
+      }
+
+      const exam = view === "midsem1" ? "midsem1" : "midsem2";
       const marks = student.examMarks?.[exam] ?? null;
       const max = student.examMarks?.[`${exam}Max`] || 0;
       const subjects = student.examMarks?.[`${exam}Subjects`] || [];
@@ -94,10 +120,12 @@ export default function AcademicPage() {
     const counts = { Excellent: 0, Good: 0, "Needs Attention": 0, "Critical Risk": 0 } as Record<Tier, number>;
     rows.forEach((row: any) => counts[tierFor(Number(row.marks), max)]++);
 
+    const subjectCodes = Array.from(new Set(rows.flatMap((row: any) => (row.subjects || []).map((subject: any) => subject.code))));
+
     return {
       rows,
       max,
-      subjectCodes: rows[0]?.subjects?.map((subject: any) => subject.code) || [],
+      subjectCodes,
       average: marks.length ? round1(marks.reduce((a, b) => a + b, 0) / marks.length) : 0,
       median: median(marks),
       highest: marks.length ? Math.max(...marks) : 0,
@@ -112,7 +140,7 @@ export default function AcademicPage() {
     : activeStats.rows;
 
   const totalStudents = students.length;
-  const activeLabel = view === "midsem1" ? "Midsem 1" : "Midsem 2";
+  const activeLabel = view === "midsem1" ? "Midsem 1" : view === "midsem2" ? "Midsem 2" : "Combined";
   const tierEntries = Object.entries(activeStats.counts) as [Tier, number][];
   const highestNames = activeStats.rows.filter((row: any) => Number(row.marks) === activeStats.highest).map((row: any) => row.name);
 
@@ -148,6 +176,7 @@ export default function AcademicPage() {
         <div className="analysis-view-switch">
           <button className={view === "midsem1" ? "is-active" : ""} onClick={() => setView("midsem1")}>Midsem 1</button>
           <button className={view === "midsem2" ? "is-active" : ""} onClick={() => setView("midsem2")}>Midsem 2</button>
+          <button className={view === "combined" ? "is-active" : ""} onClick={() => setView("combined")}>Combined</button>
         </div>
 
         {error && <div className="analysis-panel" style={{ padding: 14, marginBottom: 16, color: "#b42318" }}>{error}</div>}
@@ -158,7 +187,7 @@ export default function AcademicPage() {
             <section className="analysis-hero">
               <div className="analysis-hero-copy">
                 <h2>{activeLabel}</h2>
-                <p>Marks across all subjects, class statistics, and performance tiers.</p>
+                <p>{view === "combined" ? "Combined Midsem 1 and Midsem 2 performance across all subjects." : "Marks across all subjects, class statistics, and performance tiers."}</p>
               </div>
               <Metric label="Class Average" value={`${activeStats.average}/${activeStats.max || 0}`} detail="class average across subjects" />
               <Metric label="Class Median" value={`${activeStats.median}/${activeStats.max || 0}`} detail="middle class score" />
