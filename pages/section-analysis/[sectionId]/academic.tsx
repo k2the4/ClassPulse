@@ -36,17 +36,8 @@ function tierFor(marks: number, max: number): Tier {
   return "Critical Risk";
 }
 
-function gradeFor(marks: number, max: number) {
-  if (max <= 0) return "—";
-  const percentage = (marks / max) * 100;
-  if (percentage >= 90) return "A+";
-  if (percentage >= 80) return "A";
-  if (percentage >= 70) return "B+";
-  if (percentage >= 60) return "B";
-  if (percentage >= 50) return "C+";
-  if (percentage >= 40) return "C";
-  if (percentage >= 30) return "D";
-  return "F";
+function gradeFor(marks: number, max: number): Tier {
+  return tierFor(marks, max);
 }
 
 function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
@@ -152,7 +143,6 @@ export default function AcademicPage() {
     const max = rows[0]?.max || 0;
     const counts = { Excellent: 0, Good: 0, "Needs Attention": 0, "Critical Risk": 0 } as Record<Tier, number>;
     rows.forEach((row: any) => counts[tierFor(Number(row.marks), Number(row.max) || max)]++);
-
     const subjectCodes = Array.from(new Set(rows.flatMap((row: any) => (row.subjects || []).map((subject: any) => subject.code))));
 
     return {
@@ -198,16 +188,8 @@ export default function AcademicPage() {
 
       <main className="analysis-page">
         <header className="analysis-topbar">
-          <div className="analysis-title-row">
-            <h1>Class / Section Analysis</h1>
-            {computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}
-          </div>
-          <div className="analysis-top-actions">
-            <button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}>
-              <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
-              {syncing ? "Syncing..." : "Sync now"}
-            </button>
-          </div>
+          <div className="analysis-title-row"><h1>Class / Section Analysis</h1>{computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}</div>
+          <div className="analysis-top-actions"><button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}><RefreshCw size={15} className={syncing ? "animate-spin" : ""} />{syncing ? "Syncing..." : "Sync now"}</button></div>
         </header>
 
         {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
@@ -224,10 +206,7 @@ export default function AcademicPage() {
         {data && (
           <>
             <section className="analysis-hero">
-              <div className="analysis-hero-copy">
-                <h2>{activeLabel}</h2>
-                <p>{view === "combined" ? "Combined Midsem 1 and Midsem 2 performance across all subjects." : "Marks across all subjects, class statistics, and performance tiers."}</p>
-              </div>
+              <div className="analysis-hero-copy"><h2>{activeLabel}</h2><p>{view === "combined" ? "Combined Midsem 1 and Midsem 2 performance across all subjects." : "Marks across all subjects, class statistics, and performance tiers."}</p></div>
               <Metric label="Class Average" value={`${activeStats.average}/${activeStats.max || 0}`} detail="class average across subjects" />
               <Metric label="Class Median" value={`${activeStats.median}/${activeStats.max || 0}`} detail="middle class score" />
               <Metric label="Pass Rate" value={`${activeStats.passRate}%`} detail="students at or above 40%" />
@@ -236,72 +215,28 @@ export default function AcademicPage() {
             <section className="analysis-content-grid academic-content-grid">
               <section className="analysis-panel analysis-table-panel">
                 <div className="analysis-panel-head">
-                  <div>
-                    <h3>Data Sheet</h3>
-                    <p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>
-                      Pass mark: 40%{selectedTier ? ` · Filtered: ${selectedTier}` : ""}
-                    </p>
-                  </div>
-                  {view === "combined" && (
-                    <div className="flex items-end gap-3">
-                      <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">
-                        Score
-                        <select value={scoreBasis} onChange={(e) => setScoreBasis(e.target.value as ScoreBasis)} className="h-9 min-w-[125px] rounded-xl border border-[#e1e4ea] bg-white px-3 text-[11px] font-semibold normal-case tracking-normal text-[#344054] outline-none focus:border-[#5b4ee6]">
-                          <option value="midsem1">Midsem 1</option>
-                          <option value="midsem2">Midsem 2</option>
-                          <option value="combined">Combined</option>
-                          <option value="max">Max</option>
-                        </select>
-                      </label>
-                      <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">
-                        Sort
-                        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)} className="h-9 min-w-[125px] rounded-xl border border-[#e1e4ea] bg-white px-3 text-[11px] font-semibold normal-case tracking-normal text-[#344054] outline-none focus:border-[#5b4ee6]">
-                          <option value="none">No Sort</option>
-                          <option value="highToLow">High to Low</option>
-                          <option value="lowToHigh">Low to High</option>
-                        </select>
-                      </label>
-                    </div>
-                  )}
+                  <div><h3>Data Sheet</h3><p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>Pass mark: 40%{selectedTier ? ` · Filtered: ${selectedTier}` : ""}</p></div>
+                  {view === "combined" && <div className="flex items-end gap-3">
+                    <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">Score<select value={scoreBasis} onChange={(e) => setScoreBasis(e.target.value as ScoreBasis)} className="h-9 min-w-[125px] rounded-xl border border-[#e1e4ea] bg-white px-3 text-[11px] font-semibold normal-case tracking-normal text-[#344054] outline-none focus:border-[#5b4ee6]"><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option><option value="combined">Combined</option><option value="max">Max</option></select></label>
+                    <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">Sort<select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)} className="h-9 min-w-[125px] rounded-xl border border-[#e1e4ea] bg-white px-3 text-[11px] font-semibold normal-case tracking-normal text-[#344054] outline-none focus:border-[#5b4ee6]"><option value="none">No Sort</option><option value="highToLow">High to Low</option><option value="lowToHigh">Low to High</option></select></label>
+                  </div>}
                   {selectedTier && <button className="analysis-secondary" onClick={() => setSelectedTier(null)}>Clear filter</button>}
                 </div>
 
                 <div className="overflow-auto">
                   <table className="w-full min-w-[820px] border-collapse text-[12px]">
-                    <thead>
-                      <tr className="border-b border-[#edf0f4] text-left text-[10px] font-bold uppercase tracking-[0.2px] text-[#7b8498]">
-                        <th className="sticky left-0 z-10 bg-white px-3 py-3">Student Name</th>
-                        {activeStats.subjectCodes.map((code: string) => <th key={code} className="whitespace-nowrap px-3 py-3">{code}</th>)}
-                        <th className="whitespace-nowrap px-3 py-3">Total</th>
-                        {view === "combined" && <th className="whitespace-nowrap px-3 py-3">Grade</th>}
-                        <th className="whitespace-nowrap px-3 py-3">%age</th>
-                        <th className="whitespace-nowrap px-3 py-3">Tier</th>
-                      </tr>
-                    </thead>
+                    <thead><tr className="border-b border-[#edf0f4] text-left text-[10px] font-bold uppercase tracking-[0.2px] text-[#7b8498]"><th className="sticky left-0 z-10 bg-white px-3 py-3">Student Name</th>{activeStats.subjectCodes.map((code: string) => <th key={code} className="whitespace-nowrap px-3 py-3">{code}</th>)}<th className="whitespace-nowrap px-3 py-3">Total</th>{view === "combined" && <th className="whitespace-nowrap px-3 py-3">Grade</th>}</tr></thead>
                     <tbody>
                       {displayedRows.map((row: any) => {
                         const rowMax = Number(row.max) || activeStats.max;
-                        const pct = rowMax > 0 ? Math.round(Number(row.marks) / rowMax * 100) : 0;
                         const tier = tierFor(Number(row.marks), rowMax);
                         const grade = gradeFor(Number(row.marks), rowMax);
-                        return (
-                          <tr key={row.enrollmentNo} className="border-b border-[#f0f1f3] last:border-0">
-                            <td className="sticky left-0 z-10 bg-white px-3 py-3 font-semibold text-[#17223b]">
-                              <div className="flex items-center gap-2">
-                                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#eeebff] text-[9px] font-extrabold text-[#5b4ee6]">{initials(row.name)}</span>
-                                <span className="whitespace-nowrap">{row.name}</span>
-                              </div>
-                            </td>
-                            {activeStats.subjectCodes.map((code: string) => {
-                              const subject = (row.subjects || []).find((item: any) => item.code === code);
-                              return <td key={code} className={`px-3 py-3 ${subject?.marks === null || subject?.marks === undefined ? "text-[#98a2b3]" : subject.pass === false ? "font-semibold text-[#ef4444]" : "text-[#15966a]"}`}>{subject?.marks ?? "—"}</td>;
-                            })}
-                            <td className="px-3 py-3 font-bold text-[#17223b]">{row.marks}</td>
-                            {view === "combined" && <td className="px-3 py-3 font-bold text-[#5b4ee6]">{grade}</td>}
-                            <td className="px-3 py-3 text-[#626b80]">{pct}%</td>
-                            <td className="px-3 py-3"><button onClick={() => setSelectedTier(tier)} className="rounded-full px-2.5 py-1 text-[9px] font-bold" style={{ backgroundColor: `${TIER_COLORS[tier]}18`, color: TIER_COLORS[tier] }}>{tier}</button></td>
-                          </tr>
-                        );
+                        return <tr key={row.enrollmentNo} className="border-b border-[#f0f1f3] last:border-0">
+                          <td className="sticky left-0 z-10 bg-white px-3 py-3 font-semibold text-[#17223b]"><div className="flex items-center gap-2"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#eeebff] text-[9px] font-extrabold text-[#5b4ee6]">{initials(row.name)}</span><span className="whitespace-nowrap">{row.name}</span></div></td>
+                          {activeStats.subjectCodes.map((code: string) => { const subject = (row.subjects || []).find((item: any) => item.code === code); return <td key={code} className={`px-3 py-3 ${subject?.marks === null || subject?.marks === undefined ? "text-[#98a2b3]" : subject.pass === false ? "font-semibold text-[#ef4444]" : "text-[#15966a]"}`}>{subject?.marks ?? "—"}</td>; })}
+                          <td className="px-3 py-3 font-bold text-[#17223b]">{row.marks}</td>
+                          {view === "combined" && <td className="px-3 py-3"><button onClick={() => setSelectedTier(tier)} className="rounded-full px-2.5 py-1 text-[9px] font-bold" style={{ backgroundColor: `${TIER_COLORS[tier]}18`, color: TIER_COLORS[tier] }}>{grade}</button></td>}
+                        </tr>;
                       })}
                     </tbody>
                   </table>
@@ -309,48 +244,9 @@ export default function AcademicPage() {
               </section>
 
               <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <Metric label="Class Average" value={activeStats.average} detail={`out of ${activeStats.max || 0}`} />
-                  <Metric label="Class Median" value={activeStats.median} detail="middle class score" />
-                  <Metric label="Highest Score" value={activeStats.highest} detail={highestNames.length ? highestNames[0] : "top score"} />
-                  <Metric label="Pass Rate" value={`${activeStats.passRate}%`} detail={`${activeStats.rows.length} students assessed`} />
-                </div>
-
-                <section className="analysis-panel p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div>
-                      <h3>Performance Tier</h3>
-                      <p className="mt-1 text-[10px] text-[#98a2b3]">Click a tier to filter the data sheet.</p>
-                    </div>
-                    <span className="text-[10px] text-[#98a2b3]">{totalStudents} Students</span>
-                  </div>
-                  <div className="space-y-2.5">
-                    {tierEntries.map(([tier, count]) => (
-                      <button key={tier} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition ${selectedTier === tier ? "border-[#cfc7ff] bg-[#f6f4ff]" : "border-[#edf0f4] bg-white hover:bg-[#fafaff]"}`}>
-                        <span className="flex items-center gap-2.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TIER_COLORS[tier] }} /><span className="text-[11px] font-semibold text-[#344054]">{tier}</span></span>
-                        <span className="text-[12px] font-extrabold" style={{ color: TIER_COLORS[tier] }}>{count}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#f0f1f4]">
-                    {tierEntries.map(([tier, count]) => <span key={tier} className="inline-block h-full" style={{ width: `${activeStats.rows.length ? count / activeStats.rows.length * 100 : 0}%`, background: TIER_COLORS[tier] }} />)}
-                  </div>
-                </section>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <section className="analysis-panel p-5">
-                    <h3 className="text-[13px] font-bold text-[#17223b]">Top 5 Highest Scorers</h3>
-                    <div className="mt-3 space-y-2">
-                      {activeStats.sorted.slice(0, 5).map((row: any, index: number) => <div key={row.enrollmentNo} className="flex items-center justify-between border-b border-[#f0f1f3] pb-2 last:border-0"><span className="text-[10px] font-semibold text-[#344054]">{index + 1}. {row.name}</span><span className="text-[10px] font-extrabold text-[#15966a]">{row.marks}</span></div>)}
-                    </div>
-                  </section>
-                  <section className="analysis-panel p-5">
-                    <h3 className="text-[13px] font-bold text-[#17223b]">Bottom 5 At-Risk Students</h3>
-                    <div className="mt-3 space-y-2">
-                      {activeStats.sorted.slice(-5).reverse().map((row: any, index: number) => <div key={row.enrollmentNo} className="flex items-center justify-between border-b border-[#f0f1f3] pb-2 last:border-0"><span className="text-[10px] font-semibold text-[#344054]">{index + 1}. {row.name}</span><span className="text-[10px] font-extrabold text-[#ef4444]">{row.marks}</span></div>)}
-                    </div>
-                  </section>
-                </div>
+                <div className="grid grid-cols-2 gap-4"><Metric label="Class Average" value={activeStats.average} detail={`out of ${activeStats.max || 0}`} /><Metric label="Class Median" value={activeStats.median} detail="middle class score" /><Metric label="Highest Score" value={activeStats.highest} detail={highestNames.length ? highestNames[0] : "top score"} /><Metric label="Pass Rate" value={`${activeStats.passRate}%`} detail={`${activeStats.rows.length} students assessed`} /></div>
+                <section className="analysis-panel p-5"><div className="mb-4 flex items-center justify-between"><div><h3>Performance Tier</h3><p className="mt-1 text-[10px] text-[#98a2b3]">Click a tier to filter the data sheet.</p></div><span className="text-[10px] text-[#98a2b3]">{totalStudents} Students</span></div><div className="space-y-2.5">{tierEntries.map(([tier, count]) => <button key={tier} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition ${selectedTier === tier ? "border-[#cfc7ff] bg-[#f6f4ff]" : "border-[#edf0f4] bg-white hover:bg-[#fafaff]"}`}><span className="flex items-center gap-2.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TIER_COLORS[tier] }} /><span className="text-[11px] font-semibold text-[#344054]">{tier}</span></span><span className="text-[12px] font-extrabold" style={{ color: TIER_COLORS[tier] }}>{count}</span></button>)}</div><div className="mt-5 h-3 overflow-hidden rounded-full bg-[#f0f1f4]">{tierEntries.map(([tier, count]) => <span key={tier} className="inline-block h-full" style={{ width: `${activeStats.rows.length ? count / activeStats.rows.length * 100 : 0}%`, background: TIER_COLORS[tier] }} />)}</div></section>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2"><section className="analysis-panel p-5"><h3 className="text-[13px] font-bold text-[#17223b]">Top 5 Highest Scorers</h3><div className="mt-3 space-y-2">{activeStats.sorted.slice(0, 5).map((row: any, index: number) => <div key={row.enrollmentNo} className="flex items-center justify-between border-b border-[#f0f1f3] pb-2 last:border-0"><span className="text-[10px] font-semibold text-[#344054]">{index + 1}. {row.name}</span><span className="text-[10px] font-extrabold text-[#15966a]">{row.marks}</span></div>)}</div></section><section className="analysis-panel p-5"><h3 className="text-[13px] font-bold text-[#17223b]">Bottom 5 At-Risk Students</h3><div className="mt-3 space-y-2">{activeStats.sorted.slice(-5).reverse().map((row: any, index: number) => <div key={row.enrollmentNo} className="flex items-center justify-between border-b border-[#f0f1f3] pb-2 last:border-0"><span className="text-[10px] font-semibold text-[#344054]">{index + 1}. {row.name}</span><span className="text-[10px] font-extrabold text-[#ef4444]">{row.marks}</span></div>)}</div></section></div>
               </div>
             </section>
           </>
