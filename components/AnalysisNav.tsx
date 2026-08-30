@@ -108,43 +108,44 @@ export default function AnalysisNav({ sectionId }: Props) {
           padding-left: 195px;
         }
 
-        body:has(.classpulse-analysis-sidebar) main > div {
+        body:has(.classpulse-analysis-sidebar) #__next > div {
           max-width: none !important;
+          width: auto !important;
           margin: 0 !important;
           min-height: 100vh;
           padding: 18px 28px 28px !important;
           background: radial-gradient(circle at 82% 5%, rgba(91,78,230,.09), transparent 27%), linear-gradient(135deg, #fbfaf7 0%, #f7f6f2 58%, #f2f4f6 100%);
         }
 
-        body:has(.classpulse-analysis-sidebar) main section.bg-white {
+        body:has(.classpulse-analysis-sidebar) #__next .bg-white {
           border-color: #e1e3ea !important;
           border-radius: 18px !important;
           box-shadow: 0 8px 28px rgba(31,35,49,.055) !important;
         }
 
-        body:has(.classpulse-analysis-sidebar) main .bg-gray-900 {
+        body:has(.classpulse-analysis-sidebar) #__next .bg-gray-900 {
           background: #30227d !important;
         }
 
-        body:has(.classpulse-analysis-sidebar) main .bg-gray-100 {
+        body:has(.classpulse-analysis-sidebar) #__next .bg-gray-100 {
           background: #f5f4f8 !important;
         }
 
-        body:has(.classpulse-analysis-sidebar) main .border-gray-100,
-        body:has(.classpulse-analysis-sidebar) main .border-gray-200 {
+        body:has(.classpulse-analysis-sidebar) #__next .border-gray-100,
+        body:has(.classpulse-analysis-sidebar) #__next .border-gray-200 {
           border-color: #e5e3ea !important;
         }
 
-        body:has(.classpulse-analysis-sidebar) main input,
-        body:has(.classpulse-analysis-sidebar) main select,
-        body:has(.classpulse-analysis-sidebar) main textarea {
+        body:has(.classpulse-analysis-sidebar) #__next input,
+        body:has(.classpulse-analysis-sidebar) #__next select,
+        body:has(.classpulse-analysis-sidebar) #__next textarea {
           border-color: #dfe1e8;
           border-radius: 11px;
         }
 
-        body:has(.classpulse-analysis-sidebar) main input:focus,
-        body:has(.classpulse-analysis-sidebar) main select:focus,
-        body:has(.classpulse-analysis-sidebar) main textarea:focus {
+        body:has(.classpulse-analysis-sidebar) #__next input:focus,
+        body:has(.classpulse-analysis-sidebar) #__next select:focus,
+        body:has(.classpulse-analysis-sidebar) #__next textarea:focus {
           outline: none;
           border-color: #6b5be7;
           box-shadow: 0 0 0 3px rgba(107,91,231,.10);
@@ -155,7 +156,7 @@ export default function AnalysisNav({ sectionId }: Props) {
             padding-left: 0;
           }
 
-          body:has(.classpulse-analysis-sidebar) main > div {
+          body:has(.classpulse-analysis-sidebar) #__next > div {
             padding: 18px 20px 28px !important;
           }
         }
