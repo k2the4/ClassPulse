@@ -36,20 +36,17 @@ export async function assertTeacherCanViewClass(userId: string, role: string, cl
   return !!teaches;
 }
 
-// Section access: the class proctor, or anyone teaching a subject within
-// this specific section.
+// Class Analysis is class-level. A teacher who can access a class through
+// proctoring or a subject assignment can therefore open its section analysis.
+// Keep the section existence check so arbitrary section IDs are still denied.
 export async function assertTeacherCanViewSection(userId: string, role: string, sectionId: string) {
   if (role === "ADMIN") return true;
-  const section = await prisma.section.findUnique({ where: { id: sectionId } });
+
+  const section = await prisma.section.findUnique({
+    where: { id: sectionId },
+    select: { classId: true },
+  });
   if (!section) return false;
 
-  const proctorMatch = await prisma.class.findFirst({
-    where: { id: section.classId, proctorId: userId },
-  });
-  if (proctorMatch) return true;
-
-  const teaches = await prisma.assignment.findFirst({
-    where: { teacherId: userId, subject: { sectionId } },
-  });
-  return !!teaches;
+  return assertTeacherCanViewClass(userId, role, section.classId);
 }
