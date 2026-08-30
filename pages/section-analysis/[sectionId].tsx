@@ -1,13 +1,18 @@
 import { GetServerSideProps } from "next";
 
-// Legacy class-analysis URLs must go through the assigned-class selector.
-// This prevents dashboard/bookmark links from bypassing teacher-scoped selection.
-export const getServerSideProps: GetServerSideProps = async () => ({
-  redirect: {
-    destination: "/section-analysis",
-    permanent: false,
-  },
-});
+// The bare /section-analysis/[sectionId] URL isn't a page on its own —
+// analysis lives under /attendance, /academic, /overall, /students.
+// This just sends anyone landing here (dashboard links, bookmarks, etc.)
+// straight to the default tab.
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  const { sectionId } = ctx.params as { sectionId: string };
+  return {
+    redirect: {
+      destination: `/section-analysis/${sectionId}/attendance`,
+      permanent: false,
+    },
+  };
+};
 
 export default function SectionAnalysisRedirect() {
   return null;
