@@ -44,7 +44,16 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
       return;
     }
 
-    if (!window.location.pathname.startsWith("/subject-analysis/")) return;
+    // Class Analysis uses its own sidebar markup, so attach Raw Data to the
+    // same navigation by locating its Class Analysis link.
+    const classAnalysisLink = document.querySelector<HTMLElement>('nav a[href="/class-analysis"]');
+    const classAnalysisNav = classAnalysisLink?.closest("nav") as HTMLElement | null;
+    if (classAnalysisNav) {
+      setSideNav(classAnalysisNav);
+      return;
+    }
+
+    if (!window.location.pathname.startsWith("/subject-analysis/") && !window.location.pathname.startsWith("/section-analysis/")) return;
 
     const root = document.querySelector<HTMLElement>("#\\_\\_next > div.min-h-screen.max-w-\\[1900px\\]")
       || document.querySelector<HTMLElement>("div.min-h-screen.max-w-\\[1900px\\]")
@@ -78,7 +87,7 @@ export function RawDataButton({ sheetId }: { sheetId: string | null }) {
       </div>
       <nav className="analysis-side-nav analysis-standalone-nav">
         <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
-        <a href="/classes"><BookOpen size={18} />Class Analysis</a>
+        <a href="/class-analysis"><BookOpen size={18} />Class Analysis</a>
         <a className="is-active" href={window.location.pathname}><GraduationCap size={18} />Subject Analysis</a>
         {rawLink}
       </nav>
