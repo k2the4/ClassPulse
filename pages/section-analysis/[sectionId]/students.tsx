@@ -62,7 +62,6 @@ interface OverallData {
 }
 
 const formatNumber = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(1));
-
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 function studentAverage(student: Student) {
@@ -148,9 +147,20 @@ export default function SectionStudentReportPage() {
   const students = data?.students || [];
 
   const studentsWithGrades = useMemo(
-    () => students.map((student) => ({ ...student, reportAverage: studentAverage(student), reportGrade: gradeFromAverage(studentAverage(student)) })),
+    () => students.map((student) => ({
+      ...student,
+      reportAverage: studentAverage(student),
+      reportGrade: gradeFromAverage(studentAverage(student)),
+    })),
     [students]
   );
+
+  const classGradeCounts = useMemo(() => {
+    return GRADE_ORDER.reduce((acc, grade) => {
+      acc[grade] = studentsWithGrades.filter((student) => student.reportGrade === grade).length;
+      return acc;
+    }, {} as Record<Grade, number>);
+  }, [studentsWithGrades]);
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -179,7 +189,9 @@ export default function SectionStudentReportPage() {
       const attendance = clamp(((Number(subject.attendance) || 0) / 100) * 10, 0, 10);
       const midsem1 = clamp(((Number(subject.midsem1) || 0) / 30) * 10, 0, 10);
       const midsem2 = clamp(((Number(subject.midsem2) || 0) / 30) * 10, 0, 10);
-      const internal = Number(subject.basicInternal) || assignment + presentation + attendance + midsem1 + midsem2;
+      const basicInternal = Number(subject.basicInternal) || assignment + presentation + attendance + midsem1 + midsem2;
+      const moderatedInternal = Number(subject.moderatedInternal);
+
       return {
         ...subject,
         assignment,
@@ -187,27 +199,22 @@ export default function SectionStudentReportPage() {
         attendanceMark: attendance,
         midsem1Mark: midsem1,
         midsem2Mark: midsem2,
-        internal,
-        grade: gradeFromAverage(internal),
+        basicInternal,
+        moderatedInternal: Number.isFinite(moderatedInternal) ? moderatedInternal : basicInternal,
+        grade: gradeFromAverage(basicInternal),
       };
     });
 
-    const total = subjects.reduce((sum, subject) => sum + subject.internal, 0);
+    const total = subjects.reduce((sum, subject) => sum + subject.basicInternal, 0);
     const average = subjects.length ? total / subjects.length : 0;
 
     const ranked = [...studentsWithGrades].sort(
       (a, b) => b.reportAverage - a.reportAverage || a.name.localeCompare(b.name)
     );
     const rankIndex = Math.max(0, ranked.findIndex((item) => item.enrollmentNo === selected.enrollmentNo));
-    const percentile = students.length ? Math.round(((students.length - rankIndex) / students.length) * 100) : 0;
 
-    const gradeCounts = studentsWithGrades.reduce((acc, student) => {
-      acc[student.reportGrade] = (acc[student.reportGrade] || 0) + 1;
-      return acc;
-    }, {} as Record<Grade, number>);
-
-    const highest = [...subjects].sort((a, b) => b.internal - a.internal)[0];
-    const lowest = [...subjects].sort((a, b) => a.internal - b.internal)[0];
+    const highest = [...subjects].sort((a, b) => b.basicInternal - a.basicInternal)[0];
+    const lowest = [...subjects].sort((a, b) => a.basicInternal - b.basicInternal)[0];
 
     return {
       subjects,
@@ -215,13 +222,11 @@ export default function SectionStudentReportPage() {
       average,
       averagePct: (average / SUBJECT_MAX) * 100,
       rank: rankIndex + 1,
-      percentile,
-      gradeCounts,
       highest,
       lowest,
       grade: gradeFromAverage(average),
     };
-  }, [selected, studentsWithGrades, students.length]);
+  }, [selected, studentsWithGrades]);
 
   const navigateStudent = (direction: -1 | 1) => {
     if (!filteredStudents.length || !selected) return;
@@ -229,13 +234,6 @@ export default function SectionStudentReportPage() {
     const nextIndex = Math.min(filteredStudents.length - 1, Math.max(0, index + direction));
     setSelectedEnrollment(filteredStudents[nextIndex].enrollmentNo);
   };
-
-  const classGradeCounts = useMemo(() => {
-    return GRADE_ORDER.reduce((acc, grade) => {
-      acc[grade] = studentsWithGrades.filter((student) => student.reportGrade === grade).length;
-      return acc;
-    }, {} as Record<Grade, number>);
-  }, [studentsWithGrades]);
 
   return (
     <div className="min-h-screen max-w-[1900px] mx-auto px-6 lg:px-8 py-7 text-slate-900">
@@ -258,7 +256,6 @@ export default function SectionStudentReportPage() {
       </div>
 
       {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
-
       {error && <div className="mt-5 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
       {loading && !data && <div className="py-14 text-center text-sm text-slate-500">Loading student report...</div>}
 
@@ -334,19 +331,14 @@ export default function SectionStudentReportPage() {
                       </div>
                       <div className="min-w-0">
                         <h3 className="text-xl font-semibold truncate">{selected.name}</h3>
-                        <p className="text-xs text-slate-400 mt-1 truncate">{selected.enrollmentNo}{selected.email ? ` · ${selected.email}` : ""}</p>
+                        <p className="text-xs text-slate-400 mt-1 truncate">Student report · {Math.min(SUBJECT_COUNT, selected.subjects.length)} theory subjects</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-8">
-                      <div>
-                        <p className="text-[10px] text-slate-400">Enrollment</p>
-                        <p className="mt-1 text-sm font-semibold">{selected.enrollmentNo}</p>
-                      </div>
+                    <div className="flex items-center gap-6 lg:gap-8">
                       <div className="text-right">
                         <GradePill grade={studentStats.grade} large />
                         <p className="text-[10px] text-slate-400 mt-2">Rank by average</p>
                         <p className="text-sm font-semibold">{studentStats.rank} / {students.length}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">{studentStats.percentile}th percentile</p>
                       </div>
                     </div>
                   </div>
@@ -355,37 +347,9 @@ export default function SectionStudentReportPage() {
                 <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
                   <Metric icon={<BarChart3 size={17} />} label="Average" value={`${formatNumber(studentStats.average)} / 40`} sub={`${studentStats.averagePct.toFixed(1)}%`} />
                   <Metric icon={<Award size={17} />} label="Total" value={`${formatNumber(studentStats.total)} / ${TOTAL_MAX}`} sub="6 subjects × 40" />
-                  <Metric icon={<TrendingUp size={17} />} label="Highest Subject" value={studentStats.highest ? formatNumber(studentStats.highest.internal) : "—"} sub={studentStats.highest?.name || "—"} />
-                  <Metric icon={<TrendingDown size={17} />} label="Lowest Subject" value={studentStats.lowest ? formatNumber(studentStats.lowest.internal) : "—"} sub={studentStats.lowest?.name || "—"} />
+                  <Metric icon={<TrendingUp size={17} />} label="Highest Subject" value={studentStats.highest ? formatNumber(studentStats.highest.basicInternal) : "—"} sub={studentStats.highest?.name || "—"} />
+                  <Metric icon={<TrendingDown size={17} />} label="Lowest Subject" value={studentStats.lowest ? formatNumber(studentStats.lowest.basicInternal) : "—"} sub={studentStats.lowest?.name || "—"} />
                   <Metric icon={<CalendarCheck size={17} />} label="Overall Attendance" value={`${selected.overallAttendance}%`} sub="Current attendance" />
-                </section>
-
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div>
-                      <h3 className="font-semibold">Class Classification</h3>
-                      <p className="text-[10px] text-slate-400 mt-1">Based on average internal marks across the six theory subjects, out of 40.</p>
-                    </div>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 w-full lg:w-auto lg:min-w-[620px]">
-                      {GRADE_ORDER.map((grade) => {
-                        const count = classGradeCounts[grade] || 0;
-                        const pct = students.length ? (count / students.length) * 100 : 0;
-                        const tone = GRADE_TONE[grade];
-                        return (
-                          <div key={grade} className={`rounded-xl border ${tone.border} ${tone.bg} px-3 py-2.5`}>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className={`text-[10px] font-semibold ${tone.text}`}>{grade}</span>
-                              <span className={`text-sm font-bold ${tone.text}`}>{count}</span>
-                            </div>
-                            <div className="mt-2 h-1.5 rounded-full bg-white/80 overflow-hidden">
-                              <div className={`h-full rounded-full ${tone.dot}`} style={{ width: `${pct}%` }} />
-                            </div>
-                            <p className="mt-1 text-[9px] text-slate-400">{pct.toFixed(1)}% of class</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -394,16 +358,17 @@ export default function SectionStudentReportPage() {
                     <p className="text-[10px] text-slate-400 mt-1">Internal marks distribution for each subject. Every subject contributes 40 marks.</p>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] text-xs table-fixed">
+                    <table className="w-full min-w-[1100px] text-xs table-fixed">
                       <colgroup>
-                        <col className="w-[25%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[10%]" />
+                        <col className="w-[22%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[11%]" />
                         <col className="w-[12%]" />
-                        <col className="w-[13%]" />
+                        <col className="w-[10%]" />
                       </colgroup>
                       <thead>
                         <tr className="border-b border-slate-100 bg-slate-50/60 text-[10px] text-slate-500">
@@ -413,8 +378,9 @@ export default function SectionStudentReportPage() {
                           <th className="px-2 py-3 text-center font-semibold">Attendance / 10</th>
                           <th className="px-2 py-3 text-center font-semibold">Midsem 1 / 10</th>
                           <th className="px-2 py-3 text-center font-semibold">Midsem 2 / 10</th>
-                          <th className="px-2 py-3 text-center font-semibold">Internal / 40</th>
-                          <th className="px-5 py-3 text-center font-semibold">Grade</th>
+                          <th className="px-2 py-3 text-center font-semibold">Basic Internal / 40</th>
+                          <th className="px-2 py-3 text-center font-semibold">Moderated Internal / 40</th>
+                          <th className="px-2 py-3 text-center font-semibold">Grade</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -426,15 +392,16 @@ export default function SectionStudentReportPage() {
                             <MarkCell value={subject.attendanceMark} max={10} />
                             <MarkCell value={subject.midsem1Mark} max={10} />
                             <MarkCell value={subject.midsem2Mark} max={10} />
-                            <td className="px-2 py-3.5 text-center font-bold text-slate-900">{formatNumber(subject.internal)} / 40</td>
-                            <td className="px-5 py-3.5 text-center"><GradePill grade={subject.grade} /></td>
+                            <td className="px-2 py-3.5 text-center tabular-nums font-semibold text-slate-800">{formatNumber(subject.basicInternal)} / 40</td>
+                            <td className="px-2 py-3.5 text-center tabular-nums font-semibold text-violet-700">{formatNumber(subject.moderatedInternal)} / 40</td>
+                            <td className="px-2 py-3.5 text-center"><GradePill grade={subject.grade} /></td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                   <div className="px-5 py-3 border-t border-slate-100 text-[9px] text-slate-400">
-                    Assignment, presentation, attendance, Midsem 1 and Midsem 2 are shown as their weighted contribution to the 40-mark internal total.
+                    Assignment, presentation, attendance, Midsem 1 and Midsem 2 are shown as their weighted contribution to the 40-mark internal total. Moderated Internal is shown separately from the basic internal marks.
                   </div>
                 </section>
               </main>
