@@ -6,8 +6,6 @@ import {
   CalendarCheck,
   ChevronLeft,
   ChevronRight,
-  GraduationCap,
-  LayoutDashboard,
   RefreshCw,
   Search,
   StickyNote,
@@ -313,16 +311,16 @@ export default function SectionStudentReportPage() {
                         <h3 className="text-xl font-semibold truncate">{selected.name}</h3>
                         <p className="text-xs text-slate-400 mt-1 truncate">{selected.enrollmentNo} · {selected.email || "no email on file"}</p>
                         <div className="flex flex-wrap gap-2 mt-3">
-                          <span className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] text-slate-600">Class · B.Tech CSE</span>
-                          <span className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] text-slate-600">Section · A</span>
+                          <span className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] text-slate-600">Section · Current</span>
                           <span className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] text-slate-600">Total Students · {students.length}</span>
+                          <span className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] text-slate-600">Theory Subjects · {studentStats.subjects.length}</span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-start justify-between lg:justify-end gap-8">
                       <div>
-                        <p className="text-[10px] text-slate-400">Roll No.</p>
-                        <p className="mt-1 text-sm font-semibold">{selected.enrollmentNo.slice(-2)}</p>
+                        <p className="text-[10px] text-slate-400">Enrollment</p>
+                        <p className="mt-1 text-sm font-semibold">{selected.enrollmentNo}</p>
                       </div>
                       <div className="text-right">
                         <GradeBadge grade={selected.overallGrade} />
