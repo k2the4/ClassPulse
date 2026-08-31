@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { BarChart3, BookOpen, LayoutDashboard, RefreshCw } from "lucide-react";
-import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, RefreshCw } from "lucide-react";
 import AnalysisNav from "../../../components/AnalysisNav";
 import { RawDataButton } from "../../../components/AnalysisWidgets";
 
@@ -9,14 +8,57 @@ type MarkMode = "basic" | "internal";
 type View = "internal" | "risk";
 type SortDirection = "none" | "asc" | "desc";
 type Subject = { id: string; name: string; code: string };
-type SubjectScore = { subjectId: string; code: string; name: string; attendance: number; midsem1: number; midsem2: number; combined: number; basicInternal: number; moderatedInternal: number; basicMax: number; grade: string };
-type Student = { enrollmentNo: string; name: string; email: string; subjects: SubjectScore[]; overallPct: number; overallAttendance: number; overallGrade: string };
+type SubjectScore = {
+  subjectId: string;
+  code: string;
+  name: string;
+  attendance: number;
+  midsem1: number;
+  midsem2: number;
+  combined: number;
+  basicInternal: number;
+  moderatedInternal: number;
+  basicMax: number;
+  grade: string;
+};
+type Student = {
+  enrollmentNo: string;
+  name: string;
+  email: string;
+  subjects: SubjectScore[];
+  overallPct: number;
+  overallAttendance: number;
+  overallGrade: string;
+};
 type OverallData = { subjects: Subject[]; students: Student[]; classAverageOverallPct: number };
+type Row = Student & {
+  originalIndex: number;
+  subjects: (Subject & { mark: number; max: number; pct: number })[];
+  overallPct: number;
+  tier: string;
+};
 
-const TIER_COLORS: Record<string, string> = { Excellent: "#2563eb", Good: "#16a34a", "Needs Attention": "#f59e0b", "Critical Risk": "#ef4444" };
-const tierFor = (pct: number) => pct > 80 ? "Excellent" : pct >= 60 ? "Good" : pct >= 40 ? "Needs Attention" : "Critical Risk";
-const tierClass = (tier: string) => tier === "Excellent" ? "bg-blue-50 text-blue-700" : tier === "Good" ? "bg-green-50 text-green-700" : tier === "Needs Attention" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600";
-const scoreClass = (value: number, max: number) => max > 0 && value / max >= .8 ? "text-emerald-600" : max > 0 && value / max >= .6 ? "text-amber-600" : "text-red-500";
+const TIER_COLORS: Record<string, string> = {
+  Excellent: "#2563eb",
+  Good: "#16a34a",
+  "Needs Attention": "#f59e0b",
+  "Critical Risk": "#ef4444",
+};
+
+const tierFor = (pct: number) =>
+  pct > 80 ? "Excellent" : pct >= 60 ? "Good" : pct >= 40 ? "Needs Attention" : "Critical Risk";
+
+const tierClass = (tier: string) =>
+  tier === "Excellent"
+    ? "bg-blue-50 text-blue-700"
+    : tier === "Good"
+      ? "bg-green-50 text-green-700"
+      : tier === "Needs Attention"
+        ? "bg-amber-50 text-amber-700"
+        : "bg-red-50 text-red-600";
+
+const scoreClass = (pct: number) =>
+  pct >= 80 ? "text-emerald-600" : pct >= 60 ? "text-amber-600" : "text-red-500";
 
 export default function SectionOverallPage() {
   const router = useRouter();
@@ -30,9 +72,9 @@ export default function SectionOverallPage() {
   const [view, setView] = useState<View>("risk");
   const [markMode, setMarkMode] = useState<MarkMode>("basic");
   const [lower, setLower] = useState(0);
-  const [upper, setUpper] = useState(40);
+  const [upper, setUpper] = useState(100);
   const [draftLower, setDraftLower] = useState(0);
-  const [draftUpper, setDraftUpper] = useState(40);
+  const [draftUpper, setDraftUpper] = useState(100);
   const [sortDirection, setSortDirection] = useState<SortDirection>("none");
   const [draftSortDirection, setDraftSortDirection] = useState<SortDirection>("none");
 
@@ -43,85 +85,296 @@ export default function SectionOverallPage() {
     try {
       const res = await fetch(`/api/analysis/section/${sectionId}/overall${sync ? "?sync=1" : ""}`);
       const json = await res.json();
-      if (!res.ok) { setError(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to load overall analysis"); return; }
-      setData(json.data); setComputedAt(json.computedAt); setSheetId(json.sheetId || null);
-    } catch (e: any) { setError(e.message || "Failed to load overall analysis"); }
-    finally { setLoading(false); setSyncing(false); }
+      if (!res.ok) {
+        setError(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to load overall analysis");
+        return;
+      }
+      setData(json.data);
+      setComputedAt(json.computedAt || "");
+      setSheetId(json.sheetId || null);
+    } catch (e: any) {
+      setError(e.message || "Failed to load overall analysis");
+    } finally {
+      setLoading(false);
+      setSyncing(false);
+    }
   }
-  useEffect(() => { loadAnalysis(); }, [sectionId]);
 
-  const rows = useMemo(() => {
+  useEffect(() => {
+    loadAnalysis();
+  }, [sectionId]);
+
+  const rows = useMemo<Row[]>(() => {
     if (!data) return [];
     return data.students.map((student, originalIndex) => {
-      const subjects = data.subjects.map(subject => {
-        const score = student.subjects.find(item => item.subjectId === subject.id || item.code === subject.code);
-        const mark = markMode === "basic" ? Number(score?.basicInternal || 0) : Number(score?.moderatedInternal || 0);
+      const subjects = data.subjects.map((subject) => {
+        const score = student.subjects.find(
+          (item) => item.subjectId === subject.id || item.code === subject.code
+        );
+        const mark = markMode === "basic"
+          ? Number(score?.basicInternal || 0)
+          : Number(score?.moderatedInternal || 0);
         const max = Number(score?.basicMax || 0);
-        return { ...subject, mark, max, pct: max > 0 ? mark / max * 100 : 0 };
+        return {
+          ...subject,
+          mark,
+          max,
+          pct: max > 0 ? (mark / max) * 100 : 0,
+        };
       });
-      const overallPct = subjects.length ? subjects.reduce((sum, subject) => sum + subject.pct, 0) / subjects.length : 0;
+      const overallPct = subjects.length
+        ? subjects.reduce((sum, subject) => sum + subject.pct, 0) / subjects.length
+        : 0;
       return { ...student, originalIndex, subjects, overallPct, tier: tierFor(overallPct) };
     });
   }, [data, markMode]);
 
   const filteredRows = useMemo(() => {
-    const lo = Math.min(lower, upper), hi = Math.max(lower, upper);
-    const result = rows.filter(row => row.overallPct >= lo && row.overallPct <= hi);
-    if (sortDirection === "none") return result.sort((a, b) => a.originalIndex - b.originalIndex);
-    return result.sort((a, b) => sortDirection === "asc" ? a.overallPct - b.overallPct || a.name.localeCompare(b.name) : b.overallPct - a.overallPct || a.name.localeCompare(b.name));
+    const lo = Math.min(lower, upper);
+    const hi = Math.max(lower, upper);
+    const result = rows.filter((row) => row.overallPct >= lo && row.overallPct <= hi);
+    if (sortDirection === "none") {
+      return result.sort((a, b) => a.originalIndex - b.originalIndex);
+    }
+    return result.sort((a, b) =>
+      sortDirection === "asc"
+        ? a.overallPct - b.overallPct || a.name.localeCompare(b.name)
+        : b.overallPct - a.overallPct || a.name.localeCompare(b.name)
+    );
   }, [rows, lower, upper, sortDirection]);
 
-  const tierCounts = useMemo(() => rows.reduce((acc, row) => { acc[row.tier] = (acc[row.tier] || 0) + 1; return acc; }, {} as Record<string, number>), [rows]);
-  const classAverage = useMemo(() => rows.length ? rows.reduce((sum, row) => sum + row.overallPct, 0) / rows.length : 0, [rows]);
-  const topFive = useMemo(() => [...rows].sort((a, b) => b.overallPct - a.overallPct || a.originalIndex - b.originalIndex).slice(0, 5), [rows]);
-  const distribution = ["Excellent", "Good", "Needs Attention", "Critical Risk"].map(name => ({ name, count: tierCounts[name] || 0 }));
+  const tierCounts = useMemo(
+    () => rows.reduce((acc, row) => {
+      acc[row.tier] = (acc[row.tier] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+    [rows]
+  );
+
+  const classAverage = useMemo(
+    () => rows.length ? rows.reduce((sum, row) => sum + row.overallPct, 0) / rows.length : 0,
+    [rows]
+  );
+
+  const passRate = useMemo(
+    () => rows.length ? Math.round(rows.filter((row) => row.overallPct >= 40).length / rows.length * 100) : 0,
+    [rows]
+  );
+
+  const topFive = useMemo(
+    () => [...rows].sort((a, b) => b.overallPct - a.overallPct || a.originalIndex - b.originalIndex).slice(0, 5),
+    [rows]
+  );
 
   function applyFilters() {
-    setLower(Math.min(draftLower, draftUpper)); setUpper(Math.max(draftLower, draftUpper)); setSortDirection(draftSortDirection);
-  }
-  function selectDistribution(index: number) {
-    const ranges: [number, number][] = [[80.0001, 100], [60, 80], [40, 59.9999], [0, 39.9999]];
-    const range = ranges[index]; if (!range) return;
-    setDraftLower(range[0]); setDraftUpper(range[1]);
+    setLower(Math.min(draftLower, draftUpper));
+    setUpper(Math.max(draftLower, draftUpper));
+    setSortDirection(draftSortDirection);
   }
 
-  return <div className="min-h-screen bg-[#fffdf8] text-[#17223b] lg:flex">
-    <aside className="hidden w-[220px] shrink-0 border-r border-[#e8e7e3] bg-white lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:flex-col">
-      <div className="px-5 pt-6"><a href="/dashboard" className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#39268f] text-white shadow-[0_10px_25px_rgba(57,38,143,.2)]"><BarChart3 size={21} /></span><span className="text-[20px] font-extrabold tracking-[-.7px]">ClassPulse</span></a></div>
-      <nav className="mt-7 space-y-1 px-3 text-sm font-medium text-[#626b80]">
-        <a href="/dashboard" className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-[#f6f4ff] hover:text-[#38258e]"><LayoutDashboard size={18} />Dashboard</a>
-        <a href="/class-analysis" className="flex items-center gap-3 rounded-xl bg-[#eeeaff] px-3 py-3 font-semibold text-[#38258e]"><BarChart3 size={18} />Class Analysis</a>
-        <a href="/subject-analysis" className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-[#f6f4ff] hover:text-[#38258e]"><BookOpen size={18} />Subject Analysis</a>
-      </nav>
-      <div className="mt-auto border-t border-[#eeeeeb] px-5 py-5 text-xs text-[#7a8295]">ClassPulse Teacher Portal</div>
-    </aside>
+  function resetRiskFilter() {
+    setDraftLower(0);
+    setDraftUpper(100);
+    setLower(0);
+    setUpper(100);
+    setDraftSortDirection("none");
+    setSortDirection("none");
+  }
 
-    <main className="w-full lg:ml-[220px]"><div className="min-h-screen px-5 py-7 sm:px-8 lg:px-10 lg:py-9">
-      <div className="mb-5 flex items-start justify-between"><div><h1 className="text-[26px] font-extrabold tracking-[-1px] sm:text-[30px]">Class / Section Analysis</h1>{computedAt && <p className="mt-1 text-xs text-[#8a92a4]">Last synced {new Date(computedAt).toLocaleString()}</p>}</div><div className="flex items-center gap-2"><RawDataButton sheetId={sheetId} /><button onClick={() => loadAnalysis(true)} disabled={syncing} className="inline-flex items-center gap-2 rounded-xl bg-[#39268f] px-4 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(57,38,143,.18)] disabled:opacity-60"><RefreshCw size={16} className={syncing ? "animate-spin" : ""} />{syncing ? "Syncing..." : "Sync now"}</button></div></div>
-      {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
-      {error && <div className="mt-5 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-      {loading && !data && <div className="py-12 text-sm text-[#6f7890]">Loading overall analysis...</div>}
+  return (
+    <div className="analysis-layout">
+      <aside className="analysis-sidebar">
+        <div className="analysis-brand">
+          <span className="analysis-brand__mark"><BarChart3 size={18} /></span>
+          <span>ClassPulse</span>
+        </div>
+        <nav className="analysis-side-nav">
+          <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
+          <a className="is-active" href="/class-analysis"><BookOpen size={18} />Class Analysis</a>
+          <a href="/subject-analysis"><GraduationCap size={18} />Subject Analysis</a>
+        </nav>
+        <RawDataButton sheetId={sheetId} />
+        <div className="analysis-side-footer">ClassPulse Teacher Portal</div>
+      </aside>
 
-      {data && <>
-        <div className="mt-5 flex items-center gap-2"><button onClick={() => setView("internal")} className={`rounded-xl border px-5 py-3 text-sm font-semibold ${view === "internal" ? "border-[#39268f] bg-[#39268f] text-white" : "border-[#dedfe5] bg-white text-[#667087]"}`}>Internal Marks</button><button onClick={() => setView("risk")} className={`rounded-xl border px-5 py-3 text-sm font-semibold ${view === "risk" ? "border-[#39268f] bg-[#39268f] text-white" : "border-[#dedfe5] bg-white text-[#667087]"}`}>At Risk</button></div>
-        <div className="mt-5 grid gap-4 md:grid-cols-3"><div className="rounded-2xl border border-[#e4e4e8] bg-white p-6 shadow-[0_8px_30px_rgba(31,35,49,.04)]"><p className="text-sm text-[#6d7890]">Class Average</p><p className="mt-2 text-[31px] font-extrabold">{classAverage.toFixed(1)}%</p><p className="mt-1 text-xs text-[#8b94a6]">across all {data.subjects.length} subjects</p></div><div className="rounded-2xl border border-[#e4e4e8] bg-white p-6 shadow-[0_8px_30px_rgba(31,35,49,.04)]"><p className="text-sm text-[#6d7890]">Students</p><p className="mt-2 text-[31px] font-extrabold">{rows.length}</p><p className="mt-1 text-xs text-[#8b94a6]">students assessed</p></div><div className="rounded-2xl border border-[#e4e4e8] bg-white p-6 shadow-[0_8px_30px_rgba(31,35,49,.04)]"><p className="text-sm text-[#6d7890]">Excellent Students</p><p className="mt-2 text-[31px] font-extrabold">{tierCounts.Excellent || 0}</p><p className="mt-1 text-xs text-[#8b94a6]">above 80%</p></div></div>
-
-        {view === "risk" ? <>
-          <section className="mt-5 rounded-2xl border border-[#e4e4e8] bg-white p-5 shadow-[0_8px_30px_rgba(31,35,49,.04)]"><h2 className="text-[16px] font-bold">At-Risk Filters</h2><p className="mt-1 text-xs text-[#8b94a6]">Choose mark type, range and sort.</p><div className="mt-4 grid gap-3 md:grid-cols-[1.1fr_.7fr_.7fr_1.1fr_auto] md:items-end">
-            <label className="text-xs font-semibold text-[#6f7890]">Marks shown<select value={markMode} onChange={e => setMarkMode(e.target.value as MarkMode)} className="mt-2 w-full rounded-xl border border-[#d9dce4] bg-white px-4 py-3 text-sm font-medium text-[#17223b]"><option value="basic">Basic</option><option value="internal">Internal Marks</option></select></label>
-            <label className="text-xs font-semibold text-[#6f7890]">Lower bound<input type="number" value={draftLower} min={0} max={100} onChange={e => setDraftLower(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-[#d9dce4] px-4 py-3 text-sm" /></label>
-            <label className="text-xs font-semibold text-[#6f7890]">Upper bound<input type="number" value={draftUpper} min={0} max={100} onChange={e => setDraftUpper(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-[#d9dce4] px-4 py-3 text-sm" /></label>
-            <label className="text-xs font-semibold text-[#6f7890]">Sort<select value={draftSortDirection} onChange={e => setDraftSortDirection(e.target.value as SortDirection)} className="mt-2 w-full rounded-xl border border-[#d9dce4] bg-white px-4 py-3 text-sm"><option value="none">No sort</option><option value="desc">High to Low</option><option value="asc">Low to High</option></select></label>
-            <button onClick={applyFilters} className="rounded-xl bg-[#39268f] px-5 py-3 text-sm font-semibold text-white">Apply</button>
-          </div></section>
-
-          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]"><section className="min-w-0 rounded-2xl border border-[#e4e4e8] bg-white p-5 shadow-[0_8px_30px_rgba(31,35,49,.04)]"><div className="mb-3 flex items-center justify-between"><div><h2 className="text-[16px] font-bold">Filtered Students</h2><p className="mt-1 text-xs text-[#8b94a6]">Showing {filteredRows.length} of {rows.length} students.</p></div><span className="rounded-full bg-[#f0edff] px-3 py-1 text-xs font-semibold text-[#5b4ee6]">{data.subjects.length} Subjects</span></div><div className="max-h-[600px] overflow-auto rounded-xl border border-[#f0f0f2]"><table className="min-w-[1080px] w-full text-sm"><thead className="sticky top-0 z-10 bg-white"><tr className="border-b border-[#ececf0] text-left text-[11px] font-bold uppercase tracking-wide text-[#7c8497]"><th className="px-3 py-3">Enrollment</th><th className="px-3 py-3">Student</th>{data.subjects.map(subject => <th key={subject.id} className="px-3 py-3 text-center">{subject.code || subject.name}</th>)}<th className="px-3 py-3 text-center">Overall %</th><th className="px-3 py-3">Status</th></tr></thead><tbody>{filteredRows.map(row => <tr key={row.enrollmentNo} className="border-b border-[#f1f1f3] last:border-0"><td className="whitespace-nowrap px-3 py-3 text-xs text-[#7b8497]">{row.enrollmentNo}</td><td className="whitespace-nowrap px-3 py-3 font-semibold">{row.name}</td>{row.subjects.map(subject => <td key={subject.id} className={`px-3 py-3 text-center font-semibold ${scoreClass(subject.mark, subject.max)}`}>{subject.mark}</td>)}<td className="px-3 py-3 text-center font-bold">{row.overallPct.toFixed(1)}%</td><td className="px-3 py-3"><span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold ${tierClass(row.tier)}`}>{row.tier}</span></td></tr>)}</tbody></table></div></section>
-
-            <div className="space-y-5"><section className="rounded-2xl border border-[#e4e4e8] bg-white p-5 shadow-[0_8px_30px_rgba(31,35,49,.04)]"><h2 className="text-[16px] font-bold">Distribution</h2><p className="mt-1 text-xs text-[#8b94a6]">Click a bar to stage that score range in the filters.</p><div className="mt-4 cursor-pointer"><ResponsiveContainer width="100%" height={240}><BarChart data={distribution} onClick={(state: any) => { if (state?.activeTooltipIndex !== undefined) selectDistribution(state.activeTooltipIndex); }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={10} /><YAxis fontSize={11} allowDecimals={false} /><Tooltip /><Bar dataKey="count" radius={[5, 5, 0, 0]}>{distribution.map(item => <Cell key={item.name} fill={TIER_COLORS[item.name]} />)}</Bar></BarChart></ResponsiveContainer></div></section>
-              <section className="rounded-2xl border border-[#e4e4e8] bg-white p-5 shadow-[0_8px_30px_rgba(31,35,49,.04)]"><h2 className="text-[16px] font-bold">Top Students</h2><p className="mt-1 text-xs text-[#8b94a6]">Highest scores across all {data.subjects.length} subjects.</p><div className="mt-3 divide-y divide-[#eeeeef]">{topFive.map(student => <div key={student.enrollmentNo} className="flex items-center justify-between py-3"><span className="text-sm font-semibold">{student.name}</span><span className="font-bold text-emerald-600">{student.overallPct.toFixed(1)}%</span></div>)}</div></section></div>
+      <main className="analysis-page">
+        <header className="analysis-topbar">
+          <div className="analysis-title-row">
+            <h1>Class / Section Analysis</h1>
+            {computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}
           </div>
-        </> : <section className="mt-5 rounded-2xl border border-[#e4e4e8] bg-white p-5 shadow-[0_8px_30px_rgba(31,35,49,.04)]"><div className="mb-3"><h2 className="text-[16px] font-bold">Internal Marks</h2><p className="mt-1 text-xs text-[#8b94a6]">All students across all {data.subjects.length} subjects.</p></div><div className="max-h-[600px] overflow-auto rounded-xl border border-[#f0f0f2]"><table className="min-w-[1080px] w-full text-sm"><thead className="sticky top-0 z-10 bg-white"><tr className="border-b border-[#ececf0] text-left text-[11px] font-bold uppercase tracking-wide text-[#7c8497]"><th className="px-3 py-3">Enrollment</th><th className="px-3 py-3">Student</th>{data.subjects.map(subject => <th key={subject.id} className="px-3 py-3 text-center">{subject.code || subject.name}</th>)}<th className="px-3 py-3 text-center">Overall %</th><th className="px-3 py-3">Grade</th></tr></thead><tbody>{rows.map(row => <tr key={row.enrollmentNo} className="border-b border-[#f1f1f3] last:border-0"><td className="px-3 py-3 text-xs text-[#7b8497]">{row.enrollmentNo}</td><td className="px-3 py-3 font-semibold">{row.name}</td>{row.subjects.map(subject => <td key={subject.id} className={`px-3 py-3 text-center font-semibold ${scoreClass(subject.mark, subject.max)}`}>{subject.mark}</td>)}<td className="px-3 py-3 text-center font-bold">{row.overallPct.toFixed(1)}%</td><td className="px-3 py-3"><span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold ${tierClass(row.tier)}`}>{row.tier}</span></td></tr>)}</tbody></table></div></section>}
-      </>}
-    </div></main>
-  </div>;
+          <div className="analysis-top-actions">
+            <button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}>
+              <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Syncing..." : "Sync now"}
+            </button>
+          </div>
+        </header>
+
+        {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
+
+        <div className="analysis-view-switch">
+          <button onClick={() => setView("internal")} className={view === "internal" ? "is-active" : ""}>Internal Marks</button>
+          <button onClick={() => setView("risk")} className={view === "risk" ? "is-active" : ""}>At Risk</button>
+        </div>
+
+        {error && <div className="analysis-panel" style={{ padding: 14, marginBottom: 16, color: "#b42318" }}>{error}</div>}
+        {loading && !data && <div style={{ padding: 40, color: "#667085", fontSize: 13 }}>Loading overall analysis...</div>}
+
+        {data && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs text-slate-500">Class Average</p>
+                <p className="mt-1 text-[28px] font-extrabold text-slate-900">{classAverage.toFixed(1)}%</p>
+                <p className="mt-1 text-[10px] text-slate-400">across all {data.subjects.length} subjects</p>
+              </section>
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs text-slate-500">Students</p>
+                <p className="mt-1 text-[28px] font-extrabold text-slate-900">{rows.length}</p>
+                <p className="mt-1 text-[10px] text-slate-400">students assessed</p>
+              </section>
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs text-slate-500">Pass Rate</p>
+                <p className="mt-1 text-[28px] font-extrabold text-slate-900">{passRate}%</p>
+                <p className="mt-1 text-[10px] text-slate-400">students at or above 40%</p>
+              </section>
+            </div>
+
+            {view === "risk" ? (
+              <>
+                <section className="at-risk-filter rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <div className="at-risk-filter-inner">
+                    <div className="at-risk-filter-title">
+                      <h3>At-Risk Filters</h3>
+                      <p>Choose mark type, range and sort.</p>
+                    </div>
+                    <div className="at-risk-filter-controls">
+                      <label>
+                        <span>Marks shown</span>
+                        <select value={markMode} onChange={(e) => setMarkMode(e.target.value as MarkMode)}>
+                          <option value="basic">Basic</option>
+                          <option value="internal">Internal Marks</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Lower bound</span>
+                        <input type="number" min="0" max="100" value={draftLower} onChange={(e) => setDraftLower(Number(e.target.value))} />
+                      </label>
+                      <label>
+                        <span>Upper bound</span>
+                        <input type="number" min="0" max="100" value={draftUpper} onChange={(e) => setDraftUpper(Number(e.target.value))} />
+                      </label>
+                      <label>
+                        <span>Sort</span>
+                        <select value={draftSortDirection} onChange={(e) => setDraftSortDirection(e.target.value as SortDirection)}>
+                          <option value="none">No sort</option>
+                          <option value="desc">High to Low</option>
+                          <option value="asc">Low to High</option>
+                        </select>
+                      </label>
+                      <button type="button" onClick={applyFilters} className="at-risk-apply">Apply</button>
+                    </div>
+                  </div>
+                </section>
+
+                <div className="at-risk-layout mt-4">
+                  <section className="at-risk-table rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Filtered Students</h3>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Showing {filteredRows.length} of {rows.length} students.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] rounded-full bg-slate-100 px-2 py-1 text-slate-600">{data.subjects.length} Subjects</span>
+                        <button type="button" onClick={resetRiskFilter} className="text-[10px] font-semibold text-[#4a35b3]">Reset</button>
+                      </div>
+                    </div>
+                    <div className="max-h-[560px] overflow-y-auto overflow-x-hidden">
+                      <table className="w-full table-fixed text-[10px] border-collapse">
+                        <colgroup>
+                          {sortDirection !== "none" && <col className="w-[6%]" />}
+                          <col className="w-[22%]" />
+                          {data.subjects.map((subject) => <col key={subject.id} className="w-[9%]" />)}
+                          <col className="w-[9%]" />
+                          <col className="w-[12%]" />
+                        </colgroup>
+                        <thead className="sticky top-0 bg-white z-10">
+                          <tr className="border-b border-slate-200 text-slate-500">
+                            {sortDirection !== "none" && <th className="text-center px-1 py-2">Rank</th>}
+                            <th className="text-left px-2 py-2">Student</th>
+                            {data.subjects.map((subject) => <th key={subject.id} className="text-center px-1 py-2">{subject.code || subject.name}</th>)}
+                            <th className="text-center px-1 py-2">%AGE</th>
+                            <th className="text-center px-1 py-2">Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRows.map((row, index) => (
+                            <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
+                              {sortDirection !== "none" && <td className="text-center px-1 py-2 text-slate-500 tabular-nums">{index + 1}</td>}
+                              <td className="px-2 py-2 font-medium text-slate-800 truncate" title={row.name}>{row.name}</td>
+                              {row.subjects.map((subject) => (
+                                <td key={subject.id} className={`text-center px-1 py-2 tabular-nums ${scoreClass(subject.pct)}`} title={`${subject.mark}/${subject.max}`}>
+                                  {Number.isInteger(subject.mark) ? subject.mark : subject.mark.toFixed(1)}
+                                </td>
+                              ))}
+                              <td className={`text-center px-1 py-2 font-semibold tabular-nums ${scoreClass(row.overallPct)}`}>{row.overallPct.toFixed(0)}%</td>
+                              <td className="text-center px-1 py-2"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${tierClass(row.tier)}`}>{row.tier}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <aside className="at-risk-side-stack">
+                    <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                      <h3 className="text-sm font-semibold text-slate-900">Distribution</h3>
+                      <p className="mt-0.5 text-[10px] text-slate-500">Overall performance across all subjects.</p>
+                      <div className="mt-3 space-y-2">
+                        {["Excellent", "Good", "Needs Attention", "Critical Risk"].map((tier) => {
+                          const count = tierCounts[tier] || 0;
+                          const width = rows.length ? Math.max(2, count / rows.length * 100) : 0;
+                          return (
+                            <button key={tier} type="button" onClick={() => {
+                              const ranges: Record<string, [number, number]> = { Excellent: [80.0001, 100], Good: [60, 80], "Needs Attention": [40, 59.9999], "Critical Risk": [0, 39.9999] };
+                              const [lo, hi] = ranges[tier];
+                              setDraftLower(lo); setDraftUpper(hi);
+                            }} className="w-full text-left">
+                              <div className="flex items-center justify-between text-[10px] text-slate-600"><span>{tier}</span><span>{count}</span></div>
+                              <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: TIER_COLORS[tier] }} /></div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                    <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                      <div className="px-3 py-2 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-900">Top Students</h3><p className="text-[10px] text-slate-500 mt-0.5">Highest overall percentages.</p></div>
+                      <div className="grid grid-cols-1 divide-y divide-slate-100">
+                        {topFive.map((row) => <div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3"><div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div><div className="text-sm text-green-600 shrink-0">{row.overallPct.toFixed(1)}%</div></div>)}
+                      </div>
+                    </section>
+                  </aside>
+                </div>
+              </>
+            ) : (
+              <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+                  <div><h3 className="text-sm font-semibold text-slate-900">Internal Marks</h3><p className="text-[10px] text-slate-500 mt-0.5">Showing {markMode === "basic" ? "Basic" : "Internal (moderated)"} marks for all subjects.</p></div>
+                  <select value={markMode} onChange={(e) => setMarkMode(e.target.value as MarkMode)} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] text-slate-700 bg-white"><option value="basic">Basic</option><option value="internal">Internal Marks</option></select>
+                </div>
+                <div className="max-h-[560px] overflow-y-auto overflow-x-hidden">
+                  <table className="w-full table-fixed border-collapse text-[10px]">
+                    <colgroup><col className="w-[24%]" />{data.subjects.map((subject) => <col key={subject.id} className="w-[9%]" />)}<col className="w-[10%]" /><col className="w-[12%]" /></colgroup>
+                    <thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-left px-2 py-2">Student</th>{data.subjects.map((subject) => <th key={subject.id} className="text-center px-1 py-2">{subject.code || subject.name}</th>)}<th className="text-center px-1 py-2">%AGE</th><th className="text-center px-1 py-2">Grade</th></tr></thead>
+                    <tbody>{rows.map((row) => <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"><td className="px-2 py-2 font-medium text-slate-800 truncate">{row.name}</td>{row.subjects.map((subject) => <td key={subject.id} className={`text-center px-1 py-2 tabular-nums ${scoreClass(subject.pct)}`}>{Number.isInteger(subject.mark) ? subject.mark : subject.mark.toFixed(1)}</td>)}<td className={`text-center px-1 py-2 font-semibold ${scoreClass(row.overallPct)}`}>{row.overallPct.toFixed(0)}%</td><td className="text-center px-1 py-2"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${tierClass(row.tier)}`}>{row.tier}</span></td></tr>)}</tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+          </>
+        )}
+      </main>
+    </div>
+  );
 }
