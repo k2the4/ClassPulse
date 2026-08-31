@@ -36,30 +36,18 @@ export async function assertTeacherCanViewClass(userId: string, role: string, cl
   return !!teaches;
 }
 
-// Section access: the class proctor, or anyone teaching a subject within
-// this specific section.
+// Section-based analysis pages are used by Class Analysis, whose purpose is
+// to show the complete class/section view across all subjects. A teacher who
+// has access to the class (as proctor or by teaching any subject in it) must
+// therefore be allowed to open the section analysis pages as well.
 export async function assertTeacherCanViewSection(userId: string, role: string, sectionId: string) {
-  if (role === "ADMIN") return true;
-  const section = await prisma.section.findUnique({ where: { id: sectionId } });
-  if (!section) return false;
-
-  const proctorMatch = await prisma.class.findFirst({
-    where: { id: section.classId, proctorId: userId },
-  });
-  if (proctorMatch) return true;
-
-  const teaches = await prisma.assignment.findFirst({
-    where: { teacherId: userId, subject: { sectionId } },
-  });
-  return !!teaches;
-}
-
-// Class Analysis's overall view aggregates every subject in the selected
-// class. It therefore needs class-level access rather than access to only
-// one subject/section.
-export async function assertTeacherCanViewOverall(userId: string, role: string, sectionId: string) {
   if (role === "ADMIN") return true;
   const section = await prisma.section.findUnique({ where: { id: sectionId }, select: { classId: true } });
   if (!section) return false;
   return assertTeacherCanViewClass(userId, role, section.classId);
+}
+
+// Kept as an explicit alias for class-level overall analysis callers.
+export async function assertTeacherCanViewOverall(userId: string, role: string, sectionId: string) {
+  return assertTeacherCanViewSection(userId, role, sectionId);
 }
