@@ -53,3 +53,13 @@ export async function assertTeacherCanViewSection(userId: string, role: string, 
   });
   return !!teaches;
 }
+
+// Class Analysis's overall view aggregates every subject in the selected
+// class. It therefore needs class-level access rather than access to only
+// one subject/section.
+export async function assertTeacherCanViewOverall(userId: string, role: string, sectionId: string) {
+  if (role === "ADMIN") return true;
+  const section = await prisma.section.findUnique({ where: { id: sectionId }, select: { classId: true } });
+  if (!section) return false;
+  return assertTeacherCanViewClass(userId, role, section.classId);
+}
