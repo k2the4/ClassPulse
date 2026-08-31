@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Search,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -273,14 +272,12 @@ export default function SectionStudentReportPage() {
                   <h3 className="font-semibold">Students</h3>
                   <span className="text-xs text-slate-400">{students.length}</span>
                 </div>
-                <div className="relative">
-                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <div>
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search by name or enrollment no."
-                    style={{ paddingLeft: 38 }}
-                    className="w-full rounded-lg border border-slate-200 py-2.5 pr-3 text-xs outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
                   />
                 </div>
                 <div className="flex gap-1.5 mt-3 overflow-x-auto pb-1">
