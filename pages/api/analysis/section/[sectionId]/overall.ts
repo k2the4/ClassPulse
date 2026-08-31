@@ -15,10 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let resolvedSection = await prisma.section.findUnique({ where: { id: requestedId } });
   if (!resolvedSection) {
     if (role === "ADMIN") {
-      resolvedSection = await prisma.section.findFirst({
-        where: { classId: requestedId },
-        orderBy: { name: "asc" },
-      });
+      resolvedSection = await prisma.section.findFirst({ where: { classId: requestedId }, orderBy: { name: "asc" } });
     } else {
       resolvedSection = await prisma.section.findFirst({
         where: {
@@ -33,22 +30,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  if (!resolvedSection) {
-    return res.status(404).json({ error: "Section not found or not assigned to you" });
-  }
+  if (!resolvedSection) return res.status(404).json({ error: "Section not found or not assigned to you" });
 
   const sectionId = resolvedSection.id;
   const allowed = await assertTeacherCanViewSection(userId, role, sectionId);
   if (!allowed) return res.status(403).json({ error: "Not authorized for this section" });
 
-  // Class Overall / At Risk intentionally uses the six theory subjects only.
-  const subjects = await prisma.subject.findMany({
-    where: { sectionId, type: "THEORY" },
-    orderBy: { code: "asc" },
-  });
-  if (subjects.length === 0) {
-    return res.status(404).json({ error: "No theory subjects exist for this section yet" });
-  }
+  const subjects = await prisma.subject.findMany({ where: { sectionId, type: "THEORY" }, orderBy: { code: "asc" } });
+  if (subjects.length === 0) return res.status(404).json({ error: "No theory subjects exist for this section yet" });
 
   const link = await prisma.sheetLink.findUnique({ where: { sectionId } });
   if (!link) return res.status(404).json({ error: "No combined Google Sheet linked to this section yet" });
@@ -78,12 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }))
           : [],
       };
-      return res.status(200).json({
-        cached: true,
-        computedAt: latest.computedAt,
-        sheetId: link.sheetId,
-        data,
-      });
+      return res.status(200).json({ cached: true, computedAt: latest.computedAt, sheetId: link.sheetId, data });
     }
   }
 
@@ -103,6 +87,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         midsem1: number;
         midsem2: number;
         combined: number;
+        assignment: { submitted: number; total: number; mark: number };
+        presentation: { raw: number; mark: number };
         basicInternal: number;
         moderatedInternal: number;
         basicMax: number;
@@ -116,15 +102,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       analysis.students.forEach((s) => {
         if (!studentMap.has(s.enrollmentNo)) {
-          studentMap.set(s.enrollmentNo, {
-            enrollmentNo: s.enrollmentNo,
-            name: s.name,
-            email: s.email,
-            subjects: [],
-          });
+          studentMap.set(s.enrollmentNo, { enrollmentNo: s.enrollmentNo, name: s.name, email: s.email, subjects: [] });
         }
 
-        const basicMax = (s.assignment.total || 0) + 10 + 30;
+        const assignmentMark = s.assignment.total > 0 ? round1((s.assignment.submitted / s.assignment.total) * 5) : 0;
+        const presentationMark = round1((s.presentation / 10) * 5);
+        const basicMax = 40;
+
         studentMap.get(s.enrollmentNo)!.subjects.push({
           subjectId: subject.id,
           code: subject.code,
@@ -133,25 +117,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           midsem1: s.midsem.first,
           midsem2: s.midsem.second,
           combined: s.midsem.combined,
+          assignment: { submitted: s.assignment.submitted, total: s.assignment.total, mark: assignmentMark },
+          presentation: { raw: s.presentation, mark: presentationMark },
           basicInternal: s.internalMarks.basic,
           moderatedInternal: s.internalMarks.moderated,
           basicMax,
-          grade: s.midsem.grade,
+          grade: gradeFor(s.internalMarks.basic, basicMax),
         });
       });
     });
 
     const students = Array.from(studentMap.values()).map((student) => {
-      const percentages = student.subjects.map((sub) => sub.basicMax > 0 ? (sub.basicInternal / sub.basicMax) * 100 : 0);
-      const overallPct = percentages.length ? round1(percentages.reduce((a, b) => a + b, 0) / percentages.length) : 0;
-      const attendancePercentages = student.subjects.map((sub) => sub.attendance);
-      const overallAttendance = attendancePercentages.length ? round1(attendancePercentages.reduce((a, b) => a + b, 0) / attendancePercentages.length) : 0;
+      const sixSubjects = student.subjects.slice(0, 6);
+      const total = sixSubjects.reduce((sum, sub) => sum + sub.basicInternal, 0);
+      const average = sixSubjects.length ? total / sixSubjects.length : 0;
+      const overallPct = round1((average / 40) * 100);
+      const attendancePercentages = sixSubjects.map((sub) => sub.attendance);
+      const overallAttendance = attendancePercentages.length
+        ? round1(attendancePercentages.reduce((a, b) => a + b, 0) / attendancePercentages.length)
+        : 0;
 
       return {
         ...student,
         overallPct,
         overallAttendance,
-        overallGrade: gradeFor(overallPct, 100),
+        overallGrade: gradeFor(average, 40),
       };
     });
 
