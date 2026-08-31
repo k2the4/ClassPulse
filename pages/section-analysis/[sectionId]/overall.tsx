@@ -48,6 +48,7 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 const THEORY_SUBJECT_LIMIT = 6;
+const MAX_AVERAGE_MARKS = 40;
 
 function isLabSubject(subject: { name: string; code: string }) {
   return /(^|[-_\s])LAB($|[-_\s])/i.test(`${subject.code} ${subject.name}`);
@@ -55,6 +56,11 @@ function isLabSubject(subject: { name: string; code: string }) {
 
 function round1(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function clampAverage(value: number, fallback: number) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(MAX_AVERAGE_MARKS, Math.max(0, value));
 }
 
 function markClass(grade: string) {
@@ -131,8 +137,14 @@ export default function SectionOverallPage() {
         .map((subject) => student.subjects.find((s) => s.subjectId === subject.id || s.code === subject.code))
         .filter((subject): subject is OverallSubject => Boolean(subject));
 
-      const average = theory.length
-        ? round1(theory.reduce((sum, subject) => sum + Number(subject.basicInternal || 0), 0) / theory.length)
+      // Average is the actual average mark across the six theory subjects,
+      // with each subject treated as a mark out of 40. Missing marks count as 0.
+      const marks = theorySubjects.map((subject) => {
+        const match = theory.find((s) => s.subjectId === subject.id || s.code === subject.code);
+        return Number(match?.basicInternal ?? 0);
+      });
+      const average = marks.length
+        ? round1(marks.reduce((sum, mark) => sum + mark, 0) / marks.length)
         : 0;
 
       return { ...student, theorySubjects: theory, average };
@@ -140,12 +152,11 @@ export default function SectionOverallPage() {
   }, [data, theorySubjects]);
 
   const filteredStudents = useMemo(() => {
-    const lower = Number(lowerBound);
-    const upper = Number(upperBound);
-    const min = Number.isFinite(lower) ? lower : 0;
-    const max = Number.isFinite(upper) ? upper : 40;
+    const lower = clampAverage(Number(lowerBound), 0);
+    const upper = clampAverage(Number(upperBound), MAX_AVERAGE_MARKS);
 
-    const result = studentsWithAverage.filter((student) => student.average >= min && student.average <= max);
+    // Filter directly on the Average column (0–40), never on percentage.
+    const result = studentsWithAverage.filter((student) => student.average >= lower && student.average <= upper);
 
     if (sort === "high") return [...result].sort((a, b) => b.average - a.average);
     if (sort === "low") return [...result].sort((a, b) => a.average - b.average);
@@ -157,7 +168,7 @@ export default function SectionOverallPage() {
     return round1(studentsWithAverage.reduce((sum, student) => sum + student.average, 0) / studentsWithAverage.length);
   }, [studentsWithAverage]);
 
-  const classAveragePct = round1((classAverage / 50) * 100);
+  const classAveragePct = round1((classAverage / MAX_AVERAGE_MARKS) * 100);
 
   const tierCounts = filteredStudents.reduce(
     (acc, student) => {
@@ -212,7 +223,7 @@ export default function SectionOverallPage() {
           <section className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
             <div className="mb-3">
               <h3 className="font-medium text-gray-900">Filter</h3>
-              <p className="text-xs text-gray-500 mt-1">Filter students using their average internal marks across the six theory subjects.</p>
+              <p className="text-xs text-gray-500 mt-1">Filter students using their Average mark across the six theory subjects (0–40).</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
               <label className="text-xs text-gray-500">
@@ -222,7 +233,7 @@ export default function SectionOverallPage() {
                   min="0"
                   max="40"
                   value={lowerBound}
-                  onChange={(e) => setLowerBound(e.target.value)}
+                  onChange={(e) => setLowerBound(String(clampAverage(Number(e.target.value), 0)))}
                   className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                 />
               </label>
@@ -233,7 +244,7 @@ export default function SectionOverallPage() {
                   min="0"
                   max="40"
                   value={upperBound}
-                  onChange={(e) => setUpperBound(e.target.value)}
+                  onChange={(e) => setUpperBound(String(clampAverage(Number(e.target.value), MAX_AVERAGE_MARKS)))}
                   className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                 />
               </label>
@@ -256,7 +267,7 @@ export default function SectionOverallPage() {
           </section>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <StatCard label="Class Average" value={`${classAverage} / 50`} />
+            <StatCard label="Class Average" value={`${classAverage} / 40`} />
             <StatCard label="Students" value={filteredStudents.length} />
             <StatCard label="Average Percentage" value={`${classAveragePct}%`} />
           </div>
@@ -301,7 +312,7 @@ export default function SectionOverallPage() {
                             );
                           })}
                           <td className="py-2 px-2 text-center font-semibold text-gray-900">{student.average}</td>
-                          <td className="py-2 px-2 text-center text-gray-500">{round1((student.average / 50) * 100)}%</td>
+                          <td className="py-2 px-2 text-center text-gray-500">{round1((student.average / MAX_AVERAGE_MARKS) * 100)}%</td>
                           <td className="py-2 pl-2"><GradeBadge grade={student.overallGrade} /></td>
                         </tr>
                       );
@@ -322,7 +333,7 @@ export default function SectionOverallPage() {
                     <YAxis fontSize={11} allowDecimals={false} />
                     <Tooltip />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {["Excellent", "Good", "Needs Attention", "Critical Risk"].map((name, index) => (
+                      {["Excellent", "Good", "Needs Attention", "Critical Risk"].map((name) => (
                         <Cell key={name} fill={TIER_COLORS[name]} />
                       ))}
                     </Bar>
