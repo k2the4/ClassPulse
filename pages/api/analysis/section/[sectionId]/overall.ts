@@ -12,8 +12,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const userId = (session.user as any).id;
   const role = (session.user as any).role;
 
-  // Class Analysis can reach this endpoint through older class-id links.
-  // Resolve a class id to a section the current teacher is actually allowed to view.
   let resolvedSection = await prisma.section.findUnique({ where: { id: requestedId } });
   if (!resolvedSection) {
     if (role === "ADMIN") {
@@ -43,26 +41,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const allowed = await assertTeacherCanViewSection(userId, role, sectionId);
   if (!allowed) return res.status(403).json({ error: "Not authorized for this section" });
 
-  const forceSync = req.query.sync === "1";
-  const subjects = await prisma.subject.findMany({ where: { sectionId } });
+  // Class Overall / At Risk intentionally uses the six theory subjects only.
+  const subjects = await prisma.subject.findMany({
+    where: { sectionId, type: "THEORY" },
+    orderBy: { code: "asc" },
+  });
   if (subjects.length === 0) {
-    return res.status(404).json({ error: "No subjects exist for this section yet" });
+    return res.status(404).json({ error: "No theory subjects exist for this section yet" });
   }
 
   const link = await prisma.sheetLink.findUnique({ where: { sectionId } });
   if (!link) return res.status(404).json({ error: "No combined Google Sheet linked to this section yet" });
 
-  if (!forceSync) {
+  const theoryIds = new Set(subjects.map((s) => s.id));
+  const theoryCodes = new Set(subjects.map((s) => s.code));
+
+  if (req.query.sync !== "1") {
     const latest = await prisma.analysisSnapshot.findFirst({
       where: { sectionId, data: { path: ["kind"], equals: "overall" } as any },
       orderBy: { computedAt: "desc" },
     });
     if (latest) {
+      const cached = latest.data as any;
+      const cachedSubjects = Array.isArray(cached.subjects)
+        ? cached.subjects.filter((s: any) => theoryIds.has(s.id) || theoryCodes.has(s.code))
+        : subjects.map((s) => ({ id: s.id, name: s.name, code: s.code }));
+      const data = {
+        ...cached,
+        subjects: cachedSubjects,
+        students: Array.isArray(cached.students)
+          ? cached.students.map((student: any) => ({
+              ...student,
+              subjects: Array.isArray(student.subjects)
+                ? student.subjects.filter((s: any) => theoryIds.has(s.subjectId) || theoryCodes.has(s.code))
+                : [],
+            }))
+          : [],
+      };
       return res.status(200).json({
         cached: true,
         computedAt: latest.computedAt,
         sheetId: link.sheetId,
-        data: latest.data,
+        data,
       });
     }
   }
