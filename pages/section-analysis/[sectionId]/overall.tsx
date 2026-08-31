@@ -34,6 +34,8 @@ type OverallData = { subjects: Subject[]; students: Student[]; classAverageOvera
 type Row = Student & {
   originalIndex: number;
   subjects: (Subject & { mark: number; max: number; pct: number })[];
+  total: number;
+  totalMax: number;
   overallPct: number;
   tier: string;
 };
@@ -57,9 +59,6 @@ const tierClass = (tier: string) =>
         ? "bg-amber-50 text-amber-700"
         : "bg-red-50 text-red-600";
 
-const scoreClass = (pct: number) =>
-  pct >= 80 ? "text-emerald-600" : pct >= 60 ? "text-amber-600" : "text-red-500";
-
 export default function SectionOverallPage() {
   const router = useRouter();
   const { sectionId } = router.query;
@@ -72,9 +71,9 @@ export default function SectionOverallPage() {
   const [view, setView] = useState<View>("risk");
   const [markMode, setMarkMode] = useState<MarkMode>("basic");
   const [lower, setLower] = useState(0);
-  const [upper, setUpper] = useState(100);
+  const [upper, setUpper] = useState(40);
   const [draftLower, setDraftLower] = useState(0);
-  const [draftUpper, setDraftUpper] = useState(100);
+  const [draftUpper, setDraftUpper] = useState(40);
   const [sortDirection, setSortDirection] = useState<SortDirection>("none");
   const [draftSortDirection, setDraftSortDirection] = useState<SortDirection>("none");
 
@@ -106,6 +105,7 @@ export default function SectionOverallPage() {
 
   const rows = useMemo<Row[]>(() => {
     if (!data) return [];
+
     return data.students.map((student, originalIndex) => {
       const subjects = data.subjects.map((subject) => {
         const score = student.subjects.find(
@@ -122,20 +122,32 @@ export default function SectionOverallPage() {
           pct: max > 0 ? (mark / max) * 100 : 0,
         };
       });
-      const overallPct = subjects.length
-        ? subjects.reduce((sum, subject) => sum + subject.pct, 0) / subjects.length
-        : 0;
-      return { ...student, originalIndex, subjects, overallPct, tier: tierFor(overallPct) };
+
+      const total = subjects.reduce((sum, subject) => sum + subject.mark, 0);
+      const totalMax = subjects.reduce((sum, subject) => sum + subject.max, 0);
+      const overallPct = totalMax > 0 ? (total / totalMax) * 100 : 0;
+
+      return {
+        ...student,
+        originalIndex,
+        subjects,
+        total,
+        totalMax,
+        overallPct,
+        tier: tierFor(overallPct),
+      };
     });
   }, [data, markMode]);
 
   const filteredRows = useMemo(() => {
-    const lo = Math.min(lower, upper);
-    const hi = Math.max(lower, upper);
+    const lo = Math.max(0, Math.min(40, Math.min(lower, upper)));
+    const hi = Math.max(0, Math.min(40, Math.max(lower, upper)));
     const result = rows.filter((row) => row.overallPct >= lo && row.overallPct <= hi);
+
     if (sortDirection === "none") {
       return result.sort((a, b) => a.originalIndex - b.originalIndex);
     }
+
     return result.sort((a, b) =>
       sortDirection === "asc"
         ? a.overallPct - b.overallPct || a.name.localeCompare(b.name)
@@ -167,19 +179,25 @@ export default function SectionOverallPage() {
   );
 
   function applyFilters() {
-    setLower(Math.min(draftLower, draftUpper));
-    setUpper(Math.max(draftLower, draftUpper));
+    const nextLower = Math.max(0, Math.min(40, Math.min(draftLower, draftUpper)));
+    const nextUpper = Math.max(0, Math.min(40, Math.max(draftLower, draftUpper)));
+    setLower(nextLower);
+    setUpper(nextUpper);
+    setDraftLower(nextLower);
+    setDraftUpper(nextUpper);
     setSortDirection(draftSortDirection);
   }
 
   function resetRiskFilter() {
     setDraftLower(0);
-    setDraftUpper(100);
+    setDraftUpper(40);
     setLower(0);
-    setUpper(100);
+    setUpper(40);
     setDraftSortDirection("none");
     setSortDirection("none");
   }
+
+  const formatMark = (mark: number) => Number.isInteger(mark) ? mark : mark.toFixed(1);
 
   return (
     <div className="analysis-layout">
@@ -190,7 +208,7 @@ export default function SectionOverallPage() {
         </div>
         <nav className="analysis-side-nav">
           <a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a>
-          <a className="is-active" href="/class-analysis"><BookOpen size={18} />Class Analysis</a>
+          <a className="is-active" href={typeof sectionId === "string" ? `/class-analysis/${sectionId}` : "/class-analysis"}><BookOpen size={18} />Class Analysis</a>
           <a href="/subject-analysis"><GraduationCap size={18} />Subject Analysis</a>
         </nav>
         <RawDataButton sheetId={sheetId} />
@@ -227,7 +245,7 @@ export default function SectionOverallPage() {
               <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <p className="text-xs text-slate-500">Class Average</p>
                 <p className="mt-1 text-[28px] font-extrabold text-slate-900">{classAverage.toFixed(1)}%</p>
-                <p className="mt-1 text-[10px] text-slate-400">across all {data.subjects.length} subjects</p>
+                <p className="mt-1 text-[10px] text-slate-400">across all {data.subjects.length} theory subjects</p>
               </section>
               <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <p className="text-xs text-slate-500">Students</p>
@@ -259,11 +277,11 @@ export default function SectionOverallPage() {
                       </label>
                       <label>
                         <span>Lower bound</span>
-                        <input type="number" min="0" max="100" value={draftLower} onChange={(e) => setDraftLower(Number(e.target.value))} />
+                        <input type="number" min="0" max="40" value={draftLower} onChange={(e) => setDraftLower(Math.min(40, Math.max(0, Number(e.target.value))))} />
                       </label>
                       <label>
                         <span>Upper bound</span>
-                        <input type="number" min="0" max="100" value={draftUpper} onChange={(e) => setDraftUpper(Number(e.target.value))} />
+                        <input type="number" min="0" max="40" value={draftUpper} onChange={(e) => setDraftUpper(Math.min(40, Math.max(0, Number(e.target.value))))} />
                       </label>
                       <label>
                         <span>Sort</span>
@@ -286,24 +304,26 @@ export default function SectionOverallPage() {
                         <p className="text-[10px] text-slate-500 mt-0.5">Showing {filteredRows.length} of {rows.length} students.</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] rounded-full bg-slate-100 px-2 py-1 text-slate-600">{data.subjects.length} Subjects</span>
+                        <span className="text-[10px] rounded-full bg-slate-100 px-2 py-1 text-slate-600">{data.subjects.length} Theory Subjects</span>
                         <button type="button" onClick={resetRiskFilter} className="text-[10px] font-semibold text-[#4a35b3]">Reset</button>
                       </div>
                     </div>
                     <div className="max-h-[560px] overflow-y-auto overflow-x-hidden">
                       <table className="w-full table-fixed text-[10px] border-collapse">
                         <colgroup>
-                          {sortDirection !== "none" && <col className="w-[6%]" />}
-                          <col className="w-[22%]" />
-                          {data.subjects.map((subject) => <col key={subject.id} className="w-[9%]" />)}
-                          <col className="w-[9%]" />
-                          <col className="w-[12%]" />
+                          {sortDirection !== "none" && <col className="w-[5%]" />}
+                          <col className="w-[18%]" />
+                          {data.subjects.map((subject) => <col key={subject.id} className="w-[8%]" />)}
+                          <col className="w-[10%]" />
+                          <col className="w-[8%]" />
+                          <col className="w-[13%]" />
                         </colgroup>
                         <thead className="sticky top-0 bg-white z-10">
                           <tr className="border-b border-slate-200 text-slate-500">
                             {sortDirection !== "none" && <th className="text-center px-1 py-2">Rank</th>}
                             <th className="text-left px-2 py-2">Student</th>
                             {data.subjects.map((subject) => <th key={subject.id} className="text-center px-1 py-2">{subject.code || subject.name}</th>)}
+                            <th className="text-center px-1 py-2">Total</th>
                             <th className="text-center px-1 py-2">%AGE</th>
                             <th className="text-center px-1 py-2">Grade</th>
                           </tr>
@@ -313,12 +333,16 @@ export default function SectionOverallPage() {
                             <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
                               {sortDirection !== "none" && <td className="text-center px-1 py-2 text-slate-500 tabular-nums">{index + 1}</td>}
                               <td className="px-2 py-2 font-medium text-slate-800 truncate" title={row.name}>{row.name}</td>
-                              {row.subjects.map((subject) => (
-                                <td key={subject.id} className={`text-center px-1 py-2 tabular-nums ${scoreClass(subject.pct)}`} title={`${subject.mark}/${subject.max}`}>
-                                  {Number.isInteger(subject.mark) ? subject.mark : subject.mark.toFixed(1)}
-                                </td>
-                              ))}
-                              <td className={`text-center px-1 py-2 font-semibold tabular-nums ${scoreClass(row.overallPct)}`}>{row.overallPct.toFixed(0)}%</td>
+                              {row.subjects.map((subject) => {
+                                const color = TIER_COLORS[tierFor(subject.pct)];
+                                return <td key={subject.id} className="text-center px-1 py-2 tabular-nums font-medium" style={{ color }} title={`${subject.mark}/${subject.max} · ${subject.pct.toFixed(1)}%`}>
+                                  {formatMark(subject.mark)}
+                                </td>;
+                              })}
+                              <td className="text-center px-1 py-2 font-semibold tabular-nums text-slate-900" title={`${formatMark(row.total)}/${formatMark(row.totalMax)}`}>
+                                {formatMark(row.total)}
+                              </td>
+                              <td className="text-center px-1 py-2 font-semibold tabular-nums" style={{ color: TIER_COLORS[row.tier] }}>{row.overallPct.toFixed(0)}%</td>
                               <td className="text-center px-1 py-2"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${tierClass(row.tier)}`}>{row.tier}</span></td>
                             </tr>
                           ))}
@@ -330,20 +354,16 @@ export default function SectionOverallPage() {
                   <aside className="at-risk-side-stack">
                     <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                       <h3 className="text-sm font-semibold text-slate-900">Distribution</h3>
-                      <p className="mt-0.5 text-[10px] text-slate-500">Overall performance across all subjects.</p>
+                      <p className="mt-0.5 text-[10px] text-slate-500">Overall performance across the six theory subjects.</p>
                       <div className="mt-3 space-y-2">
                         {["Excellent", "Good", "Needs Attention", "Critical Risk"].map((tier) => {
                           const count = tierCounts[tier] || 0;
                           const width = rows.length ? Math.max(2, count / rows.length * 100) : 0;
                           return (
-                            <button key={tier} type="button" onClick={() => {
-                              const ranges: Record<string, [number, number]> = { Excellent: [80.0001, 100], Good: [60, 80], "Needs Attention": [40, 59.9999], "Critical Risk": [0, 39.9999] };
-                              const [lo, hi] = ranges[tier];
-                              setDraftLower(lo); setDraftUpper(hi);
-                            }} className="w-full text-left">
+                            <div key={tier}>
                               <div className="flex items-center justify-between text-[10px] text-slate-600"><span>{tier}</span><span>{count}</span></div>
                               <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: TIER_COLORS[tier] }} /></div>
-                            </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -351,7 +371,7 @@ export default function SectionOverallPage() {
                     <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                       <div className="px-3 py-2 border-b border-slate-100"><h3 className="text-sm font-semibold text-slate-900">Top Students</h3><p className="text-[10px] text-slate-500 mt-0.5">Highest overall percentages.</p></div>
                       <div className="grid grid-cols-1 divide-y divide-slate-100">
-                        {topFive.map((row) => <div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3"><div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div><div className="text-sm text-green-600 shrink-0">{row.overallPct.toFixed(1)}%</div></div>)}
+                        {topFive.map((row) => <div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3"><div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div><div className="text-sm font-medium" style={{ color: TIER_COLORS[row.tier] }}>{row.overallPct.toFixed(1)}%</div></div>)}
                       </div>
                     </section>
                   </aside>
@@ -360,14 +380,14 @@ export default function SectionOverallPage() {
             ) : (
               <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
-                  <div><h3 className="text-sm font-semibold text-slate-900">Internal Marks</h3><p className="text-[10px] text-slate-500 mt-0.5">Showing {markMode === "basic" ? "Basic" : "Internal (moderated)"} marks for all subjects.</p></div>
+                  <div><h3 className="text-sm font-semibold text-slate-900">Internal Marks</h3><p className="text-[10px] text-slate-500 mt-0.5">Showing {markMode === "basic" ? "Basic" : "Internal (moderated)"} marks for the six theory subjects.</p></div>
                   <select value={markMode} onChange={(e) => setMarkMode(e.target.value as MarkMode)} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] text-slate-700 bg-white"><option value="basic">Basic</option><option value="internal">Internal Marks</option></select>
                 </div>
                 <div className="max-h-[560px] overflow-y-auto overflow-x-hidden">
                   <table className="w-full table-fixed border-collapse text-[10px]">
-                    <colgroup><col className="w-[24%]" />{data.subjects.map((subject) => <col key={subject.id} className="w-[9%]" />)}<col className="w-[10%]" /><col className="w-[12%]" /></colgroup>
-                    <thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-left px-2 py-2">Student</th>{data.subjects.map((subject) => <th key={subject.id} className="text-center px-1 py-2">{subject.code || subject.name}</th>)}<th className="text-center px-1 py-2">%AGE</th><th className="text-center px-1 py-2">Grade</th></tr></thead>
-                    <tbody>{rows.map((row) => <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"><td className="px-2 py-2 font-medium text-slate-800 truncate">{row.name}</td>{row.subjects.map((subject) => <td key={subject.id} className={`text-center px-1 py-2 tabular-nums ${scoreClass(subject.pct)}`}>{Number.isInteger(subject.mark) ? subject.mark : subject.mark.toFixed(1)}</td>)}<td className={`text-center px-1 py-2 font-semibold ${scoreClass(row.overallPct)}`}>{row.overallPct.toFixed(0)}%</td><td className="text-center px-1 py-2"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${tierClass(row.tier)}`}>{row.tier}</span></td></tr>)}</tbody>
+                    <colgroup><col className="w-[20%]" />{data.subjects.map((subject) => <col key={subject.id} className="w-[8%]" />}<col className="w-[11%]" /><col className="w-[8%]" /><col className="w-[13%]" /></colgroup>
+                    <thead className="sticky top-0 bg-white z-10"><tr className="border-b border-slate-200 text-slate-500"><th className="text-left px-2 py-2">Student</th>{data.subjects.map((subject) => <th key={subject.id} className="text-center px-1 py-2">{subject.code || subject.name}</th>)}<th className="text-center px-1 py-2">Total</th><th className="text-center px-1 py-2">%AGE</th><th className="text-center px-1 py-2">Grade</th></tr></thead>
+                    <tbody>{rows.map((row) => <tr key={row.enrollmentNo} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"><td className="px-2 py-2 font-medium text-slate-800 truncate">{row.name}</td>{row.subjects.map((subject) => <td key={subject.id} className="text-center px-1 py-2 tabular-nums font-medium" style={{ color: TIER_COLORS[tierFor(subject.pct)] }}>{formatMark(subject.mark)}</td>)}<td className="text-center px-1 py-2 font-semibold text-slate-900">{formatMark(row.total)}</td><td className="text-center px-1 py-2 font-semibold" style={{ color: TIER_COLORS[row.tier] }}>{row.overallPct.toFixed(0)}%</td><td className="text-center px-1 py-2"><span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${tierClass(row.tier)}`}>{row.tier}</span></td></tr>)}</tbody>
                   </table>
                 </div>
               </section>
