@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !startsWith(github.event.head_commit.message, 'fix: combined analysis UI') }}
+    if: github.event.head_commit.message != 'fix: combined analysis UI'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +27,6 @@ jobs:
           path = Path('pages/subject-analysis/[subjectId]/academic.tsx')
           s = path.read_text(encoding='utf-8')
 
-          # Move the two sort controls into the table panel itself.
           controls = '''<div className="combined-controls-bar"><div className="combined-control"><label htmlFor="combined-sort-field">Sort By</label><select id="combined-sort-field" value={combinedSort} onChange={(e) => setCombinedSort(e.target.value as CombinedSort)}><option value="combined">Combined (average)</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option><option value="max">Maximum score</option></select></div><div className="combined-control"><label htmlFor="combined-sort-order">Order</label><select id="combined-sort-order" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)}><option value="desc">High to Low</option><option value="asc">Low to High</option><option value="none">No Sort</option></select></div></div>'''
           s, n = re.subn(r'\n\s*<section className="combined-controls-bar">.*?</section>', '', s, count=1, flags=re.S)
           if n != 1:
@@ -37,22 +36,10 @@ jobs:
               raise SystemExit('Could not locate combined table panel')
           s = s.replace(marker, marker + '              ' + controls + '\n', 1)
 
-          # Remove the redundant Performance Tiers card from Combined.
           s, n = re.subn(r'\n\s*<section className="analysis-panel combined-tier-panel">.*?</section>', '', s, count=1, flags=re.S)
           if n != 1:
               raise SystemExit('Could not locate Combined Performance Tiers card')
 
-          # Ensure only the selected sort metric is colored; existing JSX already does this,
-          # but make the intent explicit and keep grade based on the active metric.
-          old = '''const metricClass = (metric: CombinedSort, value: number) => sortOrder !== "none" && combinedSort === metric ? `tier-mark ${gradeClass(tierFor(value))}` : "";'''
-          new = '''const metricClass = (metric: CombinedSort, value: number) => {
-                      if (sortOrder === "none" || combinedSort !== metric) return "";
-                      return `tier-mark ${gradeClass(tierFor(value))}`;
-                    };'''
-          if old in s:
-              s = s.replace(old, new, 1)
-
-          # Replace the Combined-specific layout rules with a no-overflow layout.
           old_css = '''        .combined-controls-bar { display: flex; justify-content: flex-end; align-items: flex-end; gap: 12px; margin: 0 0 18px; }
         .combined-control { min-width: 190px; }
         .combined-control label { display: block; margin-bottom: 7px; color: #667085; font-size: 11px; font-weight: 600; }
@@ -91,22 +78,10 @@ jobs:
           if old_css not in s:
               raise SystemExit('Could not locate Combined CSS block')
           s = s.replace(old_css, new_css, 1)
-
           s = s.replace('        .combined-tier-panel { padding: 18px; }\n', '', 1)
           s = s.replace(' .academic-student-table { min-width: 760px; }', '', 1)
           s = s.replace('.academic-student-table { min-width: 760px; }', '', 1)
-
-          # Keep mobile layout usable without reintroducing horizontal table scrolling.
-          s = s.replace(
-              '@media (max-width: 800px) { .combined-controls-bar { justify-content: flex-start; }',
-              '@media (max-width: 800px) { .combined-controls-bar { justify-content: flex-start; flex-wrap: wrap; }',
-              1,
-          )
-          s = s.replace(
-              '@media (max-width: 600px) { .combined-controls-bar { flex-direction: column; align-items: stretch; }',
-              '@media (max-width: 600px) { .combined-controls-bar { flex-direction: column; align-items: stretch; }',
-              1,
-          )
+          s = s.replace('@media (max-width: 800px) { .combined-controls-bar { justify-content: flex-start; }', '@media (max-width: 800px) { .combined-controls-bar { justify-content: flex-start; flex-wrap: wrap; }', 1)
 
           path.write_text(s, encoding='utf-8', newline='\n')
           print('Combined Analysis UI patch applied')
@@ -115,7 +90,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pages/subject-analysis/[subjectId]/academic.tsx
+          git add -- 'pages/subject-analysis/[subjectId]/academic.tsx'
           git diff --cached --check
           if git diff --cached --quiet; then
             echo "No changes to commit"
