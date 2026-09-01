@@ -16,9 +16,8 @@ type SummarySort = "none" | "desc" | "asc";
 
 const MAX = 30;
 const TIERS: Tier[] = ["Excellent", "Good", "Needs Attention", "Critical Risk"];
-const COLORS: Record<Tier, string> = { Excellent: "#15966a", Good: "#4d75d0", "Needs Attention": "#f59e0b", "Critical Risk": "#ef4444" };
+const COLORS: Record<Tier, string> = { Excellent: "#4d75d0", Good: "#15966a", "Needs Attention": "#f59e0b", "Critical Risk": "#ef4444" };
 const round1 = (n: number) => Math.round(n * 10) / 10;
-const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 
 function median(values: number[]) {
   if (!values.length) return 0;
@@ -126,7 +125,8 @@ export default function SubjectAcademicPage() {
 
   const midsem1 = useMemo(() => statsFor("midsem1"), [students]);
   const midsem2 = useMemo(() => statsFor("midsem2"), [students]);
-  const combinedRows = useMemo(() => students.map((s: any) => ({
+  const combinedRows = useMemo(() => students.map((s: any, index: number) => ({
+    sno: index + 1,
     enrollmentNo: s.enrollmentNo,
     name: s.name,
     first: valueFor(s, "midsem1"),
@@ -143,9 +143,12 @@ export default function SubjectAcademicPage() {
   const activeLabel = view === "midsem2" ? "Midsem 2" : "Midsem 1";
   const activePie = TIERS.map((name) => ({ name, value: activeStats.counts[name], color: COLORS[name] }));
   const displayedRows = selectedTier ? activeStats.rows.filter((r) => tierFor(r.marks) === selectedTier) : activeStats.rows;
+
+  const combinedGradeExam: ExamKey = sortOrder === "none" ? "combined" : combinedSort;
+  const combinedGradeValue = (row: typeof combinedRows[number]) => valueFor({ midsem: { first: row.first, second: row.second, combined: row.combined, max: row.max } }, combinedGradeExam);
   const filteredCombinedRows = useMemo(
-    () => selectedTier ? combinedRows.filter((row) => tierFor(row.combined) === selectedTier) : combinedRows,
-    [combinedRows, selectedTier]
+    () => selectedTier ? combinedRows.filter((row) => tierFor(combinedGradeValue(row)) === selectedTier) : combinedRows,
+    [combinedRows, selectedTier, combinedGradeExam]
   );
   const sortedCombinedRows = useMemo(() => {
     if (sortOrder === "none") return [...filteredCombinedRows];
@@ -242,7 +245,26 @@ export default function SubjectAcademicPage() {
           <section className="combined-layout">
             <section className="analysis-panel analysis-table-panel combined-table-panel">
               <div className="analysis-panel-head"><div><h3>All Students</h3><p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>{selectedTier ? `Filtered: ${selectedTier}` : "Combined Midsem results"}</p></div><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{selectedTier && <button className="analysis-secondary" style={{ padding: "5px 8px" }} onClick={() => setSelectedTier(null)}><X size={13} />Clear</button>}<span className="analysis-count">{sortedCombinedRows.length} Students</span></div></div>
-              <div className="analysis-table-wrap combined-table-wrap"><table className="analysis-table"><thead><tr><th>Rank</th><th>Student</th><th>Midsem 1</th><th>Midsem 2</th><th>Combined</th><th>Max</th><th>Grade</th></tr></thead><tbody>{sortedCombinedRows.map((row, index) => { const tier = tierFor(row.combined); const rank = combinedRankRows.findIndex((r) => r.enrollmentNo === row.enrollmentNo) + 1; return <tr key={row.enrollmentNo}><td>{sortOrder === "none" ? rank : index + 1}</td><td>{row.name}</td><td className={`tier-mark ${gradeClass(tierFor(row.first))}`}>{row.first}</td><td className={`tier-mark ${gradeClass(tierFor(row.second))}`}>{row.second}</td><td className={`tier-mark ${gradeClass(tier)}`}><strong>{row.combined}</strong></td><td className={`tier-mark ${gradeClass(tierFor(row.max))}`}>{row.max}</td><td><button type="button" className={`analysis-grade-badge ${gradeClass(tier)}`} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)}>{tier}</button></td></tr>; })}{!sortedCombinedRows.length && <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match the selected filter.</td></tr>}</tbody></table></div>
+              <div className="analysis-table-wrap combined-table-wrap">
+                <table className="analysis-table">
+                  <thead><tr><th>{sortOrder === "none" ? "S.No." : "Rank"}</th><th>Student</th><th>Enrollment No.</th><th>Midsem 1</th><th>Midsem 2</th><th>Combined</th><th>Max</th><th>Grade</th></tr></thead>
+                  <tbody>{sortedCombinedRows.map((row, index) => {
+                    const gradeValue = combinedGradeValue(row);
+                    const tier = tierFor(gradeValue);
+                    const metricClass = (metric: CombinedSort, value: number) => sortOrder !== "none" && combinedSort === metric ? `tier-mark ${gradeClass(tierFor(value))}` : "";
+                    return <tr key={row.enrollmentNo}>
+                      <td>{sortOrder === "none" ? row.sno : index + 1}</td>
+                      <td>{row.name}</td>
+                      <td className="academic-enrollment-cell">{row.enrollmentNo}</td>
+                      <td className={metricClass("midsem1", row.first)}>{row.first}</td>
+                      <td className={metricClass("midsem2", row.second)}>{row.second}</td>
+                      <td className={metricClass("combined", row.combined)}><strong>{row.combined}</strong></td>
+                      <td className={metricClass("max", row.max)}>{row.max}</td>
+                      <td><button type="button" className={`analysis-grade-badge ${gradeClass(tier)}`} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)}>{tier}</button></td>
+                    </tr>;
+                  })}{!sortedCombinedRows.length && <tr><td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match the selected filter.</td></tr>}</tbody>
+                </table>
+              </div>
             </section>
             <div className="combined-right-column">
               <section className="analysis-panel combined-chart-panel"><div className="combined-panel-title"><div><h3>Grade Distribution</h3><p>Click a bar to filter the table by performance tier.</p></div><span><strong>{combinedRows.length}</strong> Students</span></div><div className="combined-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={TIERS.map((t) => ({ name: t, count: combinedCounts[t] }))} onClick={(state: any) => { const tier = state?.activeLabel as Tier | undefined; if (tier && TIERS.includes(tier)) setSelectedTier(selectedTier === tier ? null : tier); }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" fontSize={10} /><YAxis allowDecimals={false} fontSize={11} /><Tooltip /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{TIERS.map((t) => <Cell key={t} fill={COLORS[t]} cursor="pointer" opacity={!selectedTier || selectedTier === t ? 1 : .35} />)}</Bar></BarChart></ResponsiveContainer></div></section>
@@ -283,11 +305,13 @@ export default function SubjectAcademicPage() {
         .combined-table-wrap { min-height: 560px; max-height: 560px; }
         .combined-table-panel .analysis-table { table-layout: fixed; }
         .combined-table-panel .analysis-table th, .combined-table-panel .analysis-table td { white-space: nowrap; }
-        .combined-table-panel .analysis-table th:nth-child(1), .combined-table-panel .analysis-table td:nth-child(1) { width: 55px; }
-        .combined-table-panel .analysis-table th:nth-child(2), .combined-table-panel .analysis-table td:nth-child(2) { width: 28%; }
-        .combined-table-panel .analysis-table th:nth-child(3), .combined-table-panel .analysis-table td:nth-child(3), .combined-table-panel .analysis-table th:nth-child(4), .combined-table-panel .analysis-table td:nth-child(4), .combined-table-panel .analysis-table th:nth-child(5), .combined-table-panel .analysis-table td:nth-child(5), .combined-table-panel .analysis-table th:nth-child(6), .combined-table-panel .analysis-table td:nth-child(6) { width: 11%; }
-        .combined-table-panel .analysis-table th:nth-child(7), .combined-table-panel .analysis-table td:nth-child(7) { width: 16%; }
-        .combined-table-panel .analysis-table th:not(:nth-child(2)), .combined-table-panel .analysis-table td:not(:nth-child(2)) { text-align: center; }
+        .combined-table-panel .analysis-table th:nth-child(1), .combined-table-panel .analysis-table td:nth-child(1) { width: 8%; }
+        .combined-table-panel .analysis-table th:nth-child(2), .combined-table-panel .analysis-table td:nth-child(2) { width: 25%; }
+        .combined-table-panel .analysis-table th:nth-child(3), .combined-table-panel .analysis-table td:nth-child(3) { width: 17%; }
+        .combined-table-panel .analysis-table th:nth-child(4), .combined-table-panel .analysis-table td:nth-child(4), .combined-table-panel .analysis-table th:nth-child(5), .combined-table-panel .analysis-table td:nth-child(5), .combined-table-panel .analysis-table th:nth-child(6), .combined-table-panel .analysis-table td:nth-child(6), .combined-table-panel .analysis-table th:nth-child(7), .combined-table-panel .analysis-table td:nth-child(7) { width: 10%; }
+        .combined-table-panel .analysis-table th:nth-child(8), .combined-table-panel .analysis-table td:nth-child(8) { width: 10%; }
+        .combined-table-panel .analysis-table th:not(:nth-child(2)):not(:nth-child(3)), .combined-table-panel .analysis-table td:not(:nth-child(2)):not(:nth-child(3)) { text-align: center; }
+        .combined-table-panel .analysis-table th:nth-child(2), .combined-table-panel .analysis-table td:nth-child(2), .combined-table-panel .analysis-table th:nth-child(3), .combined-table-panel .analysis-table td:nth-child(3) { text-align: left; }
         .combined-right-column { display: grid; gap: 16px; }
         .combined-chart-panel { padding: 18px; }
         .combined-panel-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
@@ -298,8 +322,8 @@ export default function SubjectAcademicPage() {
         .combined-chart { height: 300px; margin-top: 10px; }
         .combined-tier-panel { padding: 18px; }
         .tier-mark { font-weight: 700; }
-        .tier-mark.excellent { color: #15966a !important; }
-        .tier-mark.good { color: #4d75d0 !important; }
+        .tier-mark.excellent { color: #4d75d0 !important; }
+        .tier-mark.good { color: #15966a !important; }
         .tier-mark.attention { color: #f59e0b !important; }
         .tier-mark.risk { color: #ef4444 !important; }
         .combined-hero .analysis-metric:nth-child(2), .summary-metric-grid .analysis-metric:nth-child(1) { border-top: 3px solid #4d75d0; }
