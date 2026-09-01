@@ -1,0 +1,83 @@
+name: Apply Combined UI Patch
+
+on:
+  push:
+    branches:
+      - ui/subject-analysis-at-risk-layout
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui/subject-analysis-at-risk-layout
+          fetch-depth: 1
+
+      - name: Patch source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('pages/subject-analysis/[subjectId]/academic.tsx')
+          s = path.read_text(encoding='utf-8')
+
+          controls = '<div className="combined-controls-bar"><div className="combined-control"><label htmlFor="combined-sort-field">Sort By</label><select id="combined-sort-field" value={combinedSort} onChange={(e) => setCombinedSort(e.target.value as CombinedSort)}><option value="combined">Combined (average)</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option><option value="max">Maximum score</option></select></div><div className="combined-control"><label htmlFor="combined-sort-order">Order</label><select id="combined-sort-order" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)}><option value="desc">High to Low</option><option value="asc">Low to High</option><option value="none">No Sort</option></select></div></div>'
+
+          s, n = re.subn(r'\n\s*<section className="combined-controls-bar">.*?</section>', '', s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('external controls not found')
+          marker = '<section className="analysis-panel analysis-table-panel combined-table-panel">\n'
+          if marker not in s:
+              raise SystemExit('table panel not found')
+          s = s.replace(marker, marker + '              ' + controls + '\n', 1)
+
+          s, n = re.subn(r'\n\s*<section className="analysis-panel combined-tier-panel">.*?</section>', '', s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('performance tiers card not found')
+
+          old_css_start = '        .combined-controls-bar { display: flex; justify-content: flex-end; align-items: flex-end; gap: 12px; margin: 0 0 18px; }'
+          css_start = s.find(old_css_start)
+          css_end = s.find('        .combined-right-column {', css_start)
+          if css_start < 0 or css_end < 0:
+              raise SystemExit('combined css block not found')
+          new_css = '''        .combined-controls-bar { display: flex; justify-content: flex-end; align-items: flex-end; gap: 12px; margin: 0 0 14px; padding: 12px; border: 1px solid #eef1f5; border-radius: 10px; background: #fafbfc; }
+        .combined-control { min-width: 180px; }
+        .combined-control label { display: block; margin-bottom: 7px; color: #667085; font-size: 11px; font-weight: 600; }
+        .combined-control select { width: 100%; height: 38px; border: 1px solid #d8e0ea; border-radius: 9px; background: #fff; color: #344054; padding: 0 12px; font-size: 13px; outline: none; box-sizing: border-box; }
+        .combined-control select:focus { border-color: #4b2e91; box-shadow: 0 0 0 2px rgba(75,46,145,.12); }
+        .combined-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, .85fr); gap: 16px; align-items: start; }
+        .combined-table-panel { min-width: 0; }
+        .combined-table-wrap { min-height: 560px; max-height: 560px; min-width: 0; overflow-x: hidden !important; overflow-y: auto; }
+        .combined-table-panel .analysis-table { table-layout: fixed; width: 100%; min-width: 0 !important; max-width: 100%; }
+        .combined-table-panel .analysis-table th, .combined-table-panel .analysis-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .combined-table-panel .analysis-table th:nth-child(1), .combined-table-panel .analysis-table td:nth-child(1) { width: 7%; }
+        .combined-table-panel .analysis-table th:nth-child(2), .combined-table-panel .analysis-table td:nth-child(2) { width: 24%; }
+        .combined-table-panel .analysis-table th:nth-child(3), .combined-table-panel .analysis-table td:nth-child(3) { width: 16%; }
+        .combined-table-panel .analysis-table th:nth-child(4), .combined-table-panel .analysis-table td:nth-child(4), .combined-table-panel .analysis-table th:nth-child(5), .combined-table-panel .analysis-table td:nth-child(5), .combined-table-panel .analysis-table th:nth-child(6), .combined-table-panel .analysis-table td:nth-child(6), .combined-table-panel .analysis-table th:nth-child(7), .combined-table-panel .analysis-table td:nth-child(7) { width: 10%; }
+        .combined-table-panel .analysis-table th:nth-child(8), .combined-table-panel .analysis-table td:nth-child(8) { width: 13%; }
+        .combined-table-panel .analysis-table th:not(:nth-child(2)):not(:nth-child(3)), .combined-table-panel .analysis-table td:not(:nth-child(2)):not(:nth-child(3)) { text-align: center; }
+        .combined-table-panel .analysis-table th:nth-child(2), .combined-table-panel .analysis-table td:nth-child(2), .combined-table-panel .analysis-table th:nth-child(3), .combined-table-panel .analysis-table td:nth-child(3) { text-align: left; }
+'''
+          s = s[:css_start] + new_css + s[css_end:]
+          s = s.replace('        .combined-tier-panel { padding: 18px; }\n', '', 1)
+          s = s.replace(' .academic-student-table { min-width: 760px; }', '', 1)
+          s = s.replace('.academic-student-table { min-width: 760px; }', '', 1)
+          s = s.replace('@media (max-width: 800px) { .combined-controls-bar { justify-content: flex-start; }', '@media (max-width: 800px) { .combined-controls-bar { justify-content: flex-start; flex-wrap: wrap; }', 1)
+
+          path.write_text(s, encoding='utf-8', newline='\n')
+          PY
+
+      - name: Commit source change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- 'pages/subject-analysis/[subjectId]/academic.tsx'
+          git diff --cached --check
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "fix: combined analysis UI"
+          git push origin HEAD:ui/subject-analysis-at-risk-layout
