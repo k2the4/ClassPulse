@@ -207,13 +207,6 @@ export default function CombinedMidsemPage() {
             </section>
 
             <div className="analysis-right-stack combined-right-stack">
-              <section className="analysis-panel academic-stats-panel">
-                <div className="academic-highest"><span>Highest Score</span><strong>{highest}</strong><p>{highestNames.join(", ") || "—"}</p></div>
-                <div className="academic-tier-grid">
-                  {TIERS.map((tier) => <button key={tier} type="button" className="academic-tier-card" onClick={() => setSelectedTier(selectedTier === tier ? null : tier)} style={{ borderColor: `${COLORS[tier]}55`, cursor: "pointer", boxShadow: selectedTier === tier ? `0 0 0 2px ${COLORS[tier]}33` : undefined }}><span>{tier}</span><strong style={{ color: COLORS[tier] }}>{counts[tier]}</strong></button>)}
-                </div>
-              </section>
-
               <section className="analysis-panel analysis-chart-panel">
                 <h3>Grade Distribution</h3>
                 <p>Click a bar to filter the student table by performance tier.</p>
@@ -240,24 +233,24 @@ export default function CombinedMidsemPage() {
       </main>
 
       <style jsx global>{`
-        .combined-content-grid { align-items: start; }
+        .combined-content-grid { align-items: start; min-width: 0; }
+        .analysis-table-panel { min-width: 0 !important; width: 100%; }
+        .combined-right-stack { min-width: 0; display: grid; gap: 16px; }
         .combined-controls-bar { display: flex; justify-content: flex-end; align-items: flex-end; gap: 12px; margin: 0 0 18px; }
         .combined-control { min-width: 190px; }
         .combined-control label { display: block; margin-bottom: 7px; color: #667085; font-size: 11px; font-weight: 600; }
         .combined-control select { width: 100%; height: 40px; border: 1px solid #d8e0ea; border-radius: 9px; background: #fff; color: #344054; padding: 0 12px; font-size: 13px; outline: none; }
         .combined-control select:focus { border-color: #4b2e91; box-shadow: 0 0 0 2px rgba(75,46,145,.12); }
-        .combined-table-wrap { min-height: 560px; max-height: 560px; overflow-x: hidden; overflow-y: auto; }
-        .combined-student-table { width: 100%; table-layout: fixed; }
+        .combined-table-wrap { min-height: 560px; max-height: 560px; width: 100%; min-width: 0; max-width: 100%; overflow-x: hidden !important; overflow-y: auto; }
+        .combined-student-table { width: 100% !important; min-width: 0 !important; max-width: 100%; table-layout: fixed; }
         .combined-student-table .combined-sno-col { width: 9%; }
         .combined-student-table .combined-name-col { width: 35%; }
         .combined-student-table .combined-midsem-col { width: 14%; }
         .combined-student-table .combined-grade-col { width: 14%; }
-        .combined-student-table th, .combined-student-table td { min-width: 0; }
-        .combined-student-table th, .combined-student-table td { overflow: hidden; text-overflow: ellipsis; }
-        .combined-student-table .student-cell { min-width: 0; }
-        .combined-student-table .combined-student-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .combined-student-table th, .combined-student-table td { min-width: 0 !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+        .combined-student-table .student-cell { min-width: 0; max-width: 100%; }
+        .combined-student-table .combined-student-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .combined-table-panel .analysis-table th:not(:nth-child(2)), .combined-table-panel .analysis-table td:not(:nth-child(2)) { text-align: center; }
-        .combined-right-stack { display: grid; gap: 16px; }
         .combined-chart { height: 250px; }
         @media (max-width: 1100px) { .combined-controls-bar { justify-content: flex-start; } .combined-table-wrap { min-height: 480px; max-height: 480px; } }
         @media (max-width: 650px) { .combined-controls-bar { flex-direction: column; align-items: stretch; } .combined-control { width: 100%; } }
