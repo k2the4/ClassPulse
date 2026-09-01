@@ -12,7 +12,7 @@ type SortOrder = "desc" | "asc" | "none";
 
 const MAX = 30;
 const TIERS: Tier[] = ["Excellent", "Good", "Needs Attention", "Critical Risk"];
-const COLORS: Record<Tier, string> = { Excellent: "#15966a", Good: "#4d75d0", "Needs Attention": "#f59e0b", "Critical Risk": "#ef4444" };
+const COLORS: Record<Tier, string> = { Excellent: "#4d75d0", Good: "#15966a", "Needs Attention": "#f59e0b", "Critical Risk": "#ef4444" };
 const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const tierFor = (marks: number): Tier => { const p = (marks / MAX) * 100; if (p >= 80) return "Excellent"; if (p >= 60) return "Good"; if (p >= 40) return "Needs Attention"; return "Critical Risk"; };
@@ -67,14 +67,24 @@ export default function CombinedMidsemPage() {
     return result;
   }, [rows]);
 
-  const filteredRows = useMemo(() => selectedTier ? rows.filter((row) => tierFor(row.combined) === selectedTier) : rows, [rows, selectedTier]);
+  const metricValue = (row: typeof rows[number], field: SortField) => {
+    if (field === "midsem1") return row.first;
+    if (field === "midsem2") return row.second;
+    if (field === "max") return row.max;
+    return row.combined;
+  };
+  const activeGradeField: SortField = sortOrder === "none" ? "combined" : sortField;
+  const filteredRows = useMemo(
+    () => selectedTier ? rows.filter((row) => tierFor(metricValue(row, activeGradeField)) === selectedTier) : rows,
+    [rows, selectedTier, activeGradeField]
+  );
 
   const sortedRows = useMemo(() => {
     if (sortOrder === "none") return [...filteredRows];
     return [...filteredRows].sort((a, b) => {
-      const value = (row: typeof a) => sortField === "midsem1" ? row.first : sortField === "midsem2" ? row.second : sortField === "max" ? row.max : row.combined;
-      const difference = value(a) - value(b);
-      return sortOrder === "asc" ? difference : -difference;
+      const difference = metricValue(a, sortField) - metricValue(b, sortField);
+      if (difference !== 0) return sortOrder === "asc" ? difference : -difference;
+      return a.name.localeCompare(b.name);
     });
   }, [filteredRows, sortField, sortOrder]);
 
@@ -167,15 +177,27 @@ export default function CombinedMidsemPage() {
                 </div>
               </div>
               <div className="analysis-table-wrap combined-table-wrap">
-                <table className="analysis-table">
-                  <thead><tr><th>Rank</th><th>Student</th><th>Midsem 1</th><th>Midsem 2</th><th>Combined</th><th>Grade</th></tr></thead>
+                <table className="analysis-table combined-student-table">
+                  <colgroup>
+                    <col className="combined-sno-col" />
+                    <col className="combined-name-col" />
+                    <col className="combined-midsem-col" />
+                    <col className="combined-midsem-col" />
+                    <col className="combined-midsem-col" />
+                    <col className="combined-grade-col" />
+                  </colgroup>
+                  <thead><tr><th>{sortOrder === "none" ? "S.No." : "Rank"}</th><th>Student</th><th>Midsem 1</th><th>Midsem 2</th><th>Combined</th><th>Grade</th></tr></thead>
                   <tbody>
                     {sortedRows.map((row, index) => {
-                      const tier = tierFor(row.combined);
+                      const tier = tierFor(metricValue(row, activeGradeField));
+                      const sortedColor = sortOrder !== "none" ? COLORS[tier] : undefined;
+                      const serial = sortOrder === "none" ? rows.findIndex((item) => item.enrollmentNo === row.enrollmentNo) + 1 : index + 1;
                       return <tr key={row.enrollmentNo}>
-                        <td>{sortOrder === "none" ? rankRows.findIndex((item) => item.enrollmentNo === row.enrollmentNo) + 1 : index + 1}</td>
-                        <td><span className="student-cell"><span className="student-avatar">{initials(row.name)}</span>{row.name}</span></td>
-                        <td>{row.first}</td><td>{row.second}</td><td><strong>{row.combined}</strong></td>
+                        <td>{serial}</td>
+                        <td><span className="student-cell"><span className="student-avatar">{initials(row.name)}</span><span className="combined-student-name">{row.name}</span></span></td>
+                        <td style={sortField === "midsem1" && sortOrder !== "none" ? { color: sortedColor, fontWeight: 700 } : undefined}>{row.first}</td>
+                        <td style={sortField === "midsem2" && sortOrder !== "none" ? { color: sortedColor, fontWeight: 700 } : undefined}>{row.second}</td>
+                        <td style={sortField === "combined" && sortOrder !== "none" ? { color: sortedColor, fontWeight: 700 } : undefined}>{row.combined}</td>
                         <td><button type="button" className={`analysis-grade-badge ${tier === "Excellent" ? "excellent" : tier === "Good" ? "good" : tier === "Needs Attention" ? "attention" : "risk"}`} onClick={() => setSelectedTier(selectedTier === tier ? null : tier)}>{tier}</button></td>
                       </tr>;
                     })}
@@ -224,7 +246,16 @@ export default function CombinedMidsemPage() {
         .combined-control label { display: block; margin-bottom: 7px; color: #667085; font-size: 11px; font-weight: 600; }
         .combined-control select { width: 100%; height: 40px; border: 1px solid #d8e0ea; border-radius: 9px; background: #fff; color: #344054; padding: 0 12px; font-size: 13px; outline: none; }
         .combined-control select:focus { border-color: #4b2e91; box-shadow: 0 0 0 2px rgba(75,46,145,.12); }
-        .combined-table-wrap { min-height: 560px; max-height: 560px; }
+        .combined-table-wrap { min-height: 560px; max-height: 560px; overflow-x: hidden; overflow-y: auto; }
+        .combined-student-table { width: 100%; table-layout: fixed; }
+        .combined-student-table .combined-sno-col { width: 9%; }
+        .combined-student-table .combined-name-col { width: 35%; }
+        .combined-student-table .combined-midsem-col { width: 14%; }
+        .combined-student-table .combined-grade-col { width: 14%; }
+        .combined-student-table th, .combined-student-table td { min-width: 0; }
+        .combined-student-table th, .combined-student-table td { overflow: hidden; text-overflow: ellipsis; }
+        .combined-student-table .student-cell { min-width: 0; }
+        .combined-student-table .combined-student-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .combined-table-panel .analysis-table th:not(:nth-child(2)), .combined-table-panel .analysis-table td:not(:nth-child(2)) { text-align: center; }
         .combined-right-stack { display: grid; gap: 16px; }
         .combined-chart { height: 250px; }
