@@ -1,5 +1,5 @@
 .academic-content-grid {
-  grid-template-columns: minmax(0, 1.5fr) minmax(340px, 1fr) !important;
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.72fr) !important;
 }
 
 .academic-content-grid .analysis-table-panel {
@@ -19,6 +19,65 @@
 .academic-content-grid .analysis-table-panel th:first-child,
 .academic-content-grid .analysis-table-panel td:first-child {
   width: 24%;
+}
+
+/* ClassPulse grade color standard: Excellent = blue, Good = green. */
+:root {
+  --grade-excellent: #4d75d0;
+  --grade-good: #15966a;
+  --grade-needs-attention: #f59e0b;
+  --grade-critical-risk: #ef4444;
+}
+
+.excellent,
+.grade-excellent,
+.tier-excellent {
+  color: var(--grade-excellent) !important;
+  border-color: var(--grade-excellent) !important;
+}
+
+.good,
+.grade-good,
+.tier-good {
+  color: var(--grade-good) !important;
+  border-color: var(--grade-good) !important;
+}
+
+.attention,
+.grade-attention,
+.tier-attention,
+.needs-attention,
+.grade-needs-attention,
+.tier-needs-attention {
+  color: var(--grade-needs-attention) !important;
+  border-color: var(--grade-needs-attention) !important;
+}
+
+.risk,
+.grade-risk,
+.tier-risk,
+.critical-risk,
+.grade-critical-risk,
+.tier-critical-risk {
+  color: var(--grade-critical-risk) !important;
+  border-color: var(--grade-critical-risk) !important;
+}
+
+/* The academic tier cards use the same semantic classes. */
+.academic-tier-card.excellent,
+.academic-tier-card.good,
+.academic-tier-card.attention,
+.academic-tier-card.risk {
+  background: rgba(255, 255, 255, 0.52) !important;
+}
+
+/* Swap the legacy academic chart fills so its visual order matches the standard. */
+.recharts-pie-sector[fill="#15966a"] {
+  fill: var(--grade-excellent) !important;
+}
+
+.recharts-pie-sector[fill="#4d75d0"] {
+  fill: var(--grade-good) !important;
 }
 
 @media (max-width: 1100px) {
