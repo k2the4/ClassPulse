@@ -47,9 +47,55 @@ const COMBINED_CSS = `
   .summary-table-wrap .analysis-table th:nth-child(4), .summary-table-wrap .analysis-table td:nth-child(4) { width: 13% !important; text-align: center !important; }
   .summary-table-wrap .analysis-table th:nth-child(5), .summary-table-wrap .analysis-table td:nth-child(5) { width: 15% !important; text-align: center !important; }
   .summary-table-wrap .summary-index-cell { text-align: center !important; font-variant-numeric: tabular-nums; }
-  @media (max-width: 1200px) { .combined-layout { grid-template-columns: 1fr !important; } }
-  @media (max-width: 800px) { .combined-controls-proxy { justify-content: flex-start; flex-wrap: wrap; } .combined-controls-proxy .combined-control { min-width: 0; flex: 1 1 180px; } }
-  @media (max-width: 600px) { .combined-controls-proxy { flex-direction: column; align-items: stretch; } .combined-controls-proxy .combined-control { width: 100%; } .summary-filter-title { align-items: stretch !important; } .summary-filter-actions { justify-content: flex-end; } }
+
+  /* Subject Academic: mirror the Class Academic page structure while keeping subject data. */
+  .subject-academic-hero { display: grid !important; grid-template-columns: minmax(220px, 1.05fr) repeat(4, minmax(0, 1fr)) !important; gap: 14px !important; align-items: stretch !important; }
+  .subject-academic-hero .analysis-hero-copy { align-self: center !important; }
+  .subject-academic-hero .analysis-metric,
+  .subject-academic-hero .academic-highest { min-width: 0 !important; min-height: 104px !important; box-sizing: border-box !important; border: 1px solid #e6e5e2 !important; border-top-width: 3px !important; border-radius: 16px !important; background: #fff !important; padding: 16px 18px !important; box-shadow: 0 8px 28px rgba(31,35,49,.04) !important; }
+  .subject-academic-hero .analysis-metric:nth-child(2) { border-top-color: #2563eb !important; }
+  .subject-academic-hero .analysis-metric:nth-child(3) { border-top-color: #15966a !important; }
+  .subject-academic-hero .academic-highest { border-top-color: #f59e0b !important; }
+  .subject-academic-hero .analysis-metric:nth-child(5) { border-top-color: #7c3aed !important; }
+  .subject-academic-hero .analysis-metric-label,
+  .subject-academic-hero .academic-highest > span { display: block !important; color: #6f7890 !important; font-size: 11px !important; font-weight: 600 !important; }
+  .subject-academic-hero .analysis-metric-value-row strong,
+  .subject-academic-hero .academic-highest > strong { display: block !important; margin-top: 5px !important; color: #17223b !important; font-size: 25px !important; line-height: 1.05 !important; font-weight: 800 !important; letter-spacing: -1px !important; }
+  .subject-academic-hero .analysis-metric-detail,
+  .subject-academic-hero .academic-highest > p { display: block !important; margin-top: 6px !important; color: #98a2b3 !important; font-size: 10px !important; line-height: 1.25 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+
+  .subject-academic-tier-panel { padding: 20px !important; }
+  .subject-academic-tier-panel .academic-highest { display: none !important; }
+  .subject-academic-tier-panel .academic-tier-heading { display: flex !important; align-items: center !important; justify-content: space-between !important; margin-bottom: 14px !important; }
+  .subject-academic-tier-panel .academic-tier-heading h3 { margin: 0 !important; font-size: 14px !important; color: #17223b !important; }
+  .subject-academic-tier-panel .academic-tier-heading p { margin: 4px 0 0 !important; color: #98a2b3 !important; font-size: 10px !important; }
+  .subject-academic-tier-panel .academic-tier-count { color: #98a2b3 !important; font-size: 10px !important; }
+  .subject-academic-tier-panel .academic-tier-grid { display: flex !important; flex-direction: column !important; gap: 8px !important; }
+  .subject-academic-tier-panel .academic-tier-card { width: 100% !important; min-height: 44px !important; box-sizing: border-box !important; display: flex !important; align-items: center !important; justify-content: space-between !important; border: 1px solid #edf0f4 !important; border-radius: 11px !important; background: #fff !important; padding: 10px 12px !important; }
+  .subject-academic-tier-panel .academic-tier-card span { color: #344054 !important; font-size: 11px !important; font-weight: 600 !important; }
+  .subject-academic-tier-panel .academic-tier-card strong { font-size: 12px !important; font-weight: 800 !important; }
+  .subject-academic-tier-panel .subject-tier-bar { display: flex !important; height: 7px !important; overflow: hidden !important; margin-top: 18px !important; border-radius: 999px !important; background: #f0f1f4 !important; }
+  .subject-academic-tier-panel .subject-tier-bar span { display: block !important; height: 100% !important; }
+  .subject-academic-hidden-chart { display: none !important; }
+  .subject-academic-ranks { margin-top: 0 !important; }
+  .subject-academic-ranks .analysis-panel { min-width: 0 !important; }
+  .subject-academic-ranks .academic-rank-row { min-width: 0 !important; }
+
+  @media (max-width: 1200px) {
+    .subject-academic-hero { grid-template-columns: minmax(190px, 1fr) repeat(2, minmax(0, 1fr)) !important; }
+    .subject-academic-hero .academic-highest { grid-column: 2 !important; }
+    .subject-academic-hero .analysis-metric:nth-child(5) { grid-column: 3 !important; }
+  }
+  @media (max-width: 800px) {
+    .subject-academic-hero { grid-template-columns: 1fr 1fr !important; }
+    .subject-academic-hero .analysis-hero-copy { grid-column: 1 / -1 !important; }
+    .subject-academic-hero .academic-highest { grid-column: auto !important; }
+    .subject-academic-hero .analysis-metric:nth-child(5) { grid-column: auto !important; }
+  }
+  @media (max-width: 600px) {
+    .subject-academic-hero { grid-template-columns: 1fr !important; }
+    .subject-academic-hero .analysis-hero-copy { grid-column: auto !important; }
+  }
 `;
 
 function installCombinedUiFix() {
@@ -180,6 +226,54 @@ function syncSummaryTable() {
   });
 }
 
+function installSubjectAcademicUiFix() {
+  const hero = document.querySelector(".analysis-hero") as HTMLElement | null;
+  const highest = document.querySelector(".academic-highest") as HTMLElement | null;
+  const statsPanel = document.querySelector(".academic-stats-panel") as HTMLElement | null;
+  const chartPanel = document.querySelector(".analysis-chart-panel") as HTMLElement | null;
+  const rankGrid = document.querySelector(".academic-rank-grid") as HTMLElement | null;
+
+  if (!hero || !highest || !statsPanel) return;
+
+  hero.classList.add("subject-academic-hero");
+  if (highest.parentElement !== hero) hero.appendChild(highest);
+
+  statsPanel.classList.add("subject-academic-tier-panel");
+  if (!statsPanel.querySelector(".academic-tier-heading")) {
+    const heading = document.createElement("div");
+    heading.className = "academic-tier-heading";
+    heading.innerHTML = `<div><h3>Performance Tier</h3><p>Click a tier to filter the data sheet.</p></div><span class="academic-tier-count"></span>`;
+    statsPanel.prepend(heading);
+  }
+
+  const count = statsPanel.querySelector(".academic-tier-count") as HTMLElement | null;
+  const tierCards = Array.from(statsPanel.querySelectorAll(".academic-tier-card")) as HTMLElement[];
+  if (count) {
+    const visibleCount = tierCards.reduce((sum, card) => sum + Number(card.querySelector("strong")?.textContent || 0), 0);
+    count.textContent = `${visibleCount} Students`;
+  }
+
+  let bar = statsPanel.querySelector(".subject-tier-bar") as HTMLElement | null;
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.className = "subject-tier-bar";
+    statsPanel.appendChild(bar);
+  }
+  bar.innerHTML = "";
+  const tierColors = ["#4d75d0", "#15966a", "#f59e0b", "#ef4444"];
+  tierCards.forEach((card, index) => {
+    const value = Number(card.querySelector("strong")?.textContent || 0);
+    const total = tierCards.reduce((sum, item) => sum + Number(item.querySelector("strong")?.textContent || 0), 0);
+    const segment = document.createElement("span");
+    segment.style.width = `${total ? (value / total) * 100 : 0}%`;
+    segment.style.background = tierColors[index];
+    bar?.appendChild(segment);
+  });
+
+  if (chartPanel) chartPanel.classList.add("subject-academic-hidden-chart");
+  if (rankGrid) rankGrid.classList.add("subject-academic-ranks");
+}
+
 export default function CombinedAnalysisFixedPage() {
   useEffect(() => {
     let frame = 0;
@@ -189,6 +283,7 @@ export default function CombinedAnalysisFixedPage() {
         installCombinedUiFix();
         installSummaryUiFix();
         syncSummaryTable();
+        installSubjectAcademicUiFix();
       });
     };
 
