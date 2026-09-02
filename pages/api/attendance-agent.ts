@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 import { fetchClassRawData } from "../../lib/googleSheetsClass";
+import { writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
 
 const TIME_SLOTS = [
   "8 to 9",
@@ -23,6 +24,12 @@ function toDate(value: string) {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+function makeSessionKey(date: string, subjectCode: string, slot: string) {
+  const compactSlot = slot.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase();
+  const compactCode = subjectCode.replace(/[^a-z0-9]+/gi, "").toUpperCase();
+  return `ATT-${date.replace(/-/g, "")}-${compactCode}-${compactSlot}`;
+}
+
 async function canManageSubject(userId: string, role: string, subjectId: string) {
   if (role === "ADMIN") return true;
   return !!(await prisma.assignment.findFirst({ where: { teacherId: userId, subjectId } }));
@@ -37,13 +44,9 @@ async function orderStudentsBySheet(sectionId: string, students: Array<{ id: str
     const sheetRank = new Map<string, number>();
     let nextRank = 1;
 
-    // Monthly rows are kept in the same order as the Google Sheet. Use the
-    // first occurrence of each enrollment number as the sheet's serial order.
     for (const month of raw.months) {
       for (const row of month.rows) {
-        if (!sheetRank.has(row.enrollmentNo)) {
-          sheetRank.set(row.enrollmentNo, nextRank++);
-        }
+        if (!sheetRank.has(row.enrollmentNo)) sheetRank.set(row.enrollmentNo, nextRank++);
       }
     }
 
@@ -58,7 +61,6 @@ async function orderStudentsBySheet(sectionId: string, students: Array<{ id: str
       return a.enrollmentNo.localeCompare(b.enrollmentNo, undefined, { numeric: true });
     });
   } catch (error) {
-    // Attendance should still work if the sheet is temporarily unavailable.
     console.error("Could not read Google Sheet student order:", error);
     return students;
   }
@@ -70,6 +72,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const userId = (session.user as any).id as string;
   const role = (session.user as any).role as string;
+  const teacherName = ((session.user as any).name as string | undefined) || "Teacher";
 
   if (req.method === "GET") {
     const sectionId = typeof req.query.sectionId === "string" ? req.query.sectionId : "";
@@ -118,11 +121,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     return res.status(200).json({
-      section: {
-        id: section.id,
-        label: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`,
-        strength: section.strength,
-      },
+      section: { id: section.id, label: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`, strength: section.strength },
       subjects: visibleSubjects.map((subject) => ({ id: subject.id, name: subject.name, code: subject.code, type: subject.type })),
       students: orderedStudents.map((student, index) => ({ id: student.id, enrollmentNo: student.enrollmentNo, name: student.name, serialNo: index + 1 })),
       sessions: sessions.map((item) => ({
@@ -147,7 +146,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: "sectionId, subjectId, date and slot are required" });
   }
 
-  if (!TIME_SLOTS.includes(slot.trim() as (typeof TIME_SLOTS)[number])) {
+  const normalizedSlot = slot.trim();
+  if (!TIME_SLOTS.includes(normalizedSlot as (typeof TIME_SLOTS)[number])) {
     return res.status(400).json({ error: "Choose one of the available class time slots" });
   }
 
@@ -159,17 +159,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ error: "You are not assigned to this subject" });
   }
 
-  const subject = await prisma.subject.findUnique({ where: { id: subjectId }, select: { sectionId: true } });
+  const subject = await prisma.subject.findUnique({
+    where: { id: subjectId },
+    select: {
+      sectionId: true,
+      name: true,
+      code: true,
+    },
+  });
   if (!subject || subject.sectionId !== sectionId) return res.status(400).json({ error: "Subject does not belong to this class" });
 
-  const students = await prisma.student.findMany({ where: { sectionId }, select: { id: true } });
+  const section = await prisma.section.findUnique({
+    where: { id: sectionId },
+    select: {
+      name: true,
+      sheetLink: { select: { sheetId: true } },
+      class: { select: { semester: true, department: { select: { name: true } } } },
+    },
+  });
+  if (!section) return res.status(404).json({ error: "Class not found" });
+  if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
+
+  const students = await prisma.student.findMany({
+    where: { sectionId },
+    select: { id: true, enrollmentNo: true },
+  });
   const studentIds = new Set(students.map((student) => student.id));
   const presentIds = [...new Set(presentStudentIds as string[])];
   if (presentIds.some((id) => !studentIds.has(id))) return res.status(400).json({ error: "Attendance contains a student outside this class" });
 
   const dateValue = toDate(date);
   const existing = await prisma.attendanceSession.findUnique({
-    where: { sectionId_subjectId_date_slot: { sectionId, subjectId, date: dateValue, slot: slot.trim() } },
+    where: { sectionId_subjectId_date_slot: { sectionId, subjectId, date: dateValue, slot: normalizedSlot } },
     select: { id: true, teacherId: true },
   });
 
@@ -177,9 +198,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ error: "This attendance session belongs to another teacher" });
   }
 
-  const sessionRow = existing
-    ? await prisma.attendanceSession.update({ where: { id: existing.id }, data: { records: { deleteMany: {}, create: students.map((student) => ({ studentId: student.id, present: presentIds.includes(student.id) })) } } })
-    : await prisma.attendanceSession.create({ data: { sectionId, subjectId, teacherId: userId, date: dateValue, slot: slot.trim(), records: { create: students.map((student) => ({ studentId: student.id, present: presentIds.includes(student.id) })) } } });
+  const sessionKey = makeSessionKey(date, subject.code, normalizedSlot);
 
-  return res.status(200).json({ ok: true, sessionId: sessionRow.id, present: presentIds.length, total: students.length });
+  // Google Sheets is the Teacher Diary/source record. Write it first; if the
+  // sheet cannot be updated, do not create a database attendance record that
+  // would leave the two sources out of sync.
+  try {
+    await writeTeacherDiaryAttendance({
+      spreadsheetId: section.sheetLink.sheetId,
+      subjectCode: subject.code,
+      subjectName: subject.name,
+      classLabel: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`,
+      teacherName,
+      date,
+      slot: normalizedSlot,
+      sessionKey,
+      students: students.map((student) => ({
+        enrollmentNo: student.enrollmentNo,
+        present: presentIds.includes(student.id),
+      })),
+    });
+  } catch (error) {
+    console.error("Teacher Diary update failed:", error);
+    const message = error instanceof Error ? error.message : "Unknown Google Sheets error";
+    return res.status(502).json({ error: `Attendance was not saved because Teacher Diary could not be updated. ${message}` });
+  }
+
+  const sessionRow = existing
+    ? await prisma.attendanceSession.update({
+        where: { id: existing.id },
+        data: {
+          records: {
+            deleteMany: {},
+            create: students.map((student) => ({ studentId: student.id, present: presentIds.includes(student.id) })),
+          },
+        },
+      })
+    : await prisma.attendanceSession.create({
+        data: {
+          sectionId,
+          subjectId,
+          teacherId: userId,
+          date: dateValue,
+          slot: normalizedSlot,
+          records: {
+            create: students.map((student) => ({ studentId: student.id, present: presentIds.includes(student.id) })),
+          },
+        },
+      });
+
+  return res.status(200).json({ ok: true, sessionId: sessionRow.id, present: presentIds.length, total: students.length, sheetUpdated: true });
 }
