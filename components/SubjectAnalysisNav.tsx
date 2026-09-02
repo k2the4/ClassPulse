@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { BarChart3, FileText, GraduationCap, LayoutDashboard } from "lucide-react";
@@ -10,30 +9,12 @@ const items = [
   { label: "Academic", icon: GraduationCap, path: "academic" },
   { label: "Overall", icon: LayoutDashboard, path: "overall" },
   { label: "Student Report", icon: FileText, path: "students" },
-  { label: "Summary", icon: BarChart3, path: "summary" },
 ];
 
 export default function SubjectAnalysisNav({ subjectId }: Props) {
   const router = useRouter();
   const pathname = router.pathname || "";
   const asPath = (router.asPath || "").split("?")[0];
-
-  useEffect(() => {
-    if (!pathname.endsWith("/academic")) return;
-
-    const handleSummaryClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const button = target?.closest(".analysis-view-switch button") as HTMLButtonElement | null;
-      if (!button || button.textContent?.trim() !== "Summary") return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      router.push(`/subject-analysis/${subjectId}/summary`);
-    };
-
-    document.addEventListener("click", handleSummaryClick, true);
-    return () => document.removeEventListener("click", handleSummaryClick, true);
-  }, [pathname, router, subjectId]);
 
   return (
     <nav className="subject-analysis-nav" aria-label="Subject analysis sections">
