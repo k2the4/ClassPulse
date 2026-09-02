@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../lib/authOptions";
 import { prisma } from "../lib/prisma";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import { BarChart3, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, LayoutDashboard, LogOut, Trash2, UserRoundPlus } from "lucide-react";
 
@@ -53,6 +53,8 @@ export default function AttendanceAgent({ teacherName, sections, initialSectionI
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState("");
+  const loadRequestRef = useRef(0);
+  const viewRef = useRef({ sectionId: initialSectionId, date: today() });
 
   const selectedSubject = subjects.find((subject) => subject.id === subjectId);
   const selectedSession = sessions.find((session) => session.subjectId === subjectId && session.slot === slot);
@@ -61,21 +63,29 @@ export default function AttendanceAgent({ teacherName, sections, initialSectionI
   const presentCount = students.filter((student) => present.has(student.id)).length;
 
   async function loadSection(nextSectionId: string, nextDate = date) {
+    const requestId = ++loadRequestRef.current;
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/attendance-agent?sectionId=${encodeURIComponent(nextSectionId)}&date=${encodeURIComponent(nextDate)}`);
+      const response = await fetch(`/api/attendance-agent?sectionId=${encodeURIComponent(nextSectionId)}&date=${encodeURIComponent(nextDate)}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load class");
+      if (requestId !== loadRequestRef.current) return;
       const result = data as ApiData;
       setStudents(result.students); setSubjects(result.subjects); setSessions(result.sessions);
       setSubjectId((current) => result.subjects.some((subject) => subject.id === current) ? current : result.subjects[0]?.id || "");
       setPresent(new Set(result.students.map((student) => student.id))); setEditingId("");
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not load class"); }
-    finally { setLoading(false); }
+    } catch (e) {
+      if (requestId !== loadRequestRef.current) return;
+      setError(e instanceof Error ? e.message : "Could not load class");
+    } finally {
+      if (requestId === loadRequestRef.current) setLoading(false);
+    }
   }
 
   async function loadDate(nextDate: string) {
-    setDate(nextDate); await loadSection(sectionId, nextDate);
+    viewRef.current.date = nextDate;
+    setDate(nextDate); setSessions([]); setEditingId(""); setSlot(""); setMessage(""); setError("");
+    await loadSection(viewRef.current.sectionId, nextDate);
   }
 
   useEffect(() => { loadSection(initialSectionId, date); // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,9 +103,10 @@ export default function AttendanceAgent({ teacherName, sections, initialSectionI
     if (!session.canEdit) return;
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/attendance-agent?sectionId=${encodeURIComponent(sectionId)}&date=${encodeURIComponent(date)}&sessionId=${encodeURIComponent(session.id)}`);
+      const response = await fetch(`/api/attendance-agent?sectionId=${encodeURIComponent(sectionId)}&date=${encodeURIComponent(date)}&sessionId=${encodeURIComponent(session.id)}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load attendance");
+      if (viewRef.current.sectionId !== sectionId || viewRef.current.date !== date) return;
       setSubjectId(session.subjectId); setSlot(session.slot); setPresent(new Set(data.presentStudentIds)); setEditingId(session.id); setMessage("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load attendance"); }
@@ -107,27 +118,34 @@ export default function AttendanceAgent({ teacherName, sections, initialSectionI
     const confirmed = window.confirm(`Delete attendance for ${session.subjectName} (${session.subjectCode}) at ${session.slot}?\n\nThis will permanently remove this attendance session from ClassPulse and the Teacher Diary. This action cannot be undone.`);
     if (!confirmed) return;
 
+    const deletedSectionId = sectionId;
+    const deletedDate = date;
     setDeletingId(session.id); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/attendance-agent", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionId, sessionId: session.id }) });
+      const response = await fetch("/api/attendance-agent", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionId: deletedSectionId, sessionId: session.id }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not delete attendance");
+      setSessions((current) => current.filter((item) => item.id !== session.id));
       if (editingId === session.id) setEditingId("");
       setMessage(`Attendance deleted — ${session.subjectName} · ${session.slot}.`);
-      await loadSection(sectionId, date);
+      if (viewRef.current.sectionId === deletedSectionId && viewRef.current.date === deletedDate) {
+        await loadSection(deletedSectionId, deletedDate);
+      }
     } catch (e) { setError(e instanceof Error ? e.message : "Could not delete attendance"); }
     finally { setDeletingId(""); }
   }
 
   async function submit() {
     if (!subjectId || !slot || students.length === 0) { setError("Choose a subject and time slot before saving."); return; }
+    const savedSectionId = sectionId;
+    const savedDate = date;
     setSaving(true); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/attendance-agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionId, subjectId, date, slot, presentStudentIds: [...present] }) });
+      const response = await fetch("/api/attendance-agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionId: savedSectionId, subjectId, date: savedDate, slot, presentStudentIds: [...present] }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save attendance");
       setMessage(`Attendance saved — ${data.present} present, ${data.total - data.present} absent.`); setEditingId("");
-      await loadSection(sectionId, date);
+      if (viewRef.current.sectionId === savedSectionId && viewRef.current.date === savedDate) await loadSection(savedSectionId, savedDate);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save attendance"); }
     finally { setSaving(false); }
   }
@@ -137,7 +155,7 @@ export default function AttendanceAgent({ teacherName, sections, initialSectionI
     <div className="mt-8"><p className="text-sm font-semibold text-[#5b4ee6]">Attendance Agent</p><h1 className="mt-2 text-[34px] font-extrabold tracking-[-1.4px] sm:text-[40px]">Take attendance</h1><p className="mt-2 text-sm leading-6 text-[#6f7890]">Record attendance for a class session. Present students are marked LA = 1 and every student in the session receives LH = 1.</p></div>
 
     <section className="mt-8 rounded-2xl border border-[#e5e4e1] bg-white p-6 shadow-[0_8px_30px_rgba(31,35,49,0.05)] sm:p-8">
-      <div className="grid gap-5 md:grid-cols-2"><Field label="Class"><div className="relative"><select value={sectionId} onChange={(e) => { setSectionId(e.target.value); loadSection(e.target.value); }} className="input"><option value="">Select class</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.label}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field><Field label="Date"><input type="date" value={date} onChange={(e) => loadDate(e.target.value)} className="input"/></Field><Field label="Subject"><div className="relative"><select value={subjectId} onChange={(e) => { setSubjectId(e.target.value); setEditingId(""); }} className="input"><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name} ({subject.code})</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field><Field label="Time slot"><div className="relative"><select value={slot} onChange={(e) => { setSlot(e.target.value); setEditingId(""); }} className="input"><option value="">Select time slot</option>{TIME_SLOTS.map((timeSlot) => <option key={timeSlot} value={timeSlot}>{timeSlot}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field></div>
+      <div className="grid gap-5 md:grid-cols-2"><Field label="Class"><div className="relative"><select value={sectionId} onChange={(e) => { const nextSectionId = e.target.value; viewRef.current.sectionId = nextSectionId; setSectionId(nextSectionId); setSessions([]); setEditingId(""); setSlot(""); setMessage(""); setError(""); loadSection(nextSectionId, date); }} className="input"><option value="">Select class</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.label}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field><Field label="Date"><input type="date" value={date} onChange={(e) => loadDate(e.target.value)} className="input"/></Field><Field label="Subject"><div className="relative"><select value={subjectId} onChange={(e) => { setSubjectId(e.target.value); setEditingId(""); }} className="input"><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name} ({subject.code})</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field><Field label="Time slot"><div className="relative"><select value={slot} onChange={(e) => { setSlot(e.target.value); setEditingId(""); }} className="input"><option value="">Select time slot</option>{TIME_SLOTS.map((timeSlot) => <option key={timeSlot} value={timeSlot}>{timeSlot}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field></div>
       {selectedSubject && <div className="mt-5 flex items-center gap-3 rounded-xl bg-[#faf9ff] px-4 py-3 text-sm"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#eeeaff] text-[#5842e8]"><BookOpen size={17}/></span><div><p className="font-semibold">{selectedSubject.name}</p><p className="text-xs text-[#7a8295]">{selectedSubject.code} · {selectedSubject.type === "LAB" ? "Lab" : "Theory"}</p></div></div>}
     </section>
 
