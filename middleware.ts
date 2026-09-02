@@ -27,6 +27,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  const subjectAttendanceTrendMatch = pathname.match(/^\/subject-analysis\/([^/]+)\/attendance$/);
+  if (subjectAttendanceTrendMatch) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/subject-analysis-attendance-trend-fixed/${subjectAttendanceTrendMatch[1]}`;
+    return NextResponse.rewrite(url);
+  }
+
   const studentReportMatch = pathname.match(/^\/section-analysis\/([^/]+)\/students$/);
   if (studentReportMatch) {
     const url = request.nextUrl.clone();
@@ -57,6 +64,7 @@ export const config = {
     '/classes/:path*',
     '/admin/:path*',
     '/subject-analysis/:subjectId/academic',
+    '/subject-analysis/:subjectId/attendance',
     '/section-analysis/:sectionId/students',
     '/section-analysis/:sectionId/overall',
     '/section-analysis/:sectionId/attendance',
