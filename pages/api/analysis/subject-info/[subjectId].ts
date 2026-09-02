@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { prisma } from "../../../../../lib/prisma";
-import { requireSession, assertTeacherCanViewSubject } from "../../../../../lib/access";
+import { prisma } from "../../../../lib/prisma";
+import { requireSession, assertTeacherCanViewSubject } from "../../../../lib/access";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await requireSession(req, res);
