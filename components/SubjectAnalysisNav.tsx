@@ -9,6 +9,7 @@ const items = [
   { label: "Academic", icon: GraduationCap, path: "academic" },
   { label: "Overall", icon: LayoutDashboard, path: "overall" },
   { label: "Student Report", icon: FileText, path: "students" },
+  { label: "Summary", icon: BarChart3, path: "summary" },
 ];
 
 export default function SubjectAnalysisNav({ subjectId }: Props) {
