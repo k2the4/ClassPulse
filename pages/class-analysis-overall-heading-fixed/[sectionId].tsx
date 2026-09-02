@@ -50,9 +50,9 @@ function panel(text: string) {
 
 function metric(label: string, value: string, detail: string, color: string) {
   const el = document.createElement("section");
-  el.className = "rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm classpulse-overall-metric";
+  el.className = "rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm classpulse-overall-metric";
   el.style.borderTop = `3px solid ${color}`;
-  el.innerHTML = `<p class="text-[11px] text-slate-500">${esc(label)}</p><p class="mt-1 text-[25px] font-extrabold leading-tight text-slate-900">${esc(value)}</p><p class="mt-1 text-[10px] text-slate-400 truncate" title="${esc(detail)}">${esc(detail)}</p>`;
+  el.innerHTML = `<p class="classpulse-metric-label">${esc(label)}</p><p class="classpulse-metric-value">${esc(value)}</p><p class="classpulse-metric-detail" title="${esc(detail)}">${esc(detail)}</p>`;
   return el;
 }
 
@@ -117,14 +117,17 @@ function renderTable(rows: Row[]) {
   const head = table.querySelector("thead tr");
   const body = table.querySelector("tbody");
   if (!head || !body) return;
+  table.style.width = "100%";
+  table.style.tableLayout = "fixed";
+  table.style.minWidth = "0";
   const state = filterState();
   const lo = Math.min(state.lo, state.hi), hi = Math.max(state.lo, state.hi);
   const filtered = rows.filter((r) => r.average >= lo && r.average <= hi);
   const ordered = [...filtered].sort((a, b) => state.sort === "asc" ? a.average - b.average || a.name.localeCompare(b.name) : state.sort === "desc" ? b.average - a.average || a.name.localeCompare(b.name) : rows.indexOf(a) - rows.indexOf(b));
-  head.innerHTML = `<th class="text-center px-1 py-2">${state.sort === "none" ? "S.No." : "Rank"}</th><th class="text-left px-2 py-2">Student</th>${rows[0]?.marks.map((m) => `<th class="text-center px-1 py-2" title="${esc(m.subject.name)}">${esc(m.subject.code || m.subject.name)}</th>`).join("") || ""}<th class="text-center px-1 py-2">Total</th><th class="text-center px-1 py-2">Average</th><th class="text-center px-1 py-2">%AGE</th><th class="text-center px-1 py-2">Grade</th>`;
+  head.innerHTML = `<th class="text-center px-0.5 py-2 classpulse-sno">${state.sort === "none" ? "S.No." : "Rank"}</th><th class="text-left px-1 py-2">Student</th><th class="text-left px-1 py-2">Enrollment No.</th>${rows[0]?.marks.map((m) => `<th class="text-center px-0.5 py-2">${esc(m.subject.code || m.subject.name)}</th>`).join("") || ""}<th class="text-center px-0.5 py-2">Total</th><th class="text-center px-0.5 py-2">Average</th><th class="text-center px-0.5 py-2">Grade</th>`;
   body.innerHTML = ordered.map((r, i) => {
     const total = r.marks.reduce((s, m) => s + m.mark, 0);
-    return `<tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"><td class="text-center px-1 py-2 text-slate-500 tabular-nums">${i + 1}</td><td class="px-2 py-2 font-medium text-slate-800 truncate" title="${esc(r.name)}">${esc(r.name)}</td>${r.marks.map((m) => `<td class="text-center px-1 py-2 tabular-nums font-medium" style="color:${COLORS[m.tier]}">${fmt(m.mark)}</td>`).join("")}<td class="text-center px-1 py-2 font-semibold tabular-nums text-slate-900">${fmt(total)}</td><td class="text-center px-1 py-2 font-semibold tabular-nums" style="color:${COLORS[r.tier]}">${fmt(r.average)}</td><td class="text-center px-1 py-2 font-semibold tabular-nums" style="color:${COLORS[r.tier]}">${r.pct.toFixed(0)}%</td><td class="text-center px-1 py-2"><span class="inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${r.tier === "Excellent" ? "bg-blue-50 text-blue-700" : r.tier === "Good" ? "bg-green-50 text-green-700" : r.tier === "Needs Attention" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}">${r.tier}</span></td></tr>`;
+    return `<tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"><td class="text-center px-0.5 py-2 text-slate-500 tabular-nums classpulse-sno">${i + 1}</td><td class="px-1 py-2 font-medium text-slate-800 truncate" title="${esc(r.name)}">${esc(r.name)}</td><td class="px-1 py-2 text-slate-600 truncate tabular-nums" title="${esc(r.enrollmentNo)}">${esc(r.enrollmentNo)}</td>${r.marks.map((m) => `<td class="text-center px-0.5 py-2 tabular-nums font-medium" style="color:${COLORS[m.tier]}">${fmt(m.mark)}</td>`).join("")}<td class="text-center px-0.5 py-2 font-semibold tabular-nums text-slate-900">${fmt(total)}</td><td class="text-center px-0.5 py-2 font-semibold tabular-nums" style="color:${COLORS[r.tier]}">${fmt(r.average)}</td><td class="text-center px-0.5 py-2"><span class="inline-flex max-w-full rounded-full px-1.5 py-0.5 text-[9px] font-semibold truncate ${r.tier === "Excellent" ? "bg-blue-50 text-blue-700" : r.tier === "Good" ? "bg-green-50 text-green-700" : r.tier === "Needs Attention" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}">${r.tier}</span></td></tr>`;
   }).join("");
   const p = Array.from(document.querySelectorAll(".at-risk-table p")).find((x) => x.textContent?.includes("Showing")) as HTMLElement | undefined;
   if (p) p.textContent = `Showing ${ordered.length} of ${rows.length} students.`;
@@ -133,8 +136,8 @@ function renderTable(rows: Row[]) {
 function renderDistribution(rows: Row[]) {
   const p = panel("Distribution");
   if (!p) return;
-  let content = p.querySelector(".classpulse-distribution-content") as HTMLElement | null;
-  if (!content) { content = document.createElement("div"); content.className = "classpulse-distribution-content"; p.appendChild(content); }
+  p.innerHTML = `<div class="px-3 pt-3 pb-2"><h3 class="text-sm font-semibold text-slate-900">Distribution</h3><p class="text-[10px] text-slate-500 mt-0.5">Overall performance across the six theory subjects.</p></div><div class="classpulse-distribution-content px-3 pb-3"></div>`;
+  const content = p.querySelector(".classpulse-distribution-content") as HTMLElement;
   const counts = rows.reduce((a, r) => { a[r.tier] = (a[r.tier] || 0) + 1; return a; }, {} as Record<string, number>);
   content.innerHTML = TIERS.map((tier) => { const count = counts[tier] || 0; const width = rows.length ? Math.max(2, count / rows.length * 100) : 0; return `<button type="button" class="classpulse-distribution-row" data-tier="${tier}"><div class="flex items-center justify-between text-[11px] text-slate-600"><span>${tier}</span><span>${count}</span></div><div class="mt-2 h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${width}%;background:${COLORS[tier]}"></div></div></button>`; }).join("");
   content.querySelectorAll<HTMLButtonElement>(".classpulse-distribution-row").forEach((row) => row.addEventListener("click", () => {
@@ -148,13 +151,19 @@ function renderTopFive(rows: Row[]) {
   const p = panel("Top Students");
   if (!p) return;
   const top = [...rows].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name)).slice(0, 5);
-  p.innerHTML = `<div class="px-3 py-2.5 border-b border-slate-100"><h3 class="text-sm font-semibold text-slate-900">Top 5 Students</h3><p class="text-[10px] text-slate-500 mt-0.5">Highest average internal marks.</p></div>${top.map((r, i) => `<div class="px-3 py-3 flex items-center justify-between gap-3 border-b border-slate-100 last:border-0"><div class="flex min-w-0 items-center gap-3"><span class="text-[10px] text-slate-400 w-4">${i + 1}.</span><span class="truncate text-[10px] text-slate-700">${esc(r.name)}</span></div><strong class="text-[11px] whitespace-nowrap" style="color:${COLORS[r.tier]}">${fmt(r.average)} / 40</strong></div>`).join("")}`;
+  p.innerHTML = `<div class="px-3 py-2.5 border-b border-slate-100"><h3 class="text-sm font-semibold text-slate-900">Top 5 Students</h3><p class="text-[10px] text-slate-500 mt-0.5">Highest average internal marks.</p></div>${top.map((r, i) => `<div class="px-3 py-3 flex items-center justify-between gap-3 border-b border-slate-100 last:border-0"><div class="flex min-w-0 items-center gap-3"><span class="text-[10px] text-slate-400 w-4">${i + 1}.</span><span class="truncate text-[10px] text-slate-700">${esc(r.name)}</span></div><span class="text-[11px] font-medium whitespace-nowrap" style="color:${COLORS[r.tier]}">${fmt(r.average)} / 40</span></div>`).join("")}`;
 }
 
 function styles() {
   if (document.getElementById("classpulse-overall-fixes")) return;
   const s = document.createElement("style"); s.id = "classpulse-overall-fixes"; s.textContent = `
-    .classpulse-overall-heading{margin:18px 0 14px}.classpulse-overall-heading h2{margin:0;color:#0f172a;font-size:20px;line-height:1.25;font-weight:600}.classpulse-overall-heading p{margin:5px 0 0;color:#64748b;font-size:12px;line-height:1.5}.classpulse-overall-metrics>.classpulse-overall-metric{min-width:0;min-height:104px}.classpulse-mark-mode-control{min-width:0!important}.classpulse-mark-mode-control select{width:100%}.at-risk-filter-controls{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(120px,1fr)!important;gap:12px!important;align-items:end}.classpulse-distribution-content{margin-top:12px;display:grid;gap:5px}.classpulse-distribution-row{display:block;width:100%;text-align:left;border:0;background:transparent;padding:10px 0;margin:0;cursor:pointer;border-radius:8px}.classpulse-distribution-row:hover{background:#f8fafc}.classpulse-distribution-row:focus-visible{outline:2px solid #4a35b3;outline-offset:2px}@media(max-width:1100px){.classpulse-overall-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}.at-risk-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:700px){.classpulse-overall-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:480px){.classpulse-overall-metrics{grid-template-columns:1fr!important}.at-risk-filter-controls{grid-template-columns:1fr!important}}
+    .classpulse-overall-heading{margin:18px 0 14px}.classpulse-overall-heading h2{margin:0;color:#0f172a;font-size:20px;line-height:1.25;font-weight:600}.classpulse-overall-heading p{margin:5px 0 0;color:#64748b;font-size:12px;line-height:1.5}
+    .classpulse-overall-metrics{margin-bottom:16px}.classpulse-overall-metrics>.classpulse-overall-metric{min-width:0;min-height:88px;height:88px;overflow:hidden}
+    .classpulse-metric-label{margin:0;color:#475569;font-size:11px;line-height:1.3;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.classpulse-metric-value{margin:7px 0 0;color:#0f172a;font-size:22px;line-height:1.1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.classpulse-metric-detail{margin:5px 0 0;color:#94a3b8;font-size:9px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .classpulse-mark-mode-control{min-width:0!important}.classpulse-mark-mode-control select{width:100%}.at-risk-filter-controls{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(120px,1fr)!important;gap:12px!important;align-items:end}
+    .at-risk-table{overflow:hidden!important}.at-risk-table table{width:100%!important;min-width:0!important;table-layout:fixed!important}.at-risk-table th,.at-risk-table td{overflow:hidden}.at-risk-table th{white-space:nowrap}.at-risk-table .classpulse-sno{width:4%!important}.at-risk-table th:nth-child(2),.at-risk-table td:nth-child(2){width:14%!important}.at-risk-table th:nth-child(3),.at-risk-table td:nth-child(3){width:12%!important}.at-risk-table th:nth-child(n+4):nth-child(-n+9),.at-risk-table td:nth-child(n+4):nth-child(-n+9){width:7%!important}.at-risk-table th:nth-child(10),.at-risk-table td:nth-child(10){width:7%!important}.at-risk-table th:nth-child(11),.at-risk-table td:nth-child(11){width:7%!important}.at-risk-table th:nth-child(12),.at-risk-table td:nth-child(12){width:14%!important}
+    .classpulse-distribution-content{display:grid;gap:4px}.classpulse-distribution-row{display:block;width:100%;text-align:left;border:0;background:transparent;padding:11px 4px;margin:0;cursor:pointer;border-radius:8px}.classpulse-distribution-row:hover{background:#f8fafc}.classpulse-distribution-row:focus-visible{outline:2px solid #4a35b3;outline-offset:2px}
+    @media(max-width:1100px){.classpulse-overall-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}.at-risk-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:700px){.classpulse-overall-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:480px){.classpulse-overall-metrics{grid-template-columns:1fr!important}.at-risk-filter-controls{grid-template-columns:1fr!important}}
   `; document.head.appendChild(s);
 }
 
