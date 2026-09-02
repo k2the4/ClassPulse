@@ -122,9 +122,7 @@ function installSummaryUiFix() {
 
   const reset = title.querySelector("button") as HTMLButtonElement | null;
   if (!reset || title.querySelector(".summary-filter-actions")) {
-    if (title.querySelector(".summary-filter-actions")) {
-      syncSummaryTable();
-    }
+    if (title.querySelector(".summary-filter-actions")) syncSummaryTable();
     return;
   }
 
@@ -139,10 +137,7 @@ function installSummaryUiFix() {
   apply.textContent = "Apply";
   apply.addEventListener("click", () => {
     const filters = panel.querySelectorAll("select, input");
-    filters.forEach((control) => {
-      const eventType = control.tagName === "SELECT" ? "change" : "change";
-      control.dispatchEvent(new Event(eventType, { bubbles: true }));
-    });
+    filters.forEach((control) => control.dispatchEvent(new Event("change", { bubbles: true })));
     requestAnimationFrame(syncSummaryTable);
   });
   actions.appendChild(apply);
@@ -162,6 +157,10 @@ function syncSummaryTable() {
     indexHeader.className = "summary-index-header";
     headerRow.insertBefore(indexHeader, headerRow.firstElementChild);
   }
+
+  const headers = Array.from(headerRow.children) as HTMLTableCellElement[];
+  const enrollmentHeader = headers.find((cell) => cell !== indexHeader && cell.textContent?.trim() === "Enrollment");
+  if (enrollmentHeader) enrollmentHeader.textContent = "Enrollment No.";
 
   const sortSelect = document.querySelector(".summary-filter-grid select:last-child") as HTMLSelectElement | null;
   const sorted = sortSelect?.value === "desc" || sortSelect?.value === "asc";
