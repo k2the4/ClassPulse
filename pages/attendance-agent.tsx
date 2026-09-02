@@ -3,18 +3,28 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../lib/authOptions";
 import { prisma } from "../lib/prisma";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { BarChart3, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, LayoutDashboard, LogOut, UserRoundPlus } from "lucide-react";
 
-type Student = { id: string; enrollmentNo: string; name: string };
+type Student = { id: string; enrollmentNo: string; name: string; serialNo: number };
 type Subject = { id: string; name: string; code: string; type: string };
 type Section = { id: string; label: string; strength: number };
 type Session = { id: string; subjectId: string; subjectName: string; subjectCode: string; slot: string; teacherId: string; teacherName: string; present: number; total: number; canEdit: boolean };
 
 type Props = { teacherName: string; sections: Section[]; initialSectionId: string; initialStudents: Student[]; initialSubjects: Subject[]; };
-
 type ApiData = { section: Section; subjects: Subject[]; students: Student[]; sessions: Session[] };
+
+const TIME_SLOTS = [
+  "8 to 9",
+  "9 to 10",
+  "10 to 11",
+  "11 to 12",
+  "12.30 to 1.30",
+  "1.30 to 2.30",
+  "2.30 to 3.30",
+  "3.30 to 4.30",
+];
 
 function today() { return new Date().toLocaleDateString("en-CA"); }
 
@@ -90,10 +100,10 @@ export default function AttendanceAgent({ teacherName, sections, initialSectionI
   }
 
   async function submit() {
-    if (!subjectId || !slot.trim() || students.length === 0) { setError("Choose a subject and enter the class time before saving."); return; }
+    if (!subjectId || !slot || students.length === 0) { setError("Choose a subject and time slot before saving."); return; }
     setSaving(true); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/attendance-agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionId, subjectId, date, slot: slot.trim(), presentStudentIds: [...present] }) });
+      const response = await fetch("/api/attendance-agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionId, subjectId, date, slot, presentStudentIds: [...present] }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save attendance");
       setMessage(`Attendance saved — ${data.present} present, ${data.total - data.present} absent.`); setEditingId("");
@@ -107,12 +117,12 @@ export default function AttendanceAgent({ teacherName, sections, initialSectionI
     <div className="mt-8"><p className="text-sm font-semibold text-[#5b4ee6]">Attendance Agent</p><h1 className="mt-2 text-[34px] font-extrabold tracking-[-1.4px] sm:text-[40px]">Take attendance</h1><p className="mt-2 text-sm leading-6 text-[#6f7890]">Record attendance for a class session. Present students are marked LA = 1 and every student in the session receives LH = 1.</p></div>
 
     <section className="mt-8 rounded-2xl border border-[#e5e4e1] bg-white p-6 shadow-[0_8px_30px_rgba(31,35,49,0.05)] sm:p-8">
-      <div className="grid gap-5 md:grid-cols-2"><Field label="Class"><div className="relative"><select value={sectionId} onChange={(e) => { setSectionId(e.target.value); loadSection(e.target.value); }} className="input"><option value="">Select class</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.label}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field><Field label="Date"><input type="date" value={date} onChange={(e) => loadDate(e.target.value)} className="input"/></Field><Field label="Subject"><div className="relative"><select value={subjectId} onChange={(e) => { setSubjectId(e.target.value); setEditingId(""); }} className="input"><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name} ({subject.code})</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field><Field label="Time slot"><input value={slot} onChange={(e) => { setSlot(e.target.value); setEditingId(""); }} placeholder="e.g. 10:00 AM – 11:00 AM" className="input"/></Field></div>
+      <div className="grid gap-5 md:grid-cols-2"><Field label="Class"><div className="relative"><select value={sectionId} onChange={(e) => { setSectionId(e.target.value); loadSection(e.target.value); }} className="input"><option value="">Select class</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.label}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field><Field label="Date"><input type="date" value={date} onChange={(e) => loadDate(e.target.value)} className="input"/></Field><Field label="Subject"><div className="relative"><select value={subjectId} onChange={(e) => { setSubjectId(e.target.value); setEditingId(""); }} className="input"><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name} ({subject.code})</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field><Field label="Time slot"><div className="relative"><select value={slot} onChange={(e) => { setSlot(e.target.value); setEditingId(""); }} className="input"><option value="">Select time slot</option>{TIME_SLOTS.map((timeSlot) => <option key={timeSlot} value={timeSlot}>{timeSlot}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-3.5 text-[#68738a]" size={17}/></div></Field></div>
       {selectedSubject && <div className="mt-5 flex items-center gap-3 rounded-xl bg-[#faf9ff] px-4 py-3 text-sm"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#eeeaff] text-[#5842e8]"><BookOpen size={17}/></span><div><p className="font-semibold">{selectedSubject.name}</p><p className="text-xs text-[#7a8295]">{selectedSubject.code} · {selectedSubject.type === "LAB" ? "Lab" : "Theory"}</p></div></div>}
     </section>
 
     <section className="mt-6 rounded-2xl border border-[#e5e4e1] bg-white shadow-[0_8px_30px_rgba(31,35,49,0.05)]"><div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#eeeeeb] px-6 py-5 sm:px-8"><div><h2 className="text-lg font-bold">Students</h2><p className="mt-1 text-xs text-[#7b8498]">{presentCount} of {students.length} marked present</p></div><button type="button" onClick={toggleAll} className="rounded-lg border border-[#d9d5ef] px-3 py-2 text-xs font-semibold text-[#4b36a7] hover:bg-[#faf9ff]">{allPresent ? "Mark all absent" : "Mark all present"}</button></div>
-      <div className="divide-y divide-[#eeeeeb]">{loading ? <div className="px-6 py-10 text-center text-sm text-[#7a8295]">Loading class…</div> : students.map((student, index) => { const isPresent = present.has(student.id); return <button type="button" key={student.id} onClick={() => toggle(student.id)} className="flex w-full items-center gap-4 px-6 py-3.5 text-left transition hover:bg-[#faf9ff] sm:px-8"><span className="w-8 text-xs font-medium text-[#98a0af]">{index + 1}</span><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${isPresent ? "bg-[#eaf9f1] text-[#159b62]" : "bg-[#f5f5f4] text-[#a2a7b1]"}`}>{isPresent ? <Check size={17} strokeWidth={2.5}/> : null}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{student.name}</span><span className="mt-0.5 block text-xs text-[#7d8698]">{student.enrollmentNo}</span></span><span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${isPresent ? "bg-[#eaf9f1] text-[#159b62]" : "bg-[#fff0f0] text-[#d95757]"}`}>{isPresent ? "Present" : "Absent"}</span></button>; })}</div>
+      <div className="divide-y divide-[#eeeeeb]">{loading ? <div className="px-6 py-10 text-center text-sm text-[#7a8295]">Loading class…</div> : students.map((student) => { const isPresent = present.has(student.id); return <button type="button" key={student.id} onClick={() => toggle(student.id)} className="flex w-full items-center gap-4 px-6 py-3.5 text-left transition hover:bg-[#faf9ff] sm:px-8"><span className="w-8 text-xs font-semibold text-[#68738a]">{student.serialNo}</span><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${isPresent ? "bg-[#eaf9f1] text-[#159b62]" : "bg-[#f5f5f4] text-[#a2a7b1]"}`}>{isPresent ? <Check size={17} strokeWidth={2.5}/> : null}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{student.name}</span><span className="mt-0.5 block text-xs text-[#7d8698]">{student.enrollmentNo}</span></span><span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${isPresent ? "bg-[#eaf9f1] text-[#159b62]" : "bg-[#fff0f0] text-[#d95757]"}`}>{isPresent ? "Present" : "Absent"}</span></button>; })}</div>
       <div className="flex flex-col gap-3 border-t border-[#eeeeeb] px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8"><div>{error && <p className="text-sm font-medium text-[#d34f4f]">{error}</p>}{message && <p className="flex items-center gap-2 text-sm font-medium text-[#159b62]"><CheckCircle2 size={16}/>{message}</p>}{editingId && !error && <p className="text-xs text-[#7b8498]">Editing an existing attendance session.</p>}</div><button type="button" disabled={saving || loading} onClick={submit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#4b36a7] px-6 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(75,54,167,0.18)] transition hover:bg-[#3f2d93] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Saving…" : editingId ? "Update attendance" : "Save attendance"}</button></div>
     </section>
 
@@ -134,5 +144,5 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const initial = sections.find((section) => section.id === initialSectionId);
   const visibleSubjects = initial ? (role === "ADMIN" ? initial.subjects : initial.subjects.filter((subject) => subject.assignments.some((assignment) => assignment.teacherId === userId))) : [];
   const students = initial ? await prisma.student.findMany({ where: { sectionId: initial.id }, orderBy: { enrollmentNo: "asc" } }) : [];
-  return { props: { teacherName: session.user.name || session.user.email || "Faculty", sections: visibleSections, initialSectionId, initialStudents: students.map((student) => ({ id: student.id, enrollmentNo: student.enrollmentNo, name: student.name })), initialSubjects: visibleSubjects.map((subject) => ({ id: subject.id, name: subject.name, code: subject.code, type: subject.type })) } };
+  return { props: { teacherName: session.user.name || session.user.email || "Faculty", sections: visibleSections, initialSectionId, initialStudents: students.map((student, index) => ({ id: student.id, enrollmentNo: student.enrollmentNo, name: student.name, serialNo: index + 1 })), initialSubjects: visibleSubjects.map((subject) => ({ id: subject.id, name: subject.name, code: subject.code, type: subject.type })) } };
 };
