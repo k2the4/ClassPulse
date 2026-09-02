@@ -1,304 +1,177 @@
 import { useEffect } from "react";
 import SectionOverallPage from "../section-analysis/[sectionId]/overall";
 
-type OverallStudent = {
-  enrollmentNo: string;
-  name: string;
-  subjects?: Array<{ basicInternal?: number }>;
-};
+type MarkMode = "basic" | "moderated";
+type Subject = { id: string; name: string; code: string };
+type Score = { subjectId: string; code: string; name: string; basicInternal?: number; moderatedInternal?: number; basicMax?: number };
+type Student = { enrollmentNo: string; name: string; subjects?: Score[] };
+type Payload = { subjects?: Subject[]; students?: Student[] };
+type Row = Student & { average: number; pct: number; tier: string; marks: Array<{ subject: Subject; mark: number; max: number; tier: string }> };
 
-type OverallPayload = {
-  students?: OverallStudent[];
-};
+const TIERS = ["Excellent", "Good", "Needs Attention", "Critical Risk"];
+const RANGES: Record<string, [number, number]> = { Excellent: [32, 40], Good: [24, 31.99], "Needs Attention": [16, 23.99], "Critical Risk": [0, 15.99] };
+const COLORS: Record<string, string> = { Excellent: "#2563eb", Good: "#16a34a", "Needs Attention": "#f59e0b", "Critical Risk": "#ef4444" };
+const CARD_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#7c3aed", "#06b6d4"];
 
-const TIER_RANGES: Record<string, [number, number]> = {
-  Excellent: [32, 40],
-  Good: [24, 31.99],
-  "Needs Attention": [16, 23.99],
-  "Critical Risk": [0, 15.99],
-};
+const fmt = (n: number) => Number.isInteger(n) ? String(n) : n.toFixed(1);
+const tierFor = (pct: number) => pct >= 80 ? "Excellent" : pct >= 60 ? "Good" : pct >= 40 ? "Needs Attention" : "Critical Risk";
+const esc = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 
-const CARD_COLORS = ["#3b82f6", "#16a34a", "#f59e0b", "#7c3aed", "#06b6d4"];
-
-function formatMark(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+function sectionId() {
+  return window.location.pathname.match(/\/section-analysis\/([^/]+)/)?.[1] || "";
 }
 
-function getSectionId() {
-  const match = window.location.pathname.match(/\/section-analysis\/([^/]+)/);
-  return match?.[1] || "";
+function rowsFor(payload: Payload, mode: MarkMode): Row[] {
+  const subjects = (payload.subjects || []).slice(0, 6);
+  return (payload.students || []).map((student) => {
+    const marks = subjects.map((subject) => {
+      const score = student.subjects?.find((s) => s.subjectId === subject.id || s.code === subject.code);
+      const mark = Number(mode === "moderated" ? score?.moderatedInternal ?? score?.basicInternal ?? 0 : score?.basicInternal ?? 0);
+      const max = Number(score?.basicMax || 40);
+      return { subject, mark, max, tier: tierFor(max ? (mark / max) * 100 : 0) };
+    });
+    const average = marks.length ? marks.reduce((s, x) => s + x.mark, 0) / marks.length : 0;
+    const max = marks.length ? marks.reduce((s, x) => s + x.max, 0) / marks.length : 40;
+    return { ...student, marks, average, pct: max ? (average / max) * 100 : 0, tier: tierFor(max ? (average / max) * 100 : 0) };
+  });
 }
 
-function setNativeInputValue(input: HTMLInputElement, value: number) {
+function setInput(input: HTMLInputElement, value: number) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   setter?.call(input, String(value));
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function findPanelByHeading(text: string) {
-  const heading = Array.from(document.querySelectorAll("h2,h3,h4,p"))
-    .find((element) => element.textContent?.trim() === text) as HTMLElement | undefined;
-  if (!heading) return null;
-  return heading.closest("section") as HTMLElement | null;
+function panel(text: string) {
+  const el = Array.from(document.querySelectorAll("h2,h3,h4,p")).find((x) => x.textContent?.trim() === text) as HTMLElement | undefined;
+  return el?.closest("section") as HTMLElement | null;
 }
 
-function makeMetricCard(label: string, value: string, detail: string, color: string) {
-  const card = document.createElement("section");
-  card.className = "rounded-xl border border-slate-200 bg-white p-4 shadow-sm classpulse-overall-metric";
-  card.dataset.classpulseMetric = label;
-  card.style.borderTop = `3px solid ${color}`;
-  card.innerHTML = `
-    <p class="text-xs text-slate-500">${label}</p>
-    <p class="mt-1 text-[28px] font-extrabold text-slate-900">${value}</p>
-    <p class="mt-1 text-[10px] text-slate-400">${detail}</p>
-  `;
-  return card;
+function metric(label: string, value: string, detail: string, color: string) {
+  const el = document.createElement("section");
+  el.className = "rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm classpulse-overall-metric";
+  el.style.borderTop = `3px solid ${color}`;
+  el.innerHTML = `<p class="text-[11px] text-slate-500">${esc(label)}</p><p class="mt-1 text-[25px] font-extrabold leading-tight text-slate-900">${esc(value)}</p><p class="mt-1 text-[10px] text-slate-400 truncate" title="${esc(detail)}">${esc(detail)}</p>`;
+  return el;
 }
 
-function installHeadingAndMetrics(topStudents: OverallStudent[]) {
+function installMetrics(rows: Row[], subjects: Subject[]) {
   const filter = document.querySelector(".at-risk-filter") as HTMLElement | null;
-  if (!filter) return;
-
-  const metrics = filter.previousElementSibling as HTMLElement | null;
-  if (!metrics || !metrics.classList.contains("grid")) return;
-
-  metrics.classList.add("classpulse-overall-metrics");
-  metrics.style.gridTemplateColumns = "repeat(5, minmax(0, 1fr))";
-  metrics.style.gap = "12px";
-
+  const grid = filter?.previousElementSibling as HTMLElement | null;
+  if (!grid || !grid.classList.contains("grid")) return;
   let heading = document.querySelector(".classpulse-overall-heading") as HTMLElement | null;
   if (!heading) {
     heading = document.createElement("div");
     heading.className = "classpulse-overall-heading";
-    heading.innerHTML = `
-      <h2>Overall Analysis</h2>
-      <p>Overall performance overview across the six theory subjects.</p>
-    `;
-    metrics.parentElement?.insertBefore(heading, metrics);
+    heading.innerHTML = `<h2>Overall Analysis</h2><p>Overall performance overview across the six theory subjects.</p>`;
+    grid.parentElement?.insertBefore(heading, grid);
   }
+  const avgs = subjects.map((subject) => {
+    const values = rows.map((r) => r.marks.find((m) => m.subject.id === subject.id)?.mark || 0);
+    return { subject, average: values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0 };
+  });
+  const bestSubject = [...avgs].sort((a, b) => b.average - a.average || a.subject.name.localeCompare(b.subject.name))[0];
+  const worstSubject = [...avgs].sort((a, b) => a.average - b.average || a.subject.name.localeCompare(b.subject.name))[0];
+  const bestStudent = [...rows].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name))[0];
+  const classAverage = rows.length ? rows.reduce((s, r) => s + r.average, 0) / rows.length : 0;
+  const above80 = rows.filter((r) => r.pct > 80).length;
 
-  const existing = new Set(
-    Array.from(metrics.querySelectorAll<HTMLElement>("[data-classpulse-metric]"))
-      .map((element) => element.dataset.classpulseMetric || "")
-  );
-
-  if (!existing.has("High Performers")) {
-    const highPerformers = topStudents.filter((student) => {
-      const subjects = student.subjects?.slice(0, 6) || [];
-      const average = subjects.length
-        ? subjects.reduce((sum, subject) => sum + (Number(subject.basicInternal) || 0), 0) / subjects.length
-        : 0;
-      return average >= 28;
-    }).length;
-    metrics.appendChild(makeMetricCard("High Performers", String(highPerformers), "students scoring 70% or more", CARD_COLORS[3]));
-  }
-
-  if (!existing.has("Needs Attention")) {
-    const needsAttention = topStudents.filter((student) => {
-      const subjects = student.subjects?.slice(0, 6) || [];
-      const average = subjects.length
-        ? subjects.reduce((sum, subject) => sum + (Number(subject.basicInternal) || 0), 0) / subjects.length
-        : 0;
-      return average < 16;
-    }).length;
-    metrics.appendChild(makeMetricCard("Needs Attention", String(needsAttention), "students scoring below 40%", CARD_COLORS[4]));
-  }
+  grid.innerHTML = "";
+  grid.className = "grid classpulse-overall-metrics";
+  grid.style.gridTemplateColumns = "repeat(5, minmax(0, 1fr))";
+  grid.style.gap = "12px";
+  grid.appendChild(metric("Class Average", `${fmt(classAverage)} / 40`, "average marks across all 6 theory subjects", CARD_COLORS[0]));
+  grid.appendChild(metric("Best Performing Subject", bestSubject ? `${fmt(bestSubject.average)} / 40` : "—", bestSubject?.subject.name || "highest subject average", CARD_COLORS[1]));
+  grid.appendChild(metric("Worst Performing Subject", worstSubject ? `${fmt(worstSubject.average)} / 40` : "—", worstSubject?.subject.name || "lowest subject average", CARD_COLORS[2]));
+  grid.appendChild(metric("Best Performing Student", bestStudent ? `${fmt(bestStudent.average)} / 40` : "—", bestStudent?.name || "highest student average", CARD_COLORS[3]));
+  grid.appendChild(metric("Students Above 80%", String(above80), "students scoring above 80% overall", CARD_COLORS[4]));
 }
 
-function installTableNumbering() {
+function installMode(mode: MarkMode, change: (m: MarkMode) => void) {
+  const controls = document.querySelector(".at-risk-filter-controls") as HTMLElement | null;
+  if (!controls) return;
+  let select = document.querySelector("#classpulse-mark-mode") as HTMLSelectElement | null;
+  if (!select) {
+    const label = document.createElement("label");
+    label.className = "classpulse-mark-mode-control";
+    label.innerHTML = `<span>Marks</span><select id="classpulse-mark-mode"><option value="basic">Basic Marks</option><option value="moderated">Moderated Marks</option></select>`;
+    controls.insertBefore(label, controls.firstElementChild);
+    select = label.querySelector("select");
+    select?.addEventListener("change", () => change(select?.value === "moderated" ? "moderated" : "basic"));
+  }
+  if (select.value !== mode) select.value = mode;
+}
+
+function filterState() {
+  const inputs = Array.from(document.querySelectorAll(".at-risk-filter input[type='number']")) as HTMLInputElement[];
+  const selects = Array.from(document.querySelectorAll(".at-risk-filter select")) as HTMLSelectElement[];
+  const lo = Number(inputs[0]?.value ?? 0);
+  const hi = Number(inputs[1]?.value ?? 40);
+  return { lo: Number.isFinite(lo) ? Math.max(0, Math.min(40, lo)) : 0, hi: Number.isFinite(hi) ? Math.max(0, Math.min(40, hi)) : 40, sort: selects.find((s) => s.id !== "classpulse-mark-mode")?.value || "none" };
+}
+
+function renderTable(rows: Row[]) {
   const table = document.querySelector(".at-risk-table table") as HTMLTableElement | null;
   if (!table) return;
-
-  const headRow = table.querySelector("thead tr") as HTMLTableRowElement | null;
-  const bodyRows = Array.from(table.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
-  const firstHeader = headRow?.querySelector("th") as HTMLElement | null;
-  if (!headRow || !firstHeader) return;
-
-  const hasRank = Array.from(headRow.querySelectorAll("th")).some((th) => th.textContent?.trim() === "Rank");
-  const customHeader = headRow.querySelector("[data-classpulse-sno]");
-  const customCells = table.querySelectorAll("[data-classpulse-sno-cell]");
-  const colgroup = table.querySelector("colgroup");
-
-  if (hasRank) {
-    customHeader?.remove();
-    customCells.forEach((cell) => cell.remove());
-    colgroup?.querySelector("[data-classpulse-sno-col]")?.remove();
-    return;
-  }
-
-  if (!customHeader) {
-    const th = document.createElement("th");
-    th.dataset.classpulseSno = "true";
-    th.className = "text-center px-1 py-2";
-    th.textContent = "S.No.";
-    headRow.insertBefore(th, headRow.firstElementChild);
-  }
-
-  if (colgroup && !colgroup.querySelector("[data-classpulse-sno-col]")) {
-    const col = document.createElement("col");
-    col.dataset.classpulseSnoCol = "true";
-    col.style.width = "5%";
-    colgroup.insertBefore(col, colgroup.firstElementChild);
-  }
-
-  bodyRows.forEach((row, index) => {
-    if (!row.querySelector("[data-classpulse-sno-cell]")) {
-      const td = document.createElement("td");
-      td.dataset.classpulseSnoCell = "true";
-      td.className = "text-center px-1 py-2 text-slate-500";
-      td.textContent = String(index + 1);
-      row.insertBefore(td, row.firstElementChild);
-    } else {
-      const cell = row.querySelector("[data-classpulse-sno-cell]") as HTMLElement;
-      cell.textContent = String(index + 1);
-    }
-  });
-
-  const cols = Array.from(colgroup?.querySelectorAll("col") || []) as HTMLElement[];
-  if (cols.length >= 12) {
-    const widths = [5, 13, 7, 7, 7, 7, 7, 7, 9, 9, 8, 12];
-    cols.slice(0, widths.length).forEach((col, index) => { col.style.width = `${widths[index]}%`; });
-  }
+  const head = table.querySelector("thead tr");
+  const body = table.querySelector("tbody");
+  if (!head || !body) return;
+  const state = filterState();
+  const lo = Math.min(state.lo, state.hi), hi = Math.max(state.lo, state.hi);
+  const filtered = rows.filter((r) => r.average >= lo && r.average <= hi);
+  const ordered = [...filtered].sort((a, b) => state.sort === "asc" ? a.average - b.average || a.name.localeCompare(b.name) : state.sort === "desc" ? b.average - a.average || a.name.localeCompare(b.name) : rows.indexOf(a) - rows.indexOf(b));
+  head.innerHTML = `<th class="text-center px-1 py-2">${state.sort === "none" ? "S.No." : "Rank"}</th><th class="text-left px-2 py-2">Student</th>${rows[0]?.marks.map((m) => `<th class="text-center px-1 py-2" title="${esc(m.subject.name)}">${esc(m.subject.code || m.subject.name)}</th>`).join("") || ""}<th class="text-center px-1 py-2">Total</th><th class="text-center px-1 py-2">Average</th><th class="text-center px-1 py-2">%AGE</th><th class="text-center px-1 py-2">Grade</th>`;
+  body.innerHTML = ordered.map((r, i) => {
+    const total = r.marks.reduce((s, m) => s + m.mark, 0);
+    return `<tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"><td class="text-center px-1 py-2 text-slate-500 tabular-nums">${i + 1}</td><td class="px-2 py-2 font-medium text-slate-800 truncate" title="${esc(r.name)}">${esc(r.name)}</td>${r.marks.map((m) => `<td class="text-center px-1 py-2 tabular-nums font-medium" style="color:${COLORS[m.tier]}">${fmt(m.mark)}</td>`).join("")}<td class="text-center px-1 py-2 font-semibold tabular-nums text-slate-900">${fmt(total)}</td><td class="text-center px-1 py-2 font-semibold tabular-nums" style="color:${COLORS[r.tier]}">${fmt(r.average)}</td><td class="text-center px-1 py-2 font-semibold tabular-nums" style="color:${COLORS[r.tier]}">${r.pct.toFixed(0)}%</td><td class="text-center px-1 py-2"><span class="inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${r.tier === "Excellent" ? "bg-blue-50 text-blue-700" : r.tier === "Good" ? "bg-green-50 text-green-700" : r.tier === "Needs Attention" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}">${r.tier}</span></td></tr>`;
+  }).join("");
+  const p = Array.from(document.querySelectorAll(".at-risk-table p")).find((x) => x.textContent?.includes("Showing")) as HTMLElement | undefined;
+  if (p) p.textContent = `Showing ${ordered.length} of ${rows.length} students.`;
 }
 
-function installDistributionClicks() {
-  const panel = findPanelByHeading("Distribution");
-  if (!panel) return;
-
-  Object.entries(TIER_RANGES).forEach(([tier, [lower, upper]]) => {
-    const label = Array.from(panel.querySelectorAll("p,span,div"))
-      .find((element) => element.children.length === 0 && element.textContent?.trim() === tier) as HTMLElement | undefined;
-    if (!label) return;
-
-    const row = (label.closest("div.flex") || label.parentElement?.parentElement || label.parentElement) as HTMLElement | null;
-    if (!row) return;
-
-    row.style.cursor = "pointer";
-    row.title = `Filter students: ${tier}`;
-    row.onclick = () => {
-      const inputs = Array.from(document.querySelectorAll(".at-risk-filter input[type='number']")) as HTMLInputElement[];
-      const apply = document.querySelector(".at-risk-apply") as HTMLButtonElement | null;
-      if (inputs.length >= 2) {
-        setNativeInputValue(inputs[0], lower);
-        setNativeInputValue(inputs[1], upper);
-        apply?.click();
-      }
-    };
-  });
+function renderDistribution(rows: Row[]) {
+  const p = panel("Distribution");
+  if (!p) return;
+  let content = p.querySelector(".classpulse-distribution-content") as HTMLElement | null;
+  if (!content) { content = document.createElement("div"); content.className = "classpulse-distribution-content"; p.appendChild(content); }
+  const counts = rows.reduce((a, r) => { a[r.tier] = (a[r.tier] || 0) + 1; return a; }, {} as Record<string, number>);
+  content.innerHTML = TIERS.map((tier) => { const count = counts[tier] || 0; const width = rows.length ? Math.max(2, count / rows.length * 100) : 0; return `<button type="button" class="classpulse-distribution-row" data-tier="${tier}"><div class="flex items-center justify-between text-[11px] text-slate-600"><span>${tier}</span><span>${count}</span></div><div class="mt-2 h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${width}%;background:${COLORS[tier]}"></div></div></button>`; }).join("");
+  content.querySelectorAll<HTMLButtonElement>(".classpulse-distribution-row").forEach((row) => row.addEventListener("click", () => {
+    const range = RANGES[row.dataset.tier || ""];
+    const inputs = Array.from(document.querySelectorAll(".at-risk-filter input[type='number']")) as HTMLInputElement[];
+    if (range && inputs.length >= 2) { setInput(inputs[0], range[0]); setInput(inputs[1], range[1]); (document.querySelector(".at-risk-apply") as HTMLButtonElement | null)?.click(); }
+  }));
 }
 
-function installTopFive(topStudents: OverallStudent[]) {
-  const panel = findPanelByHeading("Top Students");
-  if (!panel) return;
-
-  const ranked = topStudents
-    .map((student) => {
-      const subjects = student.subjects?.slice(0, 6) || [];
-      const average = subjects.length
-        ? subjects.reduce((sum, subject) => sum + (Number(subject.basicInternal) || 0), 0) / subjects.length
-        : 0;
-      return { ...student, average };
-    })
-    .sort((a, b) => b.average - a.average || a.name.localeCompare(b.name))
-    .slice(0, 5);
-
-  panel.innerHTML = `
-    <div class="px-3 py-3 border-b border-slate-100">
-      <h3 class="text-sm font-semibold text-slate-900">Top 5 Students</h3>
-      <p class="text-[10px] text-slate-500 mt-1">Highest average internal marks.</p>
-    </div>
-    <div class="px-3">
-      ${ranked.map((student, index) => `
-        <div class="flex items-center justify-between gap-3 py-3 border-b border-slate-100 last:border-0">
-          <div class="flex min-w-0 items-center gap-3">
-            <span class="text-[10px] text-slate-400 w-4">${index + 1}.</span>
-            <span class="truncate text-[10px] text-slate-700">${student.name}</span>
-          </div>
-          <strong class="text-[11px] text-emerald-600 whitespace-nowrap">${formatMark(student.average)} / 40</strong>
-        </div>
-      `).join("")}
-    </div>
-  `;
+function renderTopFive(rows: Row[]) {
+  const p = panel("Top Students");
+  if (!p) return;
+  const top = [...rows].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name)).slice(0, 5);
+  p.innerHTML = `<div class="px-3 py-2.5 border-b border-slate-100"><h3 class="text-sm font-semibold text-slate-900">Top 5 Students</h3><p class="text-[10px] text-slate-500 mt-0.5">Highest average internal marks.</p></div>${top.map((r, i) => `<div class="px-3 py-3 flex items-center justify-between gap-3 border-b border-slate-100 last:border-0"><div class="flex min-w-0 items-center gap-3"><span class="text-[10px] text-slate-400 w-4">${i + 1}.</span><span class="truncate text-[10px] text-slate-700">${esc(r.name)}</span></div><strong class="text-[11px] whitespace-nowrap" style="color:${COLORS[r.tier]}">${fmt(r.average)} / 40</strong></div>`).join("")}`;
 }
 
-async function loadOverallStudents() {
-  const sectionId = getSectionId();
-  if (!sectionId) return [];
-
-  try {
-    const response = await fetch(`/api/analysis/section/${sectionId}/overall`);
-    if (!response.ok) return [];
-    const json = await response.json();
-    return (json.data?.students || []) as OverallStudent[];
-  } catch {
-    return [];
-  }
-}
-
-function installStyles() {
+function styles() {
   if (document.getElementById("classpulse-overall-fixes")) return;
-  const style = document.createElement("style");
-  style.id = "classpulse-overall-fixes";
-  style.textContent = `
-    .classpulse-overall-heading { margin: 20px 0 16px; }
-    .classpulse-overall-heading h2 { margin: 0; color: #0f172a; font-size: 20px; line-height: 1.25; font-weight: 600; }
-    .classpulse-overall-heading p { margin: 5px 0 0; color: #64748b; font-size: 12px; line-height: 1.5; }
-    .classpulse-overall-metrics > .classpulse-overall-metric { min-width: 0; }
-    @media (max-width: 1100px) {
-      .classpulse-overall-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
-    }
-    @media (max-width: 700px) {
-      .classpulse-overall-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-    }
-    @media (max-width: 480px) {
-      .classpulse-overall-metrics { grid-template-columns: 1fr !important; }
-    }
-  `;
-  document.head.appendChild(style);
+  const s = document.createElement("style"); s.id = "classpulse-overall-fixes"; s.textContent = `
+    .classpulse-overall-heading{margin:18px 0 14px}.classpulse-overall-heading h2{margin:0;color:#0f172a;font-size:20px;line-height:1.25;font-weight:600}.classpulse-overall-heading p{margin:5px 0 0;color:#64748b;font-size:12px;line-height:1.5}.classpulse-overall-metrics>.classpulse-overall-metric{min-width:0;min-height:104px}.classpulse-mark-mode-control{min-width:0!important}.classpulse-mark-mode-control select{width:100%}.at-risk-filter-controls{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(120px,1fr)!important;gap:12px!important;align-items:end}.classpulse-distribution-content{margin-top:12px;display:grid;gap:5px}.classpulse-distribution-row{display:block;width:100%;text-align:left;border:0;background:transparent;padding:10px 0;margin:0;cursor:pointer;border-radius:8px}.classpulse-distribution-row:hover{background:#f8fafc}.classpulse-distribution-row:focus-visible{outline:2px solid #4a35b3;outline-offset:2px}@media(max-width:1100px){.classpulse-overall-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}.at-risk-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:700px){.classpulse-overall-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:480px){.classpulse-overall-metrics{grid-template-columns:1fr!important}.at-risk-filter-controls{grid-template-columns:1fr!important}}
+  `; document.head.appendChild(s);
 }
 
 export default function ClassAnalysisOverallHeadingFixedPage() {
   useEffect(() => {
-    let disposed = false;
-    let observer: MutationObserver | null = null;
-    let scheduled = false;
-    let students: OverallStudent[] = [];
-
+    let dead = false, observer: MutationObserver | null = null, scheduled = false, mode: MarkMode = "basic", payload: Payload = {};
     const apply = () => {
-      scheduled = false;
-      if (disposed) return;
-      observer?.disconnect();
-      installStyles();
-      installHeadingAndMetrics(students);
-      installTableNumbering();
-      installDistributionClicks();
-      installTopFive(students);
-      observer?.observe(document.body, { childList: true, subtree: true });
+      scheduled = false; if (dead) return; observer?.disconnect(); styles();
+      const subjects = (payload.subjects || []).slice(0, 6); const rows = rowsFor(payload, mode); if (!rows.length) { observer?.observe(document.body,{childList:true,subtree:true}); return; }
+      installMetrics(rows, subjects); installMode(mode, (next) => { mode = next; schedule(); }); renderTable(rows); renderDistribution(rows); renderTopFive(rows);
+      observer?.observe(document.body,{childList:true,subtree:true});
     };
-
-    const schedule = () => {
-      if (scheduled || disposed) return;
-      scheduled = true;
-      requestAnimationFrame(apply);
-    };
-
-    observer = new MutationObserver(schedule);
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    loadOverallStudents().then((result) => {
-      if (disposed) return;
-      students = result;
-      schedule();
-    });
-
-    schedule();
-
-    return () => {
-      disposed = true;
-      observer?.disconnect();
-    };
+    const schedule = () => { if (scheduled || dead) return; scheduled = true; requestAnimationFrame(apply); };
+    observer = new MutationObserver(schedule); observer.observe(document.body,{childList:true,subtree:true});
+    const load = async () => { const id = sectionId(); if (!id) return; try { const r = await fetch(`/api/analysis/section/${id}/overall`); if (r.ok) { payload = (await r.json()).data || {}; schedule(); } } catch {} };
+    load(); schedule();
+    return () => { dead = true; observer?.disconnect(); };
   }, []);
-
   return <SectionOverallPage />;
 }
