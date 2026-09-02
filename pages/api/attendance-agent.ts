@@ -26,8 +26,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === "GET") {
     const sectionId = typeof req.query.sectionId === "string" ? req.query.sectionId : "";
     const date = validDate(req.query.date) ? req.query.date : new Date().toISOString().slice(0, 10);
+    const sessionId = typeof req.query.sessionId === "string" ? req.query.sessionId : "";
 
     if (!sectionId) return res.status(400).json({ error: "sectionId is required" });
+
+    if (sessionId) {
+      const attendance = await prisma.attendanceSession.findFirst({
+        where: { id: sessionId, sectionId },
+        include: { records: { select: { studentId: true, present: true } } },
+      });
+      if (!attendance) return res.status(404).json({ error: "Attendance session not found" });
+      if (role !== "ADMIN" && attendance.teacherId !== userId) return res.status(403).json({ error: "Only the teacher who recorded this session can edit it" });
+      return res.status(200).json({ presentStudentIds: attendance.records.filter((record) => record.present).map((record) => record.studentId) });
+    }
 
     const section = await prisma.section.findUnique({
       where: { id: sectionId },
