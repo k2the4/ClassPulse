@@ -63,13 +63,13 @@ const COMBINED_CSS = `
   .subject-academic-hero .analysis-metric-detail,
   .subject-academic-hero .academic-highest > p { display: block !important; margin-top: 6px !important; color: #98a2b3 !important; font-size: 10px !important; line-height: 1.25 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
 
-  .subject-academic-tier-panel { padding: 20px !important; }
+  .subject-academic-tier-panel { display: block !important; padding: 20px !important; }
   .subject-academic-tier-panel .academic-highest { display: none !important; }
-  .subject-academic-tier-panel .academic-tier-heading { display: flex !important; align-items: center !important; justify-content: space-between !important; margin-bottom: 14px !important; }
+  .subject-academic-tier-panel .academic-tier-heading { display: flex !important; align-items: center !important; justify-content: space-between !important; width: 100% !important; margin-bottom: 14px !important; }
   .subject-academic-tier-panel .academic-tier-heading h3 { margin: 0 !important; font-size: 14px !important; color: #17223b !important; }
   .subject-academic-tier-panel .academic-tier-heading p { margin: 4px 0 0 !important; color: #98a2b3 !important; font-size: 10px !important; }
   .subject-academic-tier-panel .academic-tier-count { color: #98a2b3 !important; font-size: 10px !important; }
-  .subject-academic-tier-panel .academic-tier-grid { display: flex !important; flex-direction: column !important; gap: 8px !important; }
+  .subject-academic-tier-panel .academic-tier-grid { display: flex !important; flex-direction: column !important; gap: 8px !important; width: 100% !important; }
   .subject-academic-tier-panel .academic-tier-card { width: 100% !important; min-height: 44px !important; box-sizing: border-box !important; display: flex !important; align-items: center !important; justify-content: space-between !important; border: 1px solid #edf0f4 !important; border-radius: 11px !important; background: #fff !important; padding: 10px 12px !important; }
   .subject-academic-tier-panel .academic-tier-card span { color: #344054 !important; font-size: 11px !important; font-weight: 600 !important; }
   .subject-academic-tier-panel .academic-tier-card strong { font-size: 12px !important; font-weight: 800 !important; }
