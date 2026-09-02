@@ -63,6 +63,11 @@ export default function SubjectAcademicPage() {
   const [summaryLower, setSummaryLower] = useState("0");
   const [summaryUpper, setSummaryUpper] = useState("30");
   const [summarySort, setSummarySort] = useState<SummarySort>("none");
+  const [summaryExamDraft, setSummaryExamDraft] = useState<SummaryExam>("combined");
+  const [summaryTierDraft, setSummaryTierDraft] = useState<Tier | "all">("all");
+  const [summaryLowerDraft, setSummaryLowerDraft] = useState("0");
+  const [summaryUpperDraft, setSummaryUpperDraft] = useState("30");
+  const [summarySortDraft, setSummarySortDraft] = useState<SummarySort>("none");
 
   async function loadAnalysis(sync = false) {
     if (!subjectId || typeof subjectId !== "string") return;
@@ -176,15 +181,37 @@ export default function SubjectAcademicPage() {
     const upper = Number(summaryUpper);
     return row.marks >= (Number.isFinite(lower) ? lower : 0) && row.marks <= (Number.isFinite(upper) ? upper : MAX) && (summaryTier === "all" || row.tier === summaryTier);
   }).sort((a, b) => {
-    if (summarySort === "none") return 0;
+    if (summarySort === "none") return a.sno - b.sno;
     return summarySort === "desc" ? b.marks - a.marks : a.marks - b.marks;
   }), [combinedRows, summaryExam, summaryTier, summaryLower, summaryUpper, summarySort]);
+  const summaryShowRank = summarySort !== "none";
   const summaryAverage = combinedRows.length ? round1(combinedRows.reduce((sum, row) => sum + row.combined, 0) / combinedRows.length) : 0;
   const summaryPassRate = combinedRows.length ? Math.round(combinedRows.filter((row) => row.combined >= 12).length / combinedRows.length * 100) : 0;
   const midsem1Average = midsem1.average;
   const midsem2Average = midsem2.average;
   const increases = [...combinedRows].map((row) => ({ ...row, change: round1(row.second - row.first) })).filter((row) => row.change > 0).sort((a, b) => b.change - a.change).slice(0, 5);
   const decreases = [...combinedRows].map((row) => ({ ...row, change: round1(row.second - row.first) })).filter((row) => row.change < 0).sort((a, b) => a.change - b.change).slice(0, 5);
+
+  function applySummaryFilters() {
+    setSummaryExam(summaryExamDraft);
+    setSummaryTier(summaryTierDraft);
+    setSummaryLower(summaryLowerDraft);
+    setSummaryUpper(summaryUpperDraft);
+    setSummarySort(summarySortDraft);
+  }
+
+  function resetSummaryFilters() {
+    setSummaryExam("combined");
+    setSummaryTier("all");
+    setSummaryLower("0");
+    setSummaryUpper("30");
+    setSummarySort("none");
+    setSummaryExamDraft("combined");
+    setSummaryTierDraft("all");
+    setSummaryLowerDraft("0");
+    setSummaryUpperDraft("30");
+    setSummarySortDraft("none");
+  }
 
   return (
     <div className="analysis-layout">
@@ -276,9 +303,9 @@ export default function SubjectAcademicPage() {
 
         {data && view === "summary" && <>
           <section className="summary-heading"><div><h2>Academic Summary</h2><p>Compare Midsem 1 and Midsem 2 with the same ClassPulse academic analysis theme.</p></div></section>
-          <section className="summary-filter-panel analysis-panel"><div className="summary-filter-title"><div><h3>Filter Criteria</h3><p>Narrow the student list by examination, performance tier, marks range, and order.</p></div><button className="analysis-secondary" onClick={() => { setSummaryExam("combined"); setSummaryTier("all"); setSummaryLower("0"); setSummaryUpper("30"); setSummarySort("none"); }}>Reset</button></div><div className="summary-filter-grid"><label><span>Exam</span><select value={summaryExam} onChange={(e) => setSummaryExam(e.target.value as SummaryExam)}><option value="combined">Combined</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option><option value="max">Max</option></select></label><label><span>Performance Tier</span><select value={summaryTier} onChange={(e) => setSummaryTier(e.target.value as Tier | "all")}><option value="all">All Tiers</option>{TIERS.map((t) => <option key={t} value={t}>{t}</option>)}</select></label><label><span>Lower Bound</span><input type="number" min="0" max="30" value={summaryLower} onChange={(e) => setSummaryLower(e.target.value)} /></label><label><span>Upper Bound</span><input type="number" min="0" max="30" value={summaryUpper} onChange={(e) => setSummaryUpper(e.target.value)} /></label><label><span>Sort</span><select value={summarySort} onChange={(e) => setSummarySort(e.target.value as SummarySort)}><option value="none">No Sort</option><option value="desc">High to Low</option><option value="asc">Low to High</option></select></label></div></section>
+          <section className="summary-filter-panel analysis-panel"><div className="summary-filter-title"><div><h3>Filter Criteria</h3><p>Narrow the student list by examination, performance tier, marks range, and order.</p></div><div className="summary-filter-actions"><button className="analysis-secondary" onClick={resetSummaryFilters}>Reset</button><button className="summary-apply-button" onClick={applySummaryFilters}>Apply</button></div></div><div className="summary-filter-grid"><label><span>Exam</span><select value={summaryExamDraft} onChange={(e) => setSummaryExamDraft(e.target.value as SummaryExam)}><option value="combined">Combined</option><option value="midsem1">Midsem 1</option><option value="midsem2">Midsem 2</option><option value="max">Max</option></select></label><label><span>Performance Tier</span><select value={summaryTierDraft} onChange={(e) => setSummaryTierDraft(e.target.value as Tier | "all")}><option value="all">All Tiers</option>{TIERS.map((t) => <option key={t} value={t}>{t}</option>)}</select></label><label><span>Lower Bound</span><input type="number" min="0" max="30" value={summaryLowerDraft} onChange={(e) => setSummaryLowerDraft(e.target.value)} /></label><label><span>Upper Bound</span><input type="number" min="0" max="30" value={summaryUpperDraft} onChange={(e) => setSummaryUpperDraft(e.target.value)} /></label><label><span>Sort</span><select value={summarySortDraft} onChange={(e) => setSummarySortDraft(e.target.value as SummarySort)}><option value="none">No Sort</option><option value="desc">High to Low</option><option value="asc">Low to High</option></select></label></div></section>
           <section className="summary-metric-grid"><Metric label="Overall Class Average" value={summaryAverage} detail="combined average" /><Metric label="Highest Combined Score" value={combinedHighest} detail={combinedHighestNames[0] || "—"} /><Metric label="Overall Pass Rate" value={`${summaryPassRate}%`} detail="students scoring 12 or more" /><Metric label="Midsem 1 Average" value={midsem1Average} detail="out of 30 marks" /><Metric label="Midsem 2 Average" value={midsem2Average} detail="out of 30 marks" /></section>
-          <section className="summary-main-grid"><section className="analysis-panel summary-student-panel"><div className="analysis-panel-head"><div><h3>Filtered Students</h3><p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>Showing {summaryRows.length} of {students.length} students</p></div><span className="analysis-count">{summaryRows.length} Students</span></div><div className="analysis-table-wrap summary-table-wrap"><table className="analysis-table"><thead><tr><th>Enrollment</th><th>Student</th><th>Marks</th><th>Tier</th></tr></thead><tbody>{summaryRows.map((row) => <tr key={row.enrollmentNo}><td>{row.enrollmentNo}</td><td>{row.name}</td><td className={`tier-mark ${gradeClass(row.tier)}`}><strong>{row.marks}</strong></td><td><button type="button" className={`analysis-grade-badge ${gradeClass(row.tier)}`} onClick={() => setSummaryTier(summaryTier === row.tier ? "all" : row.tier)}>{row.tier}</button></td></tr>)}{!summaryRows.length && <tr><td colSpan={4} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match these filters.</td></tr>}</tbody></table></div></section><div className="summary-right-column"><section className="analysis-panel summary-rank-panel"><div className="summary-rank-title"><div><h3>Marks Increase (Top 5)</h3><p>Students whose Midsem 2 score improved.</p></div></div>{increases.length ? increases.map((row, i) => <div className="summary-rank-row" key={row.enrollmentNo}><span>{i + 1}.</span><p>{row.name}</p><strong className="change-up">+{row.change}</strong></div>) : <p className="summary-empty">No increases.</p>}</section><section className="analysis-panel summary-rank-panel"><div className="summary-rank-title"><div><h3>Marks Decrease (Top 5)</h3><p>Students whose Midsem 2 score fell.</p></div></div>{decreases.length ? decreases.map((row, i) => <div className="summary-rank-row" key={row.enrollmentNo}><span>{i + 1}.</span><p>{row.name}</p><strong className="change-down">{row.change}</strong></div>) : <p className="summary-empty">No decreases.</p>}</section></div></section>
+          <section className="summary-main-grid"><section className="analysis-panel summary-student-panel"><div className="analysis-panel-head"><div><h3>Filtered Students</h3><p style={{ marginTop: 4, color: "#98a2b3", fontSize: 11 }}>Showing {summaryRows.length} of {students.length} students</p></div><span className="analysis-count">{summaryRows.length} Students</span></div><div className="analysis-table-wrap summary-table-wrap"><table className="analysis-table"><thead><tr><th>{summaryShowRank ? "Rank" : "S.No."}</th><th>Enrollment No.</th><th>Student</th><th>Marks</th><th>Tier</th></tr></thead><tbody>{summaryRows.map((row, index) => <tr key={row.enrollmentNo}><td>{summaryShowRank ? index + 1 : row.sno}</td><td>{row.enrollmentNo}</td><td>{row.name}</td><td className={`tier-mark ${gradeClass(row.tier)}`}><strong>{row.marks}</strong></td><td><button type="button" className={`analysis-grade-badge ${gradeClass(row.tier)}`} onClick={() => setSummaryTier(summaryTier === row.tier ? "all" : row.tier)}>{row.tier}</button></td></tr>)}{!summaryRows.length && <tr><td colSpan={5} style={{ textAlign: "center", padding: 32, color: "#667085" }}>No students match these filters.</td></tr>}</tbody></table></div></section><div className="summary-right-column"><section className="analysis-panel summary-rank-panel"><div className="summary-rank-title"><div><h3>Marks Increase (Top 5)</h3><p>Students whose Midsem 2 score improved.</p></div></div>{increases.length ? increases.map((row, i) => <div className="summary-rank-row" key={row.enrollmentNo}><span>{i + 1}.</span><p>{row.name}</p><strong className="change-up">+{row.change}</strong></div>) : <p className="summary-empty">No increases.</p>}</section><section className="analysis-panel summary-rank-panel"><div className="summary-rank-title"><div><h3>Marks Decrease (Top 5)</h3><p>Students whose Midsem 2 score fell.</p></div></div>{decreases.length ? decreases.map((row, i) => <div className="summary-rank-row" key={row.enrollmentNo}><span>{i + 1}.</span><p>{row.name}</p><strong className="change-down">{row.change}</strong></div>) : <p className="summary-empty">No decreases.</p>}</section></div></section>
         </>}
       </main>
 
@@ -338,6 +365,8 @@ export default function SubjectAcademicPage() {
         .summary-filter-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
         .summary-filter-title h3 { margin: 0; }
         .summary-filter-title p { margin: 5px 0 0; color: #98a2b3; font-size: 11px; }
+        .summary-filter-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .summary-apply-button { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 15px; border: 0; border-radius: 9px; background: linear-gradient(135deg, #251b62, #4637a3); color: #fff; font-size: 12px; font-weight: 700; box-shadow: 0 7px 16px rgba(49,39,120,.14); }
         .summary-filter-grid { display: grid; grid-template-columns: 1.1fr 1.1fr .8fr .8fr 1fr; gap: 12px; }
         .summary-filter-grid label { display: block; }
         .summary-filter-grid label > span { display: block; margin: 0 0 7px; color: #667085; font-size: 11px; font-weight: 600; }
@@ -349,10 +378,11 @@ export default function SubjectAcademicPage() {
         .summary-table-wrap { max-height: 650px; min-height: 650px; overflow: auto; }
         .summary-table-wrap .analysis-table { table-layout: fixed; }
         .summary-table-wrap .analysis-table th, .summary-table-wrap .analysis-table td { white-space: nowrap; }
-        .summary-table-wrap .analysis-table th:nth-child(1), .summary-table-wrap .analysis-table td:nth-child(1) { width: 24%; }
-        .summary-table-wrap .analysis-table th:nth-child(2), .summary-table-wrap .analysis-table td:nth-child(2) { width: 40%; }
-        .summary-table-wrap .analysis-table th:nth-child(3), .summary-table-wrap .analysis-table td:nth-child(3) { width: 16%; text-align: center; }
-        .summary-table-wrap .analysis-table th:nth-child(4), .summary-table-wrap .analysis-table td:nth-child(4) { width: 20%; text-align: center; }
+        .summary-table-wrap .analysis-table th:nth-child(1), .summary-table-wrap .analysis-table td:nth-child(1) { width: 10%; text-align: center; }
+        .summary-table-wrap .analysis-table th:nth-child(2), .summary-table-wrap .analysis-table td:nth-child(2) { width: 24%; text-align: left; }
+        .summary-table-wrap .analysis-table th:nth-child(3), .summary-table-wrap .analysis-table td:nth-child(3) { width: 34%; text-align: left; }
+        .summary-table-wrap .analysis-table th:nth-child(4), .summary-table-wrap .analysis-table td:nth-child(4) { width: 14%; text-align: center; }
+        .summary-table-wrap .analysis-table th:nth-child(5), .summary-table-wrap .analysis-table td:nth-child(5) { width: 18%; text-align: center; }
         .summary-right-column { display: grid; gap: 16px; }
         .summary-rank-panel { padding: 18px; }
         .summary-rank-title h3 { margin: 0; }
