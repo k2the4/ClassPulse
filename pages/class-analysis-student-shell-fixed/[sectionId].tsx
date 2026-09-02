@@ -66,7 +66,7 @@ function installShell() {
   `;
 
   const rawButton = header.querySelector("button") as HTMLElement | null;
-  if (rawButton) sidebar.querySelector(".class-analysis-student-raw")?.appendChild(rawButton.cloneNode(true));
+  if (rawButton) sidebar.querySelector(".class-analysis-student-raw")?.appendChild(rawButton);
 
   const titleRow = header.firstElementChild as HTMLElement | null;
   const actionRow = header.lastElementChild as HTMLElement | null;
