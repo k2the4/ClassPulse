@@ -232,3 +232,83 @@ export async function writeTeacherDiaryAttendance(params: {
     total: params.students.length,
   };
 }
+
+/**
+ * Removes one attendance session's two-column block from the matching TD-* sheet.
+ * The session is located by its stored date and time slot, not by a hard-coded
+ * column position, so deleting an older or middle session keeps the remaining
+ * sessions intact.
+ */
+export async function deleteTeacherDiaryAttendance(params: {
+  spreadsheetId: string;
+  subjectCode: string;
+  date: string;
+  slot: string;
+}): Promise<{ sheetTitle: string; startColumn: number }> {
+  const sheets = getSheetsClient();
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId: params.spreadsheetId,
+    fields: "sheets(properties(sheetId,title,gridProperties(columnCount,rowCount)))",
+  });
+
+  const normalizedTarget = `td-${params.subjectCode}`.toLowerCase().replace(/\s+/g, "");
+  const target = (metadata.data.sheets || []).find((sheet) => {
+    const title = sheet.properties?.title || "";
+    return title.toLowerCase().replace(/\s+/g, "") === normalizedTarget;
+  });
+
+  const sheetId = target?.properties?.sheetId;
+  const title = target?.properties?.title;
+  if (!title || typeof sheetId !== "number") {
+    throw new Error(`Teacher Diary sheet TD-${params.subjectCode} was not found in the linked Google Sheet`);
+  }
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: params.spreadsheetId,
+    range: `'${title}'!A1:AZ500`,
+    valueRenderOption: "FORMATTED_VALUE",
+  });
+  const rows = result.data.values || [];
+  const headerRow = findStudentHeader(rows);
+  if (headerRow === -1) {
+    throw new Error(`TD-${params.subjectCode} does not have the expected S.No / Enrollment No. / Student Name header`);
+  }
+
+  const attendanceSubHeaderRow = headerRow + 1;
+  const maxColumns = Math.max(...rows.map((row) => row.length), 4);
+  let startColumn = -1;
+  for (let col = 3; col < maxColumns - 1; col++) {
+    if (
+      sessionHeaderMatches(rows[headerRow]?.[col], params.date, params.slot) &&
+      normalize(rows[attendanceSubHeaderRow]?.[col]) === "lh" &&
+      normalize(rows[attendanceSubHeaderRow]?.[col + 1]) === "la"
+    ) {
+      startColumn = col;
+      break;
+    }
+  }
+
+  if (startColumn === -1) {
+    throw new Error(`Attendance session for ${params.date} at ${params.slot} was not found in TD-${params.subjectCode}`);
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: params.spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "COLUMNS",
+              startIndex: startColumn,
+              endIndex: startColumn + 2,
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  return { sheetTitle: title, startColumn };
+}
