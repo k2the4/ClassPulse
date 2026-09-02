@@ -49,7 +49,7 @@ function sessionHeaderMatches(value: unknown, date: string, slot: string): boole
 /**
  * Writes one attendance session into the existing TD-* sheet.
  *
- * The TD layout is intentionally column-oriented:
+ * The TD layout is column-oriented:
  *   row N:     date | slot
  *   row N + 1: LH | LA
  *   row N + 2+: student attendance
@@ -81,12 +81,12 @@ export async function writeTeacherDiaryAttendance(params: {
     return title.toLowerCase().replace(/\s+/g, "") === normalizedTarget;
   });
 
-  if (!target?.properties?.title || target.properties.sheetId === undefined) {
+  const sheetId = target?.properties?.sheetId;
+  if (!target?.properties?.title || typeof sheetId !== "number") {
     throw new Error(`Teacher Diary sheet TD-${params.subjectCode} was not found in the linked Google Sheet`);
   }
 
   const title = target.properties.title;
-  const sheetId = target.properties.sheetId;
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId: params.spreadsheetId,
     range: `'${title}'!A1:AZ500`,
@@ -110,7 +110,12 @@ export async function writeTeacherDiaryAttendance(params: {
 
   const incoming = new Map<string, boolean>();
   for (const student of params.students) {
-    incoming.set(cleanEnrollment(student.enrollmentNo), student.present);
+    const enrollmentNo = cleanEnrollment(student.enrollmentNo);
+    if (enrollmentNo) incoming.set(enrollmentNo, student.present);
+  }
+
+  if (incoming.size !== params.students.length) {
+    throw new Error(`Attendance contains a student with an invalid enrollment number`);
   }
 
   for (const enrollmentNo of incoming.keys()) {
@@ -122,7 +127,8 @@ export async function writeTeacherDiaryAttendance(params: {
   // Find an existing session first. This makes Edit update the same columns
   // rather than creating a duplicate session.
   let startColumn = -1;
-  for (let col = 3; col < Math.max(...rows.map((row) => row.length), 4); col++) {
+  const maxColumns = Math.max(...rows.map((row) => row.length), 4);
+  for (let col = 3; col < maxColumns - 1; col++) {
     if (
       sessionHeaderMatches(rows[headerRow]?.[col], params.date, params.slot) &&
       normalize(rows[attendanceSubHeaderRow]?.[col]) === "lh" &&
@@ -137,7 +143,7 @@ export async function writeTeacherDiaryAttendance(params: {
   // between sessions, matching the existing TD layout shown in the sheet.
   if (startColumn === -1) {
     let lastSessionEnd = 2;
-    for (let col = 3; col < Math.max(...rows.map((row) => row.length), 4) - 1; col++) {
+    for (let col = 3; col < maxColumns - 1; col++) {
       if (
         normalize(rows[attendanceSubHeaderRow]?.[col]) === "lh" &&
         normalize(rows[attendanceSubHeaderRow]?.[col + 1]) === "la"
@@ -169,44 +175,26 @@ export async function writeTeacherDiaryAttendance(params: {
 
   const startCol = columnName(startColumn);
   const endCol = columnName(startColumn + 1);
-  const headerRange = `'${title}'!${startCol}6:${endCol}8`;
-  const headerValues = [
-    [params.sessionKey, ""],
-    [`${params.date} | ${params.slot}`, ""],
-    ["LH", "LA"],
-  ];
-
   await sheets.spreadsheets.values.update({
     spreadsheetId: params.spreadsheetId,
-    range: headerRange,
+    range: `'${title}'!${startCol}6:${endCol}8`,
     valueInputOption: "RAW",
-    requestBody: { values: headerValues },
+    requestBody: {
+      values: [
+        [params.sessionKey, ""],
+        [`${params.date} | ${params.slot}`, ""],
+        ["LH", "LA"],
+      ],
+    },
   });
 
-  const writeRanges: Array<{ range: string; values: (string | number)[][] }> = [];
-  const lhValues: number[][] = [];
-  const laValues: number[][] = [];
-
-  for (const rowIndex of enrollmentRows.values()) {
-    const enrollmentNo = cleanEnrollment(rows[rowIndex]?.[1]);
-    const isPresent = incoming.get(enrollmentNo);
-    if (isPresent === undefined) continue;
-    lhValues.push([1]);
-    laValues.push([isPresent ? 1 : 0]);
-  }
-
-  // Build writes by the actual sheet row positions so blank/formatting rows
-  // cannot shift attendance onto a different student.
-  const lhCells: Array<{ range: string; values: number[][] }> = [];
-  const laCells: Array<{ range: string; values: number[][] }> = [];
+  const writeRanges: Array<{ range: string; values: number[][] }> = [];
   for (const [enrollmentNo, rowIndex] of enrollmentRows.entries()) {
     if (!incoming.has(enrollmentNo)) continue;
     const rowNumber = rowIndex + 1;
-    lhCells.push({ range: `'${title}'!${startCol}${rowNumber}`, values: [[1]] });
-    laCells.push({ range: `'${title}'!${endCol}${rowNumber}`, values: [[incoming.get(enrollmentNo) ? 1 : 0]] });
+    writeRanges.push({ range: `'${title}'!${startCol}${rowNumber}`, values: [[1]] });
+    writeRanges.push({ range: `'${title}'!${endCol}${rowNumber}`, values: [[incoming.get(enrollmentNo) ? 1 : 0]] });
   }
-
-  writeRanges.push(...lhCells, ...laCells);
 
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: params.spreadsheetId,
@@ -216,8 +204,8 @@ export async function writeTeacherDiaryAttendance(params: {
     },
   });
 
-  // Keep the static metadata at the top of the Teacher Diary useful and
-  // identify the most recently recorded session without changing the table.
+  // Keep the top of the Teacher Diary useful while retaining the per-session
+  // date/slot and unique key in the attendance table itself.
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: params.spreadsheetId,
     requestBody: {
