@@ -32,9 +32,9 @@ export default function SubjectAnalysisNav({ subjectId }: Props) {
   return (
     <>
       {info && (
-        <div className="analysis-context-heading">
-          <div className="analysis-context-heading__class">{info.className}</div>
-          <div className="analysis-context-heading__subject">{info.subjectName} <span>({info.subjectCode})</span></div>
+        <div className="mb-4 rounded-xl border border-[#e8e6f5] bg-[#faf9ff] px-4 py-3">
+          <div className="text-sm font-bold text-[#17223b]">{info.className}</div>
+          <div className="mt-0.5 text-sm font-medium text-[#5b4ee6]">{info.subjectName} <span className="font-normal text-[#7a8295]">({info.subjectCode})</span></div>
         </div>
       )}
       <nav className="subject-analysis-nav" aria-label="Subject analysis sections">
