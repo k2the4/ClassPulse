@@ -10,7 +10,6 @@ type Student = {
 type AttendancePayload = {
   students?: Student[];
   monthsUsed?: { previous?: string; current?: string };
-  trendCounts?: { increasing?: number; decreasing?: number; stable?: number };
 };
 
 const fmt = (n: number) => `${Math.round(n * 10) / 10}%`;
@@ -26,33 +25,30 @@ function addStyles() {
   const style = document.createElement("style");
   style.id = "classpulse-attendance-trend-fixes";
   style.textContent = `
-    .classpulse-trend-hero{display:grid!important;grid-template-columns:minmax(230px,.72fr) minmax(0,1.7fr)!important;gap:20px!important;align-items:center!important}
+    .classpulse-trend-hero{display:grid!important;grid-template-columns:300px minmax(480px,620px)!important;justify-content:space-between!important;gap:24px!important;align-items:center!important}
     .classpulse-trend-hero-copy h2{margin:0;font-size:21px;line-height:1.2;font-weight:700;color:#17223b}
-    .classpulse-trend-hero-copy p{margin:8px 0 0;max-width:390px;font-size:12px;line-height:1.55;color:#667085}
-    .classpulse-trend-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-    .classpulse-trend-metric{min-width:0;min-height:76px;padding:12px 14px;border:1px solid #e7ebf1;border-top:3px solid;border-radius:13px;background:#fff;box-shadow:0 2px 7px rgba(16,24,40,.04)}
+    .classpulse-trend-hero-copy p{margin:8px 0 0;max-width:300px;font-size:12px;line-height:1.55;color:#667085}
+    .classpulse-trend-metrics{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:10px;width:100%;max-width:620px}
+    .classpulse-trend-metric{min-width:0;height:76px;padding:11px 14px;border:1px solid #e7ebf1;border-top:3px solid;border-radius:13px;background:#fff;box-shadow:0 2px 7px rgba(16,24,40,.04);box-sizing:border-box}
     .classpulse-trend-metric-label{display:block;font-size:10px;line-height:1.25;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .classpulse-trend-metric-value{margin-top:5px;font-size:19px;line-height:1.15;color:#17223b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .classpulse-trend-metric-detail{margin-top:3px;font-size:9px;line-height:1.25;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .classpulse-trend-table-wrap{overflow-x:hidden!important;overflow-y:auto!important;max-height:500px!important}
-    .classpulse-trend-table{width:100%!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}
-    .classpulse-trend-table th,.classpulse-trend-table td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:10px 7px!important}
-    .classpulse-trend-table th:nth-child(1),.classpulse-trend-table td:nth-child(1){width:38px!important;text-align:center}
-    .classpulse-trend-table th:nth-child(2),.classpulse-trend-table td:nth-child(2){width:29%!important}
+    .classpulse-trend-table-wrap{overflow-x:hidden!important;overflow-y:auto!important;height:500px!important;max-height:500px!important;scrollbar-gutter:stable}
+    .classpulse-trend-table{width:100%!important;max-width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse!important}
+    .classpulse-trend-table th,.classpulse-trend-table td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:10px 6px!important}
+    .classpulse-trend-table th:nth-child(1),.classpulse-trend-table td:nth-child(1){width:5%!important;text-align:center}
+    .classpulse-trend-table th:nth-child(2),.classpulse-trend-table td:nth-child(2){width:28%!important}
     .classpulse-trend-table th:nth-child(3),.classpulse-trend-table td:nth-child(3){width:18%!important}
-    .classpulse-trend-table th:nth-child(4),.classpulse-trend-table td:nth-child(4){width:15%!important}
+    .classpulse-trend-table th:nth-child(4),.classpulse-trend-table td:nth-child(4){width:13%!important}
     .classpulse-trend-table th:nth-child(5),.classpulse-trend-table td:nth-child(5){width:13%!important}
-    .classpulse-trend-table th:nth-child(6),.classpulse-trend-table td:nth-child(6){width:25%!important}
-    .classpulse-trend-table th:nth-child(7),.classpulse-trend-table td:nth-child(7){width:25%!important}
-    .classpulse-trend-pagination{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 8px 4px}
-    .classpulse-trend-page{min-width:30px;height:30px;padding:0 8px;border:1px solid #e2e8f0;border-radius:7px;background:#fff;color:#64748b;font-size:11px;cursor:pointer}
-    .classpulse-trend-page.is-active{background:#39248f;color:#fff;border-color:#39248f}
-    .classpulse-trend-page:disabled{opacity:.4;cursor:default}
-    .classpulse-trend-page-info{font-size:10px;color:#94a3b8;margin:0 8px}
+    .classpulse-trend-table th:nth-child(6),.classpulse-trend-table td:nth-child(6){width:10%!important}
+    .classpulse-trend-table th:nth-child(7),.classpulse-trend-table td:nth-child(7){width:13%!important}
     .classpulse-trend-chart-stack{min-width:0}
-    @media(min-width:1000px){.analysis-content-grid{grid-template-columns:minmax(0,.95fr) minmax(400px,1.05fr)!important}}
-    @media(max-width:900px){.classpulse-trend-hero{grid-template-columns:1fr!important}.classpulse-trend-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-content-grid{grid-template-columns:1fr!important}}
-    @media(max-width:560px){.classpulse-trend-metrics{grid-template-columns:1fr}.classpulse-trend-table th,.classpulse-trend-table td{padding-left:4px!important;padding-right:4px!important}.classpulse-trend-table th:nth-child(2),.classpulse-trend-table td:nth-child(2){width:27%!important}.classpulse-trend-table th:nth-child(3),.classpulse-trend-table td:nth-child(3){width:18%!important}}
+    .classpulse-trend-chart-stack .analysis-chart-panel{min-width:0}
+    @media(min-width:1000px){.analysis-content-grid{grid-template-columns:minmax(0,1.35fr) minmax(300px,.85fr)!important;gap:14px!important}}
+    @media(max-width:1050px){.classpulse-trend-hero{grid-template-columns:260px minmax(440px,1fr)!important}.classpulse-trend-metrics{max-width:560px}}
+    @media(max-width:900px){.classpulse-trend-hero{grid-template-columns:1fr!important}.classpulse-trend-metrics{grid-template-columns:repeat(2,minmax(0,1fr));max-width:none}.analysis-content-grid{grid-template-columns:1fr!important}}
+    @media(max-width:560px){.classpulse-trend-metrics{grid-template-columns:1fr}.classpulse-trend-table th,.classpulse-trend-table td{padding-left:4px!important;padding-right:4px!important}}
   `;
   document.head.appendChild(style);
 }
@@ -90,37 +86,18 @@ function installTable(payload: AttendancePayload) {
   const panel = document.querySelector(".analysis-table-panel") as HTMLElement | null;
   const oldTable = panel?.querySelector("table.analysis-table") as HTMLTableElement | null;
   if (!panel || !oldTable) return;
-  const state = (window as any).__classpulseAttendancePager || { page: 1, search: "" };
-  (window as any).__classpulseAttendancePager = state;
   const students = payload.students || [];
   const oldSearch = panel.querySelector(".analysis-panel-head input") as HTMLInputElement | null;
-  const search = oldSearch?.value || state.search || "";
-  if (search !== state.search) state.page = 1;
-  state.search = search;
+  const search = oldSearch?.value || "";
   const filtered = students.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()) || s.enrollmentNo.toLowerCase().includes(search.toLowerCase()));
-  const totalPages = Math.max(1, Math.ceil(filtered.length / 10));
-  state.page = Math.min(Math.max(1, state.page), totalPages);
-  const pageRows = filtered.slice((state.page - 1) * 10, state.page * 10);
   oldTable.className = "analysis-table classpulse-trend-table";
-  oldTable.innerHTML = `<thead><tr><th>S.No.</th><th>Student Name</th><th>Enrollment No.</th><th>${esc(payload.monthsUsed?.previous || "Month 1")}</th><th>${esc(payload.monthsUsed?.current || "Month 2")}</th><th>Change</th><th>Trend</th></tr></thead><tbody>${pageRows.map((s, i) => { const prev = Number(s.attendancePct.prevMonth || 0); const curr = Number(s.attendancePct.currMonth || 0); const change = Math.round((curr - prev) * 10) / 10; const trend = s.attendancePct.trend; const badge = trend === "Increasing" ? "trend-up" : trend === "Decreasing" ? "trend-down" : "trend-stable"; return `<tr><td>${(state.page - 1) * 10 + i + 1}</td><td><span class="student-cell"><span class="student-avatar">${esc(initials(s.name))}</span>${esc(s.name)}</span></td><td title="${esc(s.enrollmentNo)}">${esc(s.enrollmentNo)}</td><td>${fmt(prev)}</td><td>${fmt(curr)}</td><td class="${change > 0 ? "change-up" : change < 0 ? "change-down" : ""}">${change > 0 ? "+" : ""}${fmt(change)}</td><td><span class="trend-badge ${badge}">${trend === "Increasing" ? "↑ " : trend === "Decreasing" ? "↓ " : "− "}${esc(trend)}</span></td></tr>`; }).join("")}</tbody>`;
+  oldTable.innerHTML = `<thead><tr><th>S.No.</th><th>Student Name</th><th>Enrollment No.</th><th>${esc(payload.monthsUsed?.previous || "Month 1")}</th><th>${esc(payload.monthsUsed?.current || "Month 2")}</th><th>Change</th><th>Trend</th></tr></thead><tbody>${filtered.map((s, i) => { const prev = Number(s.attendancePct.prevMonth || 0); const curr = Number(s.attendancePct.currMonth || 0); const change = Math.round((curr - prev) * 10) / 10; const trend = s.attendancePct.trend; const badge = trend === "Increasing" ? "trend-up" : trend === "Decreasing" ? "trend-down" : "trend-stable"; return `<tr><td>${i + 1}</td><td><span class="student-cell"><span class="student-avatar">${esc(initials(s.name))}</span>${esc(s.name)}</span></td><td title="${esc(s.enrollmentNo)}">${esc(s.enrollmentNo)}</td><td>${fmt(prev)}</td><td>${fmt(curr)}</td><td class="${change > 0 ? "change-up" : change < 0 ? "change-down" : ""}">${change > 0 ? "+" : ""}${fmt(change)}</td><td><span class="trend-badge ${badge}">${trend === "Increasing" ? "↑ " : trend === "Decreasing" ? "↓ " : "− "}${esc(trend)}</span></td></tr>`; }).join("")}</tbody>`;
   const wrap = panel.querySelector(".analysis-table-wrap") as HTMLElement | null;
   if (wrap) wrap.classList.add("classpulse-trend-table-wrap");
-  let pagination = panel.querySelector(".classpulse-trend-pagination") as HTMLElement | null;
-  if (!pagination) { pagination = document.createElement("div"); pagination.className = "classpulse-trend-pagination"; wrap?.after(pagination); }
-  pagination.innerHTML = "";
-  const prevBtn = document.createElement("button"); prevBtn.className = "classpulse-trend-page"; prevBtn.textContent = "‹"; prevBtn.disabled = state.page <= 1; prevBtn.onclick = () => { state.page--; render(); };
-  pagination.appendChild(prevBtn);
-  for (let p = 1; p <= totalPages; p++) {
-    if (totalPages > 7 && p > 5 && p < totalPages) {
-      if (p === 6) { const dots = document.createElement("span"); dots.className = "classpulse-trend-page-info"; dots.textContent = "…"; pagination.appendChild(dots); }
-      continue;
-    }
-    const b = document.createElement("button"); b.className = `classpulse-trend-page${p === state.page ? " is-active" : ""}`; b.textContent = String(p); b.onclick = () => { state.page = p; render(); }; pagination.appendChild(b);
-  }
-  const nextBtn = document.createElement("button"); nextBtn.className = "classpulse-trend-page"; nextBtn.textContent = "›"; nextBtn.disabled = state.page >= totalPages; nextBtn.onclick = () => { state.page++; render(); }; pagination.appendChild(nextBtn);
+  const pagination = panel.querySelector(".classpulse-trend-pagination");
+  pagination?.remove();
   const count = panel.querySelector(".analysis-count") as HTMLElement | null;
   if (count) count.textContent = `${filtered.length} Students`;
-  function render() { installTable(payload); }
 }
 
 function installCharts() {
