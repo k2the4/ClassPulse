@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 import { fetchClassRawData } from "../../lib/googleSheetsClass";
-import { writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
+import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
 
 const TIME_SLOTS = [
   "8 to 9",
@@ -137,6 +137,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         canEdit: role === "ADMIN" || item.teacherId === userId,
       })),
     });
+  }
+
+  if (req.method === "DELETE") {
+    const { sectionId, sessionId } = req.body ?? {};
+    if (typeof sectionId !== "string" || typeof sessionId !== "string" || !sessionId) {
+      return res.status(400).json({ error: "sectionId and sessionId are required" });
+    }
+
+    const attendance = await prisma.attendanceSession.findFirst({
+      where: { id: sessionId, sectionId },
+      include: {
+        subject: { select: { id: true, name: true, code: true, sectionId: true } },
+        section: {
+          select: {
+            name: true,
+            sheetLink: { select: { sheetId: true } },
+            class: { select: { semester: true, department: { select: { name: true } } } },
+          },
+        },
+      },
+    });
+
+    if (!attendance) return res.status(404).json({ error: "Attendance session not found" });
+    if (role !== "ADMIN" && attendance.teacherId !== userId) {
+      return res.status(403).json({ error: "Only the teacher who recorded this session can delete it" });
+    }
+    if (attendance.subject.sectionId !== sectionId) return res.status(400).json({ error: "Attendance subject does not belong to this class" });
+    if (!attendance.section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
+
+    try {
+      await deleteTeacherDiaryAttendance({
+        spreadsheetId: attendance.section.sheetLink.sheetId,
+        subjectCode: attendance.subject.code,
+        date: attendance.date.toISOString().slice(0, 10),
+        slot: attendance.slot,
+      });
+    } catch (error) {
+      console.error("Teacher Diary deletion failed:", error);
+      const message = error instanceof Error ? error.message : "Unknown Google Sheets error";
+      return res.status(502).json({ error: `Attendance was not deleted because Teacher Diary could not be updated. ${message}` });
+    }
+
+    await prisma.attendanceSession.delete({ where: { id: attendance.id } });
+    return res.status(200).json({ ok: true, deletedSessionId: attendance.id });
   }
 
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
