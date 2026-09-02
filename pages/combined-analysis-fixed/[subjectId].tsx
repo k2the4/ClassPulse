@@ -31,9 +31,25 @@ const COMBINED_CSS = `
   .combined-table-panel .tier-mark.good { color: #15966a !important; }
   .combined-table-panel .tier-mark.attention { color: #f59e0b !important; }
   .combined-table-panel .tier-mark.risk { color: #ef4444 !important; }
+  .summary-filter-title { align-items: center !important; }
+  .summary-filter-title > div:first-child { min-width: 0; }
+  .summary-filter-actions { display: flex !important; align-items: center; gap: 8px; flex-shrink: 0; }
+  .summary-filter-actions button { height: 36px; min-width: 64px; padding: 0 12px !important; }
+  .summary-apply-button { border: 0; border-radius: 8px; background: #4b2e91; color: #fff; font-weight: 600; cursor: pointer; }
+  .summary-apply-button:hover { background: #3f267b; }
+  .summary-table-wrap { min-width: 0 !important; overflow-x: hidden !important; overflow-y: auto !important; }
+  .summary-table-wrap .analysis-table { width: 100% !important; max-width: 100% !important; min-width: 0 !important; table-layout: fixed !important; }
+  .summary-table-wrap .analysis-table th,
+  .summary-table-wrap .analysis-table td { white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+  .summary-table-wrap .analysis-table th:nth-child(1), .summary-table-wrap .analysis-table td:nth-child(1) { width: 8% !important; text-align: center !important; }
+  .summary-table-wrap .analysis-table th:nth-child(2), .summary-table-wrap .analysis-table td:nth-child(2) { width: 23% !important; text-align: left !important; }
+  .summary-table-wrap .analysis-table th:nth-child(3), .summary-table-wrap .analysis-table td:nth-child(3) { width: 41% !important; text-align: left !important; }
+  .summary-table-wrap .analysis-table th:nth-child(4), .summary-table-wrap .analysis-table td:nth-child(4) { width: 13% !important; text-align: center !important; }
+  .summary-table-wrap .analysis-table th:nth-child(5), .summary-table-wrap .analysis-table td:nth-child(5) { width: 15% !important; text-align: center !important; }
+  .summary-table-wrap .summary-index-cell { text-align: center !important; font-variant-numeric: tabular-nums; }
   @media (max-width: 1200px) { .combined-layout { grid-template-columns: 1fr !important; } }
   @media (max-width: 800px) { .combined-controls-proxy { justify-content: flex-start; flex-wrap: wrap; } .combined-controls-proxy .combined-control { min-width: 0; flex: 1 1 180px; } }
-  @media (max-width: 600px) { .combined-controls-proxy { flex-direction: column; align-items: stretch; } .combined-controls-proxy .combined-control { width: 100%; } }
+  @media (max-width: 600px) { .combined-controls-proxy { flex-direction: column; align-items: stretch; } .combined-controls-proxy .combined-control { width: 100%; } .summary-filter-title { align-items: stretch !important; } .summary-filter-actions { justify-content: flex-end; } }
 `;
 
 function installCombinedUiFix() {
@@ -99,12 +115,82 @@ function installCombinedUiFix() {
   panel.prepend(proxy);
 }
 
+function installSummaryUiFix() {
+  const panel = document.querySelector(".summary-filter-panel") as HTMLElement | null;
+  const title = panel?.querySelector(".summary-filter-title") as HTMLElement | null;
+  if (!panel || !title) return;
+
+  const reset = title.querySelector("button") as HTMLButtonElement | null;
+  if (!reset || title.querySelector(".summary-filter-actions")) {
+    if (title.querySelector(".summary-filter-actions")) {
+      syncSummaryTable();
+    }
+    return;
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "summary-filter-actions";
+  reset.parentElement?.insertBefore(actions, reset);
+  actions.appendChild(reset);
+
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "summary-apply-button";
+  apply.textContent = "Apply";
+  apply.addEventListener("click", () => {
+    const filters = panel.querySelectorAll("select, input");
+    filters.forEach((control) => {
+      const eventType = control.tagName === "SELECT" ? "change" : "change";
+      control.dispatchEvent(new Event(eventType, { bubbles: true }));
+    });
+    requestAnimationFrame(syncSummaryTable);
+  });
+  actions.appendChild(apply);
+  syncSummaryTable();
+}
+
+function syncSummaryTable() {
+  const table = document.querySelector(".summary-table-wrap .analysis-table") as HTMLTableElement | null;
+  if (!table) return;
+  const headerRow = table.querySelector("thead tr");
+  const bodyRows = Array.from(table.querySelectorAll("tbody tr"));
+  if (!headerRow) return;
+
+  let indexHeader = headerRow.querySelector(".summary-index-header") as HTMLTableCellElement | null;
+  if (!indexHeader) {
+    indexHeader = document.createElement("th");
+    indexHeader.className = "summary-index-header";
+    headerRow.insertBefore(indexHeader, headerRow.firstElementChild);
+  }
+
+  const sortSelect = document.querySelector(".summary-filter-grid select:last-child") as HTMLSelectElement | null;
+  const sorted = sortSelect?.value === "desc" || sortSelect?.value === "asc";
+  indexHeader.textContent = sorted ? "Rank" : "S.No.";
+
+  let visibleIndex = 0;
+  bodyRows.forEach((row) => {
+    if (row.querySelector("td[colspan]")) return;
+    let cell = row.querySelector(".summary-index-cell") as HTMLTableCellElement | null;
+    if (!cell) {
+      cell = document.createElement("td");
+      cell.className = "summary-index-cell";
+      row.insertBefore(cell, row.firstElementChild);
+    }
+    visibleIndex += 1;
+    cell.textContent = String(visibleIndex);
+  });
+}
+
 export default function CombinedAnalysisFixedPage() {
   useEffect(() => {
     let frame = 0;
     const run = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => installCombinedUiFix());
+      frame = requestAnimationFrame(() => {
+        installCombinedUiFix();
+        installSummaryUiFix();
+        syncSummaryTable();
+      });
     };
 
     run();
