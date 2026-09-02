@@ -19,7 +19,7 @@ export default function SubjectAnalysisNav({ subjectId }: Props) {
       <div className="subject-analysis-nav__rail">
         {items.map(({ label, icon: Icon, path }) => {
           const href = `/subject-analysis/${subjectId}/${path}`;
-          const active = router.pathname.endsWith(`/${path}`);
+          const active = router.pathname.endsWith(`/${path}`) || (path === "academic" && router.asPath.includes(`/subject-analysis/${subjectId}/academic`));
           return (
             <Link key={path} href={href} className={`subject-analysis-nav__item ${active ? "is-active" : ""}`}>
               <Icon size={17} strokeWidth={1.8} />
