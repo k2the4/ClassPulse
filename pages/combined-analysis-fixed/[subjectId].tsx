@@ -48,7 +48,6 @@ const COMBINED_CSS = `
   .summary-table-wrap .analysis-table th:nth-child(5), .summary-table-wrap .analysis-table td:nth-child(5) { width: 15% !important; text-align: center !important; }
   .summary-table-wrap .summary-index-cell { text-align: center !important; font-variant-numeric: tabular-nums; }
 
-  /* Subject Academic: mirror the Class Academic page structure while keeping subject data. */
   .subject-academic-hero { display: grid !important; grid-template-columns: minmax(220px, 1.05fr) repeat(4, minmax(0, 1fr)) !important; gap: 14px !important; align-items: stretch !important; }
   .subject-academic-hero .analysis-hero-copy { align-self: center !important; }
   .subject-academic-hero .analysis-metric,
@@ -248,9 +247,11 @@ function installSubjectAcademicUiFix() {
 
   const count = statsPanel.querySelector(".academic-tier-count") as HTMLElement | null;
   const tierCards = Array.from(statsPanel.querySelectorAll(".academic-tier-card")) as HTMLElement[];
+  const counts = tierCards.map((card) => Number(card.querySelector("strong")?.textContent || 0));
+  const total = counts.reduce((sum, value) => sum + value, 0);
   if (count) {
-    const visibleCount = tierCards.reduce((sum, card) => sum + Number(card.querySelector("strong")?.textContent || 0), 0);
-    count.textContent = `${visibleCount} Students`;
+    const nextText = `${total} Students`;
+    if (count.textContent !== nextText) count.textContent = nextText;
   }
 
   let bar = statsPanel.querySelector(".subject-tier-bar") as HTMLElement | null;
@@ -259,15 +260,15 @@ function installSubjectAcademicUiFix() {
     bar.className = "subject-tier-bar";
     statsPanel.appendChild(bar);
   }
-  bar.innerHTML = "";
+
   const tierColors = ["#4d75d0", "#15966a", "#f59e0b", "#ef4444"];
-  tierCards.forEach((card, index) => {
-    const value = Number(card.querySelector("strong")?.textContent || 0);
-    const total = tierCards.reduce((sum, item) => sum + Number(item.querySelector("strong")?.textContent || 0), 0);
-    const segment = document.createElement("span");
-    segment.style.width = `${total ? (value / total) * 100 : 0}%`;
+  if (bar.children.length !== tierCards.length) {
+    bar.replaceChildren(...tierCards.map(() => document.createElement("span")));
+  }
+  Array.from(bar.children).forEach((child, index) => {
+    const segment = child as HTMLElement;
+    segment.style.width = `${total ? (counts[index] / total) * 100 : 0}%`;
     segment.style.background = tierColors[index];
-    bar?.appendChild(segment);
   });
 
   if (chartPanel) chartPanel.classList.add("subject-academic-hidden-chart");
