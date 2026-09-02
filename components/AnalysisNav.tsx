@@ -30,8 +30,8 @@ export default function AnalysisNav({ sectionId }: Props) {
   return (
     <>
       {className && (
-        <div className="analysis-context-heading">
-          <div className="analysis-context-heading__class">{className}</div>
+        <div className="mb-4 rounded-xl border border-[#e8e6f5] bg-[#faf9ff] px-4 py-3">
+          <div className="text-sm font-bold text-[#17223b]">{className}</div>
         </div>
       )}
       <nav className="subject-analysis-nav" aria-label="Class analysis sections">
