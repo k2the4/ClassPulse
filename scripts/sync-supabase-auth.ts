@@ -1,10 +1,50 @@
-import { loadEnvConfig } from "@next/env";
 import { PrismaClient } from "@prisma/client";
 import { createClient, type User } from "@supabase/supabase-js";
-
-loadEnvConfig(process.cwd());
+import fs from "node:fs";
+import path from "node:path";
 
 const prisma = new PrismaClient();
+
+type Env = Record<string, string>;
+
+function loadDotEnv(filePath: string): Env {
+  if (!fs.existsSync(filePath)) return {};
+
+  const values: Env = {};
+  const content = fs.readFileSync(filePath, "utf8");
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const match = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+
+    let value = match[2].trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    values[match[1]] = value;
+  }
+
+  return values;
+}
+
+function loadLocalEnv() {
+  const root = process.cwd();
+  const envFiles = [".env", ".env.local"];
+
+  for (const file of envFiles) {
+    const values = loadDotEnv(path.join(root, file));
+    for (const [key, value] of Object.entries(values)) {
+      if (process.env[key] === undefined) process.env[key] = value;
+    }
+  }
+}
 
 async function listAllAuthUsers(supabase: any): Promise<User[]> {
   const users: User[] = [];
@@ -27,12 +67,14 @@ async function listAllAuthUsers(supabase: any): Promise<User[]> {
 }
 
 async function main() {
+  loadLocalEnv();
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceKey) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env",
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env or .env.local",
     );
   }
 
