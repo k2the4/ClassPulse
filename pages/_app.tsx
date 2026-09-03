@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { AppProps } from "next/app";
 import GlobalButtonLoading from "../components/GlobalButtonLoading";
 import "../styles/globals.css";
+import "../styles/analysis.css";
 import "../styles/overall-analysis-fixes.css";
 import "../styles/academic-table-fix.css";
 import "../styles/academic-summary-fix.css";
