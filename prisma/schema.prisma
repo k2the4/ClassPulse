@@ -38,7 +38,7 @@ model User {
   id                   String              @id @default(cuid())
   name                 String
   email                String              @unique
-  passwordHash         String
+  authUserId            String?             @unique @db.Uuid
   role                 Role                @default(TEACHER)
   college              College             @relation(fields: [collegeId], references: [id])
   collegeId            String
