@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -10,13 +9,10 @@ async function main() {
     data: { name: "ECE", collegeId: college.id },
   });
 
-  const passwordHash = await bcrypt.hash("changeme123", 10);
-
   const teacher = await prisma.user.create({
     data: {
-      name: "Dr. Geetanjali",
+      name: "Dr. Geetanjali Sharma",
       email: "geetanjali@demo.edu",
-      passwordHash,
       role: "TEACHER",
       collegeId: college.id,
     },
@@ -26,7 +22,6 @@ async function main() {
     data: {
       name: "College Admin",
       email: "admin@demo.edu",
-      passwordHash,
       role: "ADMIN",
       collegeId: college.id,
     },
@@ -55,8 +50,6 @@ async function main() {
     data: { teacherId: teacher.id, subjectId: subject.id },
   });
 
-  // ECE 2 Sem 7 combined section sheet. Subject Analysis prefers this
-  // section-level link, so all subjects read from the same current sheet.
   const ece2Sem7SheetId =
     "1T9F-99yjdoe99hh16urc1eQHZuiMZuTemzXk3s9sHeY";
 
@@ -67,8 +60,6 @@ async function main() {
     },
   });
 
-  // Keep the optional subject-level link aligned with the same current
-  // proof-of-concept sheet rather than leaving the old sheet configured.
   await prisma.sheetLink.create({
     data: {
       subjectId: subject.id,
@@ -76,10 +67,10 @@ async function main() {
     },
   });
 
-  console.log("Seeded. Login as:");
-  console.log("  teacher: geetanjali@demo.edu / changeme123");
-  console.log("  admin:   admin@demo.edu / changeme123");
-  console.log("");
+  console.log("Seeded Prisma application data.");
+  console.log("Create/link the demo accounts with Supabase Auth before signing in.");
+  console.log(`  teacher: ${teacher.email}`);
+  console.log(`  admin:   ${admin.email}`);
   console.log("ECE 2 Sem 7 sheet:");
   console.log(ece2Sem7SheetId);
 }
