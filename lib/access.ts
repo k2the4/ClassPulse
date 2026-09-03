@@ -12,34 +12,27 @@ export async function requireSession(req: NextApiRequest, res: NextApiResponse) 
   return session;
 }
 
-// Admins can access anything in their college. Teachers only subjects
-// they're assigned to (via Assignment) or classes they proctor.
+// Admins can access anything in their college. Teachers can view a subject
+// only when they are the single teacher assigned to that subject.
 export async function assertTeacherCanViewSubject(userId: string, role: string, subjectId: string) {
   if (role === "ADMIN") return true;
-  const assignment = await prisma.assignment.findFirst({
-    where: { teacherId: userId, subjectId },
+  const assignment = await prisma.assignment.findUnique({
+    where: { subjectId },
   });
-  return !!assignment;
+  return assignment?.teacherId === userId;
 }
 
+// Class-level access is separate from subject assignment. A teacher must be
+// explicitly granted ClassAccess for the whole class. Teaching one subject
+// no longer implicitly grants access to the complete class.
 export async function assertTeacherCanViewClass(userId: string, role: string, classId: string) {
   if (role === "ADMIN") return true;
-  const cls = await prisma.class.findFirst({ where: { id: classId, proctorId: userId } });
-  if (cls) return true;
-  // or teaches at least one subject within this class's sections
-  const teaches = await prisma.assignment.findFirst({
-    where: {
-      teacherId: userId,
-      subject: { section: { classId } },
-    },
+  const access = await prisma.classAccess.findUnique({
+    where: { teacherId_classId: { teacherId: userId, classId } },
   });
-  return !!teaches;
+  return !!access;
 }
 
-// Section-based analysis pages are used by Class Analysis, whose purpose is
-// to show the complete class/section view across all subjects. A teacher who
-// has access to the class (as proctor or by teaching any subject in it) must
-// therefore be allowed to open the section analysis pages as well.
 export async function assertTeacherCanViewSection(userId: string, role: string, sectionId: string) {
   if (role === "ADMIN") return true;
   const section = await prisma.section.findUnique({ where: { id: sectionId }, select: { classId: true } });
@@ -47,7 +40,6 @@ export async function assertTeacherCanViewSection(userId: string, role: string, 
   return assertTeacherCanViewClass(userId, role, section.classId);
 }
 
-// Kept as an explicit alias for class-level overall analysis callers.
 export async function assertTeacherCanViewOverall(userId: string, role: string, sectionId: string) {
   return assertTeacherCanViewSection(userId, role, sectionId);
 }
