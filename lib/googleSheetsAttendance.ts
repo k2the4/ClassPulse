@@ -193,14 +193,15 @@ export async function syncMonthlyAttendanceFromTeacherDiary(params: {
   if (monthHeaderRow === -1) throw new Error(`Monthly sheet ${monthTitle} does not have LH/LA attendance columns`);
 
   const monthSubjectRow = monthHeaderRow - 1;
+  const monthParentSubjectRow = monthHeaderRow - 2;
   let monthLhCol = -1;
   for (let col = 0; col + 1 < (monthRows[monthHeaderRow]?.length || 0); col++) {
-    if (normalize(monthRows[monthHeaderRow]?.[col]) === "lh" && normalize(monthRows[monthHeaderRow]?.[col + 1]) === "la") {
-      const candidate = monthRows[monthSubjectRow]?.[col] || monthRows[monthSubjectRow - 1]?.[col];
-      if (subjectCodesMatch(candidate, params.subjectCode)) {
-        monthLhCol = col;
-        break;
-      }
+    if (normalize(monthRows[monthHeaderRow]?.[col]) !== "lh" || normalize(monthRows[monthHeaderRow]?.[col + 1]) !== "la") continue;
+    const directCandidate = monthRows[monthSubjectRow]?.[col];
+    const parentCandidate = monthRows[monthParentSubjectRow]?.[col];
+    if (subjectCodesMatch(directCandidate, params.subjectCode) || subjectCodesMatch(parentCandidate, params.subjectCode)) {
+      monthLhCol = col;
+      break;
     }
   }
   if (monthLhCol === -1) throw new Error(`Subject ${params.subjectCode} was not found in monthly sheet ${monthTitle}`);
