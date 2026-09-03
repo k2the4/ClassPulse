@@ -1,9 +1,7 @@
 import { useEffect } from "react";
 import type { AppProps } from "next/app";
-import { SessionProvider } from "next-auth/react";
 import GlobalButtonLoading from "../components/GlobalButtonLoading";
 import "../styles/globals.css";
-import "../app/globals.css";
 import "../styles/overall-analysis-fixes.css";
 import "../styles/academic-table-fix.css";
 import "../styles/academic-summary-fix.css";
@@ -32,12 +30,12 @@ function AnalysisSidebarRouting() {
   return null;
 }
 
-export default function App({ Component, pageProps: { session, ...pageProps } }: AppProps) {
+export default function App({ Component, pageProps }: AppProps) {
   return (
-    <SessionProvider session={session}>
+    <>
       <AnalysisSidebarRouting />
       <GlobalButtonLoading />
       <Component {...pageProps} />
-    </SessionProvider>
+    </>
   );
 }
