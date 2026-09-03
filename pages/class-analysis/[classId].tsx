@@ -4,9 +4,8 @@ import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 
 // Class Analysis is a class-level entry point into the existing section-based
-// analysis UI. A class can contain multiple sections, so never blindly pick
-// the first section: resolve the section the signed-in user is actually
-// allowed to view.
+// analysis UI. Teachers may enter a class only through an explicit ClassAccess
+// record; teaching a subject or being listed as a proctor does not grant access.
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const classId = typeof ctx.params?.classId === "string" ? ctx.params.classId : "";
 
@@ -39,27 +38,27 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     };
   }
 
-  // Prefer a section the teacher teaches. This is important when a class has
-  // multiple sections: the section-analysis API enforces section-level access.
-  const assignedSection = await prisma.section.findFirst({
-    where: {
-      classId,
-      OR: [
-        { class: { proctorId: userId } },
-        { subjects: { some: { assignments: { some: { teacherId: userId } } } } },
-      ],
-    },
+  const classAccess = await prisma.classAccess.findUnique({
+    where: { teacherId_classId: { teacherId: userId, classId } },
+  });
+
+  if (!classAccess) {
+    return { notFound: true };
+  }
+
+  const section = await prisma.section.findFirst({
+    where: { classId },
     orderBy: { name: "asc" },
     select: { id: true },
   });
 
-  if (!assignedSection) {
+  if (!section) {
     return { notFound: true };
   }
 
   return {
     redirect: {
-      destination: `/section-analysis/${assignedSection.id}/attendance`,
+      destination: `/section-analysis/${section.id}/attendance`,
       permanent: false,
     },
   };
