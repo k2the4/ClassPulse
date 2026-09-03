@@ -1,22 +1,12 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { prisma } from "./prisma";
 
-const supabaseAuth = createServerClient(
+const supabaseAuth = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-  {
-    cookies: {
-      getAll: () => [],
-      setAll: () => undefined,
-    },
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-  },
+  { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } },
 );
 
 export const authOptions: NextAuthOptions = {
