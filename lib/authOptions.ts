@@ -3,11 +3,32 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { createClient } from "@supabase/supabase-js";
 import { prisma } from "./prisma";
 
-const supabaseAuth = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } },
-);
+function getSupabaseAuthClient() {
+  const supabaseUrl =
+    process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const publishableKey =
+    process.env.SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+  if (!supabaseUrl) {
+    throw new Error("Missing Supabase URL. Set SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL.");
+  }
+
+  if (!publishableKey) {
+    throw new Error(
+      "Missing Supabase publishable key. Set SUPABASE_PUBLISHABLE_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
+    );
+  }
+
+  return createClient(supabaseUrl, publishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -26,15 +47,26 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) return null;
 
         const email = credentials.email.trim().toLowerCase();
+        const supabaseAuth = getSupabaseAuthClient();
         const { data, error } = await supabaseAuth.auth.signInWithPassword({
           email,
           password: credentials.password,
         });
 
-        if (error || !data.user?.id) return null;
+        if (error || !data.user?.id) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("Supabase login failed:", error?.message ?? "No user returned");
+          }
+          return null;
+        }
 
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) return null;
+        if (!user) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error(`Supabase login succeeded but no ClassPulse user exists for ${email}`);
+          }
+          return null;
+        }
 
         if (user.authUserId !== data.user.id) {
           await prisma.user.update({
