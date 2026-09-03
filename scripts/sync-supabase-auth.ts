@@ -1,11 +1,10 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { createClient, type User } from "@supabase/supabase-js";
 
 const prisma = new PrismaClient();
 
-type AdminSupabaseClient = SupabaseClient;
-
-async function listAllAuthUsers(supabase: AdminSupabaseClient): Promise<User[]> {
+async function listAllAuthUsers(supabase: any): Promise<User[]> {
   const users: User[] = [];
   let page = 1;
 
@@ -35,7 +34,7 @@ async function main() {
     );
   }
 
-  const supabase: AdminSupabaseClient = createClient(supabaseUrl, serviceKey, {
+  const supabase = createClient(supabaseUrl, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
