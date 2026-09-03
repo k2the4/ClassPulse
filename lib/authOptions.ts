@@ -4,14 +4,14 @@ import { createClient } from "@supabase/supabase-js";
 import { prisma } from "./prisma";
 
 function getSupabaseAuthClient() {
-  const supabaseUrl =
+  const rawUrl =
     process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const publishableKey =
     process.env.SUPABASE_PUBLISHABLE_KEY?.trim() ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
-  if (!supabaseUrl) {
+  if (!rawUrl) {
     throw new Error("Missing Supabase URL. Set SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL.");
   }
 
@@ -21,7 +21,29 @@ function getSupabaseAuthClient() {
     );
   }
 
-  return createClient(supabaseUrl, publishableKey, {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new Error(`Invalid Supabase URL: ${rawUrl}`);
+  }
+
+  // Supabase clients expect the project root URL. Accept common API URLs
+  // copied from the dashboard and normalize them back to the project root.
+  const allowedApiPaths = ["/rest/v1", "/auth/v1", "/storage/v1", "/functions/v1"];
+  if (url.pathname !== "/" && url.pathname !== "") {
+    if (allowedApiPaths.some((prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`))) {
+      url.pathname = "/";
+      url.search = "";
+      url.hash = "";
+    } else {
+      throw new Error(
+        `Invalid Supabase URL path: ${url.pathname}. Use the project root URL, for example https://ayktccawcpxmhpauwqie.supabase.co`,
+      );
+    }
+  }
+
+  return createClient(url.toString().replace(/\/$/, ""), publishableKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
