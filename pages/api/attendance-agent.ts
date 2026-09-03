@@ -4,6 +4,7 @@ import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 import { fetchClassRawData } from "../../lib/googleSheetsClass";
 import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
+import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
 
 const TIME_SLOTS = [
   "8 to 9",
@@ -18,16 +19,6 @@ const TIME_SLOTS = [
 
 function validDate(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function toDate(value: string) {
-  return new Date(`${value}T00:00:00.000Z`);
-}
-
-function makeSessionKey(date: string, subjectCode: string, slot: string) {
-  const compactSlot = slot.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase();
-  const compactCode = subjectCode.replace(/[^a-z0-9]+/gi, "").toUpperCase();
-  return `ATT-${date.replace(/-/g, "")}-${compactCode}-${compactSlot}`;
 }
 
 async function canManageSubject(userId: string, role: string, subjectId: string) {
@@ -66,6 +57,11 @@ async function orderStudentsBySheet(sectionId: string, students: Array<{ id: str
   }
 }
 
+function sessionSortKey(date: string, slot: string): string {
+  const slotIndex = TIME_SLOTS.findIndex((item) => item === slot);
+  return `${date}|${String(slotIndex === -1 ? 999 : slotIndex).padStart(3, "0")}|${slot}`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user) return res.status(401).json({ error: "Not authenticated" });
@@ -81,26 +77,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!sectionId) return res.status(400).json({ error: "sectionId is required" });
 
-    if (sessionId) {
-      const attendance = await prisma.attendanceSession.findFirst({
-        where: { id: sessionId, sectionId },
-        include: { records: { select: { studentId: true, present: true } } },
-      });
-      if (!attendance) return res.status(404).json({ error: "Attendance session not found" });
-      if (role !== "ADMIN" && attendance.teacherId !== userId) return res.status(403).json({ error: "Only the teacher who recorded this session can edit it" });
-      return res.status(200).json({ presentStudentIds: attendance.records.filter((record) => record.present).map((record) => record.studentId) });
-    }
-
     const section = await prisma.section.findUnique({
       where: { id: sectionId },
       include: {
         class: { include: { department: true } },
         students: { orderBy: [{ enrollmentNo: "asc" }] },
         subjects: { include: { assignments: true }, orderBy: { name: "asc" } },
+        sheetLink: true,
       },
     });
 
     if (!section) return res.status(404).json({ error: "Class not found" });
+    if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
 
     const visibleSubjects = role === "ADMIN"
       ? section.subjects
@@ -109,33 +97,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (visibleSubjects.length === 0) return res.status(403).json({ error: "No assigned subjects for this class" });
 
     const orderedStudents = await orderStudentsBySheet(sectionId, section.students);
-
-    const sessions = await prisma.attendanceSession.findMany({
-      where: { sectionId, date: toDate(date) },
-      include: {
-        subject: { select: { id: true, name: true, code: true } },
-        teacher: { select: { id: true, name: true } },
-        records: { select: { studentId: true, present: true } },
-      },
-      orderBy: { slot: "asc" },
+    const sheetSessions = await readTeacherDiarySessions({
+      spreadsheetId: section.sheetLink.sheetId,
+      subjectCodes: visibleSubjects.map((subject) => subject.code),
+      date,
     });
+
+    const subjectByCode = new Map(visibleSubjects.map((subject) => [subject.code.toLowerCase(), subject]));
+    const sessions = sheetSessions
+      .map((item) => {
+        const subject = subjectByCode.get(item.subjectCode.toLowerCase());
+        if (!subject) return null;
+        return {
+          id: item.id,
+          subjectId: subject.id,
+          subjectName: subject.name,
+          subjectCode: subject.code,
+          slot: item.slot,
+          teacherId: "sheet",
+          teacherName: item.teacherName,
+          present: item.presentEnrollmentNos.length,
+          total: orderedStudents.length,
+          canEdit: true,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => sessionSortKey(date, a.slot).localeCompare(sessionSortKey(date, b.slot)));
+
+    if (sessionId) {
+      const found = sheetSessions.find((item) => item.id === sessionId);
+      if (!found) return res.status(404).json({ error: "Attendance session not found" });
+      const presentEnrollmentNos = new Set(found.presentEnrollmentNos);
+      return res.status(200).json({
+        presentStudentIds: orderedStudents.filter((student) => presentEnrollmentNos.has(student.enrollmentNo)).map((student) => student.id),
+      });
+    }
 
     return res.status(200).json({
       section: { id: section.id, label: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`, strength: section.strength },
       subjects: visibleSubjects.map((subject) => ({ id: subject.id, name: subject.name, code: subject.code, type: subject.type })),
       students: orderedStudents.map((student, index) => ({ id: student.id, enrollmentNo: student.enrollmentNo, name: student.name, serialNo: index + 1 })),
-      sessions: sessions.map((item) => ({
-        id: item.id,
-        subjectId: item.subjectId,
-        subjectName: item.subject.name,
-        subjectCode: item.subject.code,
-        slot: item.slot,
-        teacherId: item.teacherId,
-        teacherName: item.teacher.name,
-        present: item.records.filter((r) => r.present).length,
-        total: item.records.length,
-        canEdit: role === "ADMIN" || item.teacherId === userId,
-      })),
+      sessions,
     });
   }
 
@@ -145,33 +147,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "sectionId and sessionId are required" });
     }
 
-    const attendance = await prisma.attendanceSession.findFirst({
-      where: { id: sessionId, sectionId },
+    const section = await prisma.section.findUnique({
+      where: { id: sectionId },
       include: {
-        subject: { select: { id: true, name: true, code: true, sectionId: true } },
-        section: {
-          select: {
-            name: true,
-            sheetLink: { select: { sheetId: true } },
-            class: { select: { semester: true, department: { select: { name: true } } } },
-          },
-        },
+        sheetLink: true,
+        subjects: { include: { assignments: true } },
       },
     });
+    if (!section) return res.status(404).json({ error: "Class not found" });
+    if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
 
-    if (!attendance) return res.status(404).json({ error: "Attendance session not found" });
-    if (role !== "ADMIN" && attendance.teacherId !== userId) {
-      return res.status(403).json({ error: "Only the teacher who recorded this session can delete it" });
-    }
-    if (attendance.subject.sectionId !== sectionId) return res.status(400).json({ error: "Attendance subject does not belong to this class" });
-    if (!attendance.section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
+    const visibleSubjects = role === "ADMIN"
+      ? section.subjects
+      : section.subjects.filter((subject) => subject.assignments.some((a) => a.teacherId === userId));
+    const sheetSessions = await readTeacherDiarySessions({
+      spreadsheetId: section.sheetLink.sheetId,
+      subjectCodes: visibleSubjects.map((subject) => subject.code),
+    });
+    const target = sheetSessions.find((item) => item.id === sessionId);
+    if (!target) return res.status(404).json({ error: "Attendance session not found" });
 
     try {
       await deleteTeacherDiaryAttendance({
-        spreadsheetId: attendance.section.sheetLink.sheetId,
-        subjectCode: attendance.subject.code,
-        date: attendance.date.toISOString().slice(0, 10),
-        slot: attendance.slot,
+        spreadsheetId: section.sheetLink.sheetId,
+        subjectCode: target.subjectCode,
+        date: target.date,
+        slot: target.slot,
       });
     } catch (error) {
       console.error("Teacher Diary deletion failed:", error);
@@ -179,8 +180,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(502).json({ error: `Attendance was not deleted because Teacher Diary could not be updated. ${message}` });
     }
 
-    await prisma.attendanceSession.delete({ where: { id: attendance.id } });
-    return res.status(200).json({ ok: true, deletedSessionId: attendance.id });
+    return res.status(200).json({ ok: true, deletedSessionId: sessionId });
   }
 
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -205,11 +205,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const subject = await prisma.subject.findUnique({
     where: { id: subjectId },
-    select: {
-      sectionId: true,
-      name: true,
-      code: true,
-    },
+    select: { sectionId: true, name: true, code: true },
   });
   if (!subject || subject.sectionId !== sectionId) return res.status(400).json({ error: "Subject does not belong to this class" });
 
@@ -232,21 +228,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const presentIds = [...new Set(presentStudentIds as string[])];
   if (presentIds.some((id) => !studentIds.has(id))) return res.status(400).json({ error: "Attendance contains a student outside this class" });
 
-  const dateValue = toDate(date);
-  const existing = await prisma.attendanceSession.findUnique({
-    where: { sectionId_subjectId_date_slot: { sectionId, subjectId, date: dateValue, slot: normalizedSlot } },
-    select: { id: true, teacherId: true },
-  });
+  const sessionKey = `ATT-${date.replace(/-/g, "")}-${subject.code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${normalizedSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
 
-  if (existing && role !== "ADMIN" && existing.teacherId !== userId) {
-    return res.status(403).json({ error: "This attendance session belongs to another teacher" });
-  }
-
-  const sessionKey = makeSessionKey(date, subject.code, normalizedSlot);
-
-  // Google Sheets is the Teacher Diary/source record. Write it first; if the
-  // sheet cannot be updated, do not create a database attendance record that
-  // would leave the two sources out of sync.
   try {
     await writeTeacherDiaryAttendance({
       spreadsheetId: section.sheetLink.sheetId,
@@ -268,28 +251,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(502).json({ error: `Attendance was not saved because Teacher Diary could not be updated. ${message}` });
   }
 
-  const sessionRow = existing
-    ? await prisma.attendanceSession.update({
-        where: { id: existing.id },
-        data: {
-          records: {
-            deleteMany: {},
-            create: students.map((student) => ({ studentId: student.id, present: presentIds.includes(student.id) })),
-          },
-        },
-      })
-    : await prisma.attendanceSession.create({
-        data: {
-          sectionId,
-          subjectId,
-          teacherId: userId,
-          date: dateValue,
-          slot: normalizedSlot,
-          records: {
-            create: students.map((student) => ({ studentId: student.id, present: presentIds.includes(student.id) })),
-          },
-        },
-      });
-
-  return res.status(200).json({ ok: true, sessionId: sessionRow.id, present: presentIds.length, total: students.length, sheetUpdated: true });
+  return res.status(200).json({
+    ok: true,
+    sessionId: sessionKey,
+    present: presentIds.length,
+    total: students.length,
+    sheetUpdated: true,
+  });
 }
