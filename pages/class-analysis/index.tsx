@@ -37,7 +37,10 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
   if (!session?.user) return { redirect: { destination: "/login", permanent: false } };
   const userId = (session.user as any).id; const role = (session.user as any).role;
-  const sections = await prisma.section.findMany({ where: role === "ADMIN" ? undefined : { OR: [{ class: { proctorId: userId } }, { subjects: { some: { assignments: { some: { teacherId: userId } } } } }] }, include: { class: { include: { department: true } } } });
+  const sections = await prisma.section.findMany({
+    where: role === "ADMIN" ? undefined : { class: { classAccess: { some: { teacherId: userId } } } },
+    include: { class: { include: { department: true } } },
+  });
   const classes = new Map<string, ClassOption>();
   for (const section of sections) classes.set(section.class.id, { id: section.class.id, label: formatClassLabel(section.class.department.name, section.class.semester, section.name) });
   return { props: { classes: Array.from(classes.values()), teacherName: session.user.name || session.user.email } };
