@@ -1,18 +1,11 @@
 import { PrismaClient } from "@prisma/client";
-import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 const prisma = new PrismaClient();
-
-const supabase = createServerClient(
+const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    cookies: {
-      getAll: () => [],
-      setAll: () => undefined,
-    },
-    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-  },
+  { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
 const DEFAULT_PASSWORD = process.env.CLASS_PULSE_DEFAULT_PASSWORD || "changeme123";
