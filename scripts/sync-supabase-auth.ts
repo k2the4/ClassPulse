@@ -36,9 +36,7 @@ function loadDotEnv(filePath: string): Env {
 
 function loadLocalEnv() {
   const root = process.cwd();
-  const envFiles = [".env", ".env.local"];
-
-  for (const file of envFiles) {
+  for (const file of [".env", ".env.local"]) {
     const values = loadDotEnv(path.join(root, file));
     for (const [key, value] of Object.entries(values)) {
       if (process.env[key] === undefined) process.env[key] = value;
@@ -72,8 +70,6 @@ function getSupabaseConfig() {
     );
   }
 
-  // The Supabase JS client adds /auth/v1, /rest/v1, etc. itself.
-  // Strip API paths if one was accidentally copied from a Supabase endpoint.
   if (url.pathname !== "/" && url.pathname !== "") {
     const allowedApiPaths = ["/rest/v1", "/auth/v1", "/storage/v1", "/functions/v1"];
     if (allowedApiPaths.some((prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`))) {
@@ -105,15 +101,19 @@ async function listAllAuthUsers(supabase: ReturnType<typeof createAdminClient>):
   let page = 1;
 
   while (true) {
-    const response = await supabase.auth.admin.listUsers({
+    const { data, error } = await supabase.auth.admin.listUsers({
       page,
       perPage: 1000,
     });
 
-    if (response.error) throw response.error;
-    users.push(...response.data.users);
+    if (error) {
+      throw new Error(
+        `Supabase Auth listUsers failed (${error.status ?? "unknown"}): ${error.message}`,
+      );
+    }
 
-    if (response.data.users.length < 1000) break;
+    users.push(...data.users);
+    if (data.users.length < 1000) break;
     page += 1;
   }
 
@@ -178,9 +178,7 @@ async function main() {
     console.log(`Linked ${email}`);
   }
 
-  const unlinked = await prisma.user.count({
-    where: { authUserId: null },
-  });
+  const unlinked = await prisma.user.count({ where: { authUserId: null } });
 
   if (unlinked !== 0) {
     throw new Error(`Auth sync finished with ${unlinked} unlinked user(s).`);
