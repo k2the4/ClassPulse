@@ -46,20 +46,51 @@ function loadLocalEnv() {
   }
 }
 
-async function listAllAuthUsers(supabase: any): Promise<User[]> {
+function getSupabaseConfig() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, "");
+  const secretKey =
+    process.env.SUPABASE_SECRET_KEY?.trim() ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (!supabaseUrl || !secretKey) {
+    throw new Error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) in .env or .env.local",
+    );
+  }
+
+  try {
+    new URL(supabaseUrl);
+  } catch {
+    throw new Error(`Invalid NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl}`);
+  }
+
+  return { supabaseUrl, secretKey };
+}
+
+function createAdminClient(supabaseUrl: string, secretKey: string) {
+  return createClient(supabaseUrl, secretKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+async function listAllAuthUsers(supabase: ReturnType<typeof createAdminClient>): Promise<User[]> {
   const users: User[] = [];
   let page = 1;
 
   while (true) {
-    const { data, error } = await supabase.auth.admin.listUsers({
+    const response = await supabase.auth.admin.listUsers({
       page,
       perPage: 1000,
     });
 
-    if (error) throw error;
-    users.push(...data.users);
+    if (response.error) throw response.error;
+    users.push(...response.data.users);
 
-    if (data.users.length < 1000) break;
+    if (response.data.users.length < 1000) break;
     page += 1;
   }
 
@@ -69,30 +100,14 @@ async function listAllAuthUsers(supabase: any): Promise<User[]> {
 async function main() {
   loadLocalEnv();
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceKey) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env or .env.local",
-    );
-  }
-
-  const supabase = createClient(supabaseUrl, serviceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-  });
+  const { supabaseUrl, secretKey } = getSupabaseConfig();
+  const supabase = createAdminClient(supabaseUrl, secretKey);
 
   const defaultPassword =
     process.env.CLASS_PULSE_DEFAULT_PASSWORD || "changeme123";
 
-  const [appUsers, authUsers] = await Promise.all([
-    prisma.user.findMany({ orderBy: { email: "asc" } }),
-    listAllAuthUsers(supabase),
-  ]);
+  const appUsers = await prisma.user.findMany({ orderBy: { email: "asc" } });
+  const authUsers = await listAllAuthUsers(supabase);
 
   const authByEmail = new Map(
     authUsers
@@ -101,7 +116,7 @@ async function main() {
   );
 
   for (const appUser of appUsers) {
-    const email = appUser.email.toLowerCase();
+    const email = appUser.email.trim().toLowerCase();
     let authUser = authByEmail.get(email);
 
     if (authUser) {
@@ -126,6 +141,10 @@ async function main() {
 
       if (error) throw error;
       authUser = data.user;
+    }
+
+    if (!authUser?.id) {
+      throw new Error(`Supabase Auth returned no user ID for ${email}`);
     }
 
     await prisma.user.update({
