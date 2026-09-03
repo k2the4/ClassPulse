@@ -8,7 +8,9 @@
     "start": "next start",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed": "ts-node prisma/seed.ts && ts-node prisma/fix-geetanjali-assignments.ts && ts-node prisma/seed-ece2-sem7-students.ts",
+    "seed": "ts-node prisma/seed.ts",
+    "seed:ece2-students": "ts-node prisma/seed-ece2-sem7-students.ts",
+    "fix:geetanjali": "ts-node prisma/fix-geetanjali-assignments.ts",
     "auth:sync": "ts-node scripts/sync-supabase-auth.ts"
   },
   "dependencies": {
@@ -34,6 +36,6 @@
     "wait-on": "^9.0.0"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts && ts-node prisma/fix-geetanjali-assignments.ts && ts-node prisma/seed-ece2-sem7-students.ts"
+    "seed": "ts-node prisma/seed.ts"
   }
 }
