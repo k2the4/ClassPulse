@@ -43,7 +43,7 @@ model User {
   college              College             @relation(fields: [collegeId], references: [id])
   collegeId            String
   assignments          Assignment[]
-  proctorOf            Class[]            @relation("Proctor")
+  proctorOf            Class[]             @relation("Proctor")
   classAccess          ClassAccess[]
   attendanceSessions   AttendanceSession[]
   createdAt            DateTime            @default(now())
