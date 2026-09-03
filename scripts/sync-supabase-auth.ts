@@ -47,24 +47,47 @@ function loadLocalEnv() {
 }
 
 function getSupabaseConfig() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, "");
+  const rawUrl =
+    process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const secretKey =
     process.env.SUPABASE_SECRET_KEY?.trim() ||
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
-  if (!supabaseUrl || !secretKey) {
+  if (!rawUrl || !secretKey) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) in .env or .env.local",
+      "Missing SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) in .env or .env.local",
     );
   }
 
+  let url: URL;
   try {
-    new URL(supabaseUrl);
+    url = new URL(rawUrl);
   } catch {
-    throw new Error(`Invalid NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl}`);
+    throw new Error(`Invalid Supabase URL: ${rawUrl}`);
   }
 
-  return { supabaseUrl, secretKey };
+  if (url.protocol !== "https:" || !url.hostname.endsWith(".supabase.co")) {
+    throw new Error(
+      "Supabase URL must be the project root URL, for example https://ayktccawcpxmhpauwqie.supabase.co",
+    );
+  }
+
+  // The Supabase JS client adds /auth/v1, /rest/v1, etc. itself.
+  // Strip API paths if one was accidentally copied from a Supabase endpoint.
+  if (url.pathname !== "/" && url.pathname !== "") {
+    const allowedApiPaths = ["/rest/v1", "/auth/v1", "/storage/v1", "/functions/v1"];
+    if (allowedApiPaths.some((prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`))) {
+      url.pathname = "/";
+      url.search = "";
+      url.hash = "";
+    } else {
+      throw new Error(
+        `Invalid Supabase URL path: ${url.pathname}. Use the project root URL, for example https://ayktccawcpxmhpauwqie.supabase.co`,
+      );
+    }
+  }
+
+  return { supabaseUrl: url.toString().replace(/\/$/, ""), secretKey };
 }
 
 function createAdminClient(supabaseUrl: string, secretKey: string) {
