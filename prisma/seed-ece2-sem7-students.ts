@@ -72,24 +72,24 @@ const students = [
 
 async function main() {
   const department = await prisma.department.findFirst({
-    where: { name: "ECE", college: { id: "demo-college" } },
+    where: { name: "ECE" },
+    orderBy: { createdAt: "asc" },
   });
   if (!department) throw new Error("ECE department not found.");
 
-  const cls = await prisma.class.findFirst({
-    where: {
-      departmentId: department.id,
-      academicYear: "2026-27",
-      semester: 7,
-      OR: [{ program: "B.Tech ECE 2" }, { program: "B.Tech ECE" }],
-    },
+  const classes = await prisma.class.findMany({
+    where: { departmentId: department.id, academicYear: "2026-27", semester: 7 },
+    include: { sections: true },
   });
+
+  const cls = classes.find((item) => item.program === "B.Tech ECE 2" && item.sections.some((s) => s.name === "2"))
+    ?? classes.find((item) => item.program === "B.Tech ECE 2")
+    ?? classes.find((item) => item.program === "B.Tech ECE" && item.sections.some((s) => s.name === "2"));
+
   if (!cls) throw new Error("ECE 2 Semester 7 class not found.");
 
-  const section = await prisma.section.findFirst({
-    where: { classId: cls.id, name: "A" },
-  });
-  if (!section) throw new Error("ECE 2 Semester 7 Section A not found.");
+  const section = cls.sections.find((item) => item.name === "2") ?? cls.sections.find((item) => item.name === "A");
+  if (!section) throw new Error("ECE 2 Semester 7 section not found.");
 
   for (const [enrollmentNo, name, email] of students) {
     await prisma.student.upsert({
@@ -104,7 +104,7 @@ async function main() {
     data: { strength: students.length },
   });
 
-  console.log(`Seeded ${students.length} students into ECE 2 Sem 7 Section A.`);
+  console.log(`Seeded ${students.length} students into ${cls.program} Sem 7 Section ${section.name}.`);
 }
 
 main()
