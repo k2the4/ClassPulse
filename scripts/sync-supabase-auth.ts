@@ -66,6 +66,11 @@ async function main() {
     console.log(`Linked ${appUser.email}`);
   }
 
+  const unlinked = await prisma.user.count({ where: { authUserId: null } });
+  if (unlinked > 0) {
+    throw new Error(`Auth sync finished with ${unlinked} unlinked Prisma user(s).`);
+  }
+
   console.log(`Done. Synced ${appUsers.length} Prisma users with Supabase Auth.`);
 }
 
