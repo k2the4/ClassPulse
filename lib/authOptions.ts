@@ -1,7 +1,13 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
+import { createClient } from "@supabase/supabase-js";
 import { prisma } from "./prisma";
+
+const supabaseAuth = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } },
+);
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -11,7 +17,7 @@ export const authOptions: NextAuthOptions = {
   },
   providers: [
     CredentialsProvider({
-      name: "Credentials",
+      name: "Supabase Auth",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
@@ -19,13 +25,23 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
+        const email = credentials.email.trim().toLowerCase();
+        const { data, error } = await supabaseAuth.auth.signInWithPassword({
+          email,
+          password: credentials.password,
         });
+
+        if (error || !data.user?.id) return null;
+
+        const user = await prisma.user.findUnique({ where: { email } });
         if (!user) return null;
 
-        const valid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!valid) return null;
+        if (user.authUserId !== data.user.id) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { authUserId: data.user.id },
+          });
+        }
 
         return {
           id: user.id,
