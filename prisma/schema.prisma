@@ -32,6 +32,8 @@ model Department {
   collegeId String
   classes   Class[]
   createdAt DateTime @default(now())
+
+  @@index([collegeId])
 }
 
 model User {
@@ -47,6 +49,8 @@ model User {
   classAccess          ClassAccess[]
   attendanceSessions   AttendanceSession[]
   createdAt            DateTime            @default(now())
+
+  @@index([collegeId])
 }
 
 model Class {
@@ -62,6 +66,9 @@ model Class {
   sections      Section[]
   classAccess   ClassAccess[]
   createdAt     DateTime      @default(now())
+
+  @@index([departmentId])
+  @@index([proctorId])
 }
 
 model ClassAccess {
@@ -174,6 +181,7 @@ model AttendanceSession {
 
   @@unique([sectionId, subjectId, date, slot])
   @@index([teacherId, date])
+  @@index([subjectId])
 }
 
 model AttendanceRecord {
