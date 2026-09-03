@@ -1,2 +1,0 @@
-'use client'; import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
-export function AttendanceChart({data}:{data:{month:string;percentage:number}[]}) { return <div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="month"/><YAxis domain={[0,100]}/><Tooltip/><Line type="monotone" dataKey="percentage" stroke="#1d4ed8" strokeWidth={2}/></LineChart></ResponsiveContainer></div>; }
