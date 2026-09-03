@@ -1,6 +1,8 @@
-import "dotenv/config";
+import { loadEnvConfig } from "@next/env";
 import { PrismaClient } from "@prisma/client";
 import { createClient, type User } from "@supabase/supabase-js";
+
+loadEnvConfig(process.cwd());
 
 const prisma = new PrismaClient();
 
