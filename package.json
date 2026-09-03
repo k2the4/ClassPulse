@@ -9,7 +9,6 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed:ece2-students": "ts-node prisma/seed-ece2-sem7-students.ts",
-    "fix:geetanjali": "ts-node prisma/fix-geetanjali-assignments.ts",
     "auth:sync": "ts-node scripts/sync-supabase-auth.ts"
   },
   "dependencies": {
