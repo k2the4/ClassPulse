@@ -27,7 +27,7 @@ model College {
 
 model Department {
   id        String   @id @default(cuid())
-  name      String // e.g. "ECE"
+  name      String
   college   College  @relation(fields: [collegeId], references: [id])
   collegeId String
   classes   Class[]
@@ -42,30 +42,44 @@ model User {
   role                 Role                @default(TEACHER)
   college              College             @relation(fields: [collegeId], references: [id])
   collegeId            String
-  assignments          Assignment[] // subjects this teacher teaches
+  assignments          Assignment[]
   proctorOf            Class[]            @relation("Proctor")
+  classAccess          ClassAccess[]
   attendanceSessions   AttendanceSession[]
   createdAt            DateTime            @default(now())
 }
 
-// e.g. "B.Tech ECE, 4th Year, Semester 7"
 model Class {
-  id            String     @id @default(cuid())
-  department    Department @relation(fields: [departmentId], references: [id])
+  id            String        @id @default(cuid())
+  department    Department    @relation(fields: [departmentId], references: [id])
   departmentId  String
-  program       String // "B.Tech ECE"
-  academicYear  String // "2026-27"
-  year          String // "4th Year"
-  semester      Int // 7
-  proctor       User?      @relation("Proctor", fields: [proctorId], references: [id])
+  program       String
+  academicYear  String
+  year          String
+  semester      Int
+  proctor       User?         @relation("Proctor", fields: [proctorId], references: [id])
   proctorId     String?
   sections      Section[]
-  createdAt     DateTime   @default(now())
+  classAccess   ClassAccess[]
+  createdAt     DateTime      @default(now())
+}
+
+model ClassAccess {
+  id        String   @id @default(cuid())
+  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId String
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId   String
+  createdAt DateTime @default(now())
+
+  @@unique([teacherId, classId])
+  @@index([classId])
+  @@index([teacherId])
 }
 
 model Section {
   id                 String              @id @default(cuid())
-  name               String // "A"
+  name               String
   class              Class               @relation(fields: [classId], references: [id])
   classId            String
   strength           Int                 @default(0)
@@ -92,7 +106,6 @@ model Student {
   @@unique([sectionId, enrollmentNo])
 }
 
-// e.g. "Data Analysis" / "DA 338 T", scoped to one section
 model Subject {
   id                 String              @id @default(cuid())
   name               String
@@ -109,7 +122,6 @@ model Subject {
   @@unique([sectionId, code])
 }
 
-// which teacher(s) can view/manage a subject
 model Assignment {
   id        String   @id @default(cuid())
   teacher   User     @relation(fields: [teacherId], references: [id])
@@ -119,37 +131,28 @@ model Assignment {
   createdAt DateTime @default(now())
 
   @@unique([teacherId, subjectId])
+  @@unique([subjectId])
 }
 
 model SheetLink {
   id         String   @id @default(cuid())
-
-  // Either a combined section sheet...
   section    Section? @relation(fields: [sectionId], references: [id])
   sectionId  String?  @unique
-
-  // ...or an individual subject sheet
   subject    Subject? @relation(fields: [subjectId], references: [id])
   subjectId  String?  @unique
-
   sheetId    String
   gid        String?
   lastSyncAt DateTime?
 }
 
-// cached, computed analysis for a subject OR a section — refreshed via sync,
-// read by dashboards. Exactly one of subjectId/sectionId should be set.
 model AnalysisSnapshot {
   id         String   @id @default(cuid())
-
   subject    Subject? @relation(fields: [subjectId], references: [id])
   subjectId  String?
-
   section    Section? @relation(fields: [sectionId], references: [id])
   sectionId  String?
-
   computedAt DateTime @default(now())
-  data       Json // SubjectAnalysis shape (lib/analysis.ts) or ClassAnalysis shape (lib/analysisClass.ts)
+  data       Json
 
   @@index([subjectId, computedAt])
   @@index([sectionId, computedAt])
