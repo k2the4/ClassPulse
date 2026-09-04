@@ -61,6 +61,8 @@
 .analysis-table th{text-align:left;padding:10px 13px;background:#fafafd;color:#8991a2;font-size:9px;font-weight:800;letter-spacing:.25px;white-space:nowrap}
 .analysis-table td{padding:10px 13px;border-top:1px solid #f0efed;color:#4e586d;vertical-align:middle}
 .analysis-table tbody tr:hover{background:#fcfbff}
+.analysis-attendance-trend-table th:first-child,.analysis-attendance-trend-table td:first-child{width:62px;min-width:62px;max-width:62px;text-align:center;padding-left:6px;padding-right:6px;white-space:nowrap}
+.analysis-attendance-trend-table th:nth-child(3),.analysis-attendance-trend-table td:nth-child(3){min-width:100px;white-space:nowrap}
 .student-cell{display:flex;align-items:center;gap:8px;color:#26304a;font-weight:650}
 .student-avatar{width:27px;height:27px;border-radius:50%;background:#eeeaff;color:#5745b8;display:grid;place-items:center;font-size:8px;font-weight:800;flex:none}
 .change-up{color:#15966a!important;font-weight:700}.change-down{color:#d94343!important;font-weight:700}
