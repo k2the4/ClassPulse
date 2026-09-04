@@ -57,8 +57,9 @@
 .analysis-count{display:inline-flex;margin-left:5px;padding:3px 7px;border-radius:999px;background:#f1efff;color:#6251bf;font-size:9px;font-weight:700}
 .analysis-table-panel .analysis-panel-head input{border:1px solid #dfe2e8;border-radius:8px;width:200px;height:36px;font-size:11px;outline:none}
 .analysis-table-wrap{overflow:auto}
+.analysis-content-grid .analysis-table-wrap{max-height:calc(100vh - 430px);overflow-y:auto;overflow-x:auto}
 .analysis-table{width:100%;border-collapse:collapse;font-size:11px}
-.analysis-table th{text-align:left;padding:10px 13px;background:#fafafd;color:#8991a2;font-size:9px;font-weight:800;letter-spacing:.25px;white-space:nowrap}
+.analysis-table th{text-align:left;padding:10px 13px;background:#fafafd;color:#8991a2;font-size:9px;font-weight:800;letter-spacing:.25px;white-space:nowrap;position:sticky;top:0;z-index:2}
 .analysis-table td{padding:10px 13px;border-top:1px solid #f0efed;color:#4e586d;vertical-align:middle}
 .analysis-table tbody tr:hover{background:#fcfbff}
 .analysis-attendance-trend-table th:first-child,.analysis-attendance-trend-table td:first-child{width:62px;min-width:62px;max-width:62px;text-align:center;padding-left:6px;padding-right:6px;white-space:nowrap}
