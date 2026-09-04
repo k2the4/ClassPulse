@@ -64,6 +64,10 @@
 .analysis-table tbody tr:hover{background:#fcfbff}
 .analysis-attendance-trend-table th:first-child,.analysis-attendance-trend-table td:first-child{width:62px;min-width:62px;max-width:62px;text-align:center;padding-left:6px;padding-right:6px;white-space:nowrap}
 .analysis-attendance-trend-table th:nth-child(3),.analysis-attendance-trend-table td:nth-child(3){min-width:100px;white-space:nowrap}
+.analysis-page>.analysis-table-panel:not(:has(.analysis-attendance-trend-table)) .analysis-table tbody{counter-reset:at-risk-row}
+.analysis-page>.analysis-table-panel:not(:has(.analysis-attendance-trend-table)) .analysis-table tbody tr{counter-increment:at-risk-row}
+.analysis-page>.analysis-table-panel:not(:has(.analysis-attendance-trend-table)) .analysis-table tbody td:first-child{position:relative;padding-left:42px}
+.analysis-page>.analysis-table-panel:not(:has(.analysis-attendance-trend-table)) .analysis-table tbody td:first-child::before{content:counter(at-risk-row);position:absolute;left:13px;top:50%;transform:translateY(-50%);width:20px;text-align:center;color:#8991a2;font-size:10px;font-weight:700}
 .student-cell{display:flex;align-items:center;gap:8px;color:#26304a;font-weight:650}
 .student-avatar{width:27px;height:27px;border-radius:50%;background:#eeeaff;color:#5745b8;display:grid;place-items:center;font-size:8px;font-weight:800;flex:none}
 .change-up{color:#15966a!important;font-weight:700}.change-down{color:#d94343!important;font-weight:700}
