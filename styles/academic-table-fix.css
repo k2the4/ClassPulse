@@ -21,6 +21,31 @@
   opacity: .8;
 }
 
+/* Academic currently uses the same navigation markup as the shared analysis shell.
+   Keep its legacy class names visually identical to the shared sidebar. */
+.analysis-sidebar .active {
+  background: #eeeaff;
+  color: #38258e;
+}
+.analysis-brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #39268f;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 25px rgba(57,38,143,.18);
+  flex: none;
+}
+.analysis-sidebar-footer {
+  margin-top: auto;
+  border-top: 1px solid #eeeeeb;
+  padding: 18px 10px 2px;
+  color: #8991a2;
+  font-size: 11px;
+}
+
 .academic-content-grid {
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr) !important;
   gap: 14px !important;
