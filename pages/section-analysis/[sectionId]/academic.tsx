@@ -163,14 +163,10 @@ export default function AcademicPage() {
   if (error) return <div className="analysis-page"><div className="analysis-error">{error}</div></div>;
 
   return <div className="analysis-layout">
-    <aside className="analysis-sidebar">
-      <div className="analysis-brand"><span className="analysis-brand-mark"><BarChart3 size={18} /></span><span>ClassPulse</span></div>
-      <nav className="analysis-side-nav"><a href="/dashboard"><LayoutDashboard size={16} />Dashboard</a><a className="active" href={`/section-analysis/${sectionId}/academic`}><BookOpen size={16} />Class Analysis</a><a href="/subject-analysis"><GraduationCap size={16} />Subject Analysis</a><a href="/raw-data"><span className="text-[16px]">↓</span>Raw Data</a></nav>
-      <div className="analysis-sidebar-footer">ClassPulse Teacher Portal</div>
-    </aside>
+    <aside className="analysis-sidebar"><div className="analysis-brand"><span className="analysis-brand__mark"><BarChart3 size={18} /></span><span>ClassPulse</span></div><nav className="analysis-side-nav"><a href="/dashboard"><LayoutDashboard size={18} />Dashboard</a><a className="is-active" href={typeof sectionId === "string" ? `/section-analysis/${sectionId}/academic` : "#"}><BookOpen size={18} />Class Analysis</a><a href="/subject-analysis"><GraduationCap size={18} />Subject Analysis</a></nav><div className="analysis-side-footer">ClassPulse Teacher Portal</div></aside>
     <main className="analysis-main">
-      <header className="analysis-topbar"><div><h1>Class / Section Analysis <span>· Last synced {computedAt ? new Date(computedAt).toLocaleString() : "—"}</span></h1><div className="analysis-section-pill">ECE-2 Sem 7</div></div><button className="analysis-sync" onClick={() => loadAnalysis(true)} disabled={syncing}><RefreshCw size={14} /> {syncing ? "Syncing…" : "Sync now"}</button></header>
-      <AnalysisNav sectionId={String(sectionId)} active="academic" />
+      <header className="analysis-topbar"><div className="analysis-title-row"><h1>Class / Section Analysis</h1>{computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}</div><div className="analysis-top-actions"><RawDataButton sheetId={sheetId} /><button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}><RefreshCw size={15} className={syncing ? "animate-spin" : ""} />{syncing ? "Syncing..." : "Sync now"}</button></div></header>
+      {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
       <div className="analysis-tabs">{(["midsem1", "midsem2", "combined", "summary"] as AcademicView[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "midsem1" ? "Midsem 1" : item === "midsem2" ? "Midsem 2" : item === "combined" ? "Combined" : "Summary"}</button>)}</div>
       {view !== "summary" && <>
         <section className="analysis-hero" style={{ display: "grid", gridTemplateColumns: "1.05fr repeat(4, minmax(0, 1fr))", gap: 14, alignItems: "stretch" }}>
