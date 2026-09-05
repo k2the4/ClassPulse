@@ -167,3 +167,11 @@
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+@media (max-width: 760px) {
+  .analysis-main {
+    width: 100%;
+    margin-left: 0;
+    padding: 18px;
+  }
+}
