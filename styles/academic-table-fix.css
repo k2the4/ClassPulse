@@ -1,3 +1,26 @@
+/* Academic page content alignment */
+.analysis-main {
+  box-sizing: border-box;
+  width: calc(100% - 220px);
+  margin-left: 220px;
+  min-width: 0;
+  padding: 28px 42px 50px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.analysis-main::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 620px;
+  height: 300px;
+  pointer-events: none;
+  background: radial-gradient(circle at 70% 20%, rgba(111,91,231,.13), transparent 48%), linear-gradient(145deg, transparent 35%, rgba(111,91,231,.055) 75%, transparent);
+  opacity: .8;
+}
+
 .academic-content-grid {
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr) !important;
   gap: 14px !important;
@@ -134,6 +157,12 @@
 }
 
 @media (max-width: 1100px) {
+  .analysis-main {
+    width: calc(100% - 220px);
+    margin-left: 220px;
+    padding: 24px;
+  }
+
   .academic-content-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
