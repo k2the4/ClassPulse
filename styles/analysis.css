@@ -7,7 +7,7 @@
 .analysis-side-nav a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;color:#626b80;font-size:13px;font-weight:600;transition:.18s ease}
 .analysis-side-nav a:hover,.analysis-side-nav a.is-active{background:#eeeaff;color:#38258e}
 .analysis-side-footer{margin-top:auto;border-top:1px solid #eeeeeb;padding:18px 10px 2px;color:#8991a2;font-size:11px}
-.analysis-page{width:calc(100% - 220px);margin-left:220px;min-width:0;padding:28px 42px 50px;position:relative}
+.analysis-page{box-sizing:border-box;width:calc(100% - 220px);margin-left:220px;min-width:0;padding:28px 42px 50px;position:relative}
 .analysis-page:before{content:"";position:absolute;right:0;top:0;width:620px;height:300px;pointer-events:none;background:radial-gradient(circle at 70% 20%,rgba(111,91,231,.13),transparent 48%),linear-gradient(145deg,transparent 35%,rgba(111,91,231,.055) 75%,transparent);opacity:.8}
 .analysis-topbar{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:42px}
 .analysis-title-row{display:flex;align-items:center;gap:12px;min-width:0}
