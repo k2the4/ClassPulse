@@ -27,12 +27,12 @@
 .at-risk-table th{padding:9px 5px;background:#fafafd;color:#8991a2;font-size:9px;font-weight:800;letter-spacing:.15px;white-space:nowrap;position:sticky;top:0;z-index:2}
 .at-risk-table td{padding:9px 5px;border-top:1px solid #f0efed;color:#4e586d;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .at-risk-table th:nth-child(1),.at-risk-table td:nth-child(1){width:6%;text-align:center}
-.at-risk-table th:nth-child(2),.at-risk-table td:nth-child(2){width:16%;text-align:left}
-.at-risk-table th:nth-child(n+3):nth-child(-n+8),.at-risk-table td:nth-child(n+3):nth-child(-n+8){width:6.5%;text-align:center}
-.at-risk-table th:nth-child(9),.at-risk-table td:nth-child(9){width:9%;text-align:center}
-.at-risk-table th:nth-child(10),.at-risk-table td:nth-child(10){width:9%;text-align:center}
+.at-risk-table th:nth-child(2),.at-risk-table td:nth-child(2){width:20%;text-align:left}
+.at-risk-table th:nth-child(n+3):nth-child(-n+8),.at-risk-table td:nth-child(n+3):nth-child(-n+8){width:5.5%;text-align:center}
+.at-risk-table th:nth-child(9),.at-risk-table td:nth-child(9){width:8%;text-align:center}
+.at-risk-table th:nth-child(10),.at-risk-table td:nth-child(10){width:8%;text-align:center}
 .at-risk-table th:nth-child(11),.at-risk-table td:nth-child(11){width:8%;text-align:center}
-.at-risk-table th:nth-child(12),.at-risk-table td:nth-child(12){width:13%;text-align:center}
+.at-risk-table th:nth-child(12),.at-risk-table td:nth-child(12){width:11%;text-align:center}
 .at-risk-table .text-sm{font-size:11px}
 .at-risk-table .text-\[10px\]{font-size:10px}
 .at-risk-table .text-\[9px\]{font-size:9px}
