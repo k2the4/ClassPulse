@@ -40,6 +40,11 @@ type Row = Student & {
   overallPct: number;
   tier: string;
 };
+type FilterState = {
+  lower: number;
+  upper: number;
+  sortDirection: SortDirection;
+};
 
 const TIER_COLORS: Record<string, string> = {
   Excellent: "#2563eb",
@@ -62,6 +67,11 @@ const tierClass = (tier: string) =>
 
 const formatMark = (mark: number) => (Number.isInteger(mark) ? mark : mark.toFixed(1));
 
+const normalizeBounds = (lower: number, upper: number) => ({
+  lower: Math.max(0, Math.min(40, Math.min(lower, upper))),
+  upper: Math.max(0, Math.min(40, Math.max(lower, upper))),
+});
+
 export default function SectionOverallPage() {
   const router = useRouter();
   const { sectionId } = router.query;
@@ -71,12 +81,16 @@ export default function SectionOverallPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
-  const [lower, setLower] = useState(0);
-  const [upper, setUpper] = useState(40);
-  const [draftLower, setDraftLower] = useState(0);
-  const [draftUpper, setDraftUpper] = useState(40);
-  const [sortDirection, setSortDirection] = useState<SortDirection>("none");
-  const [draftSortDirection, setDraftSortDirection] = useState<SortDirection>("none");
+  const [draftFilters, setDraftFilters] = useState<FilterState>({
+    lower: 0,
+    upper: 40,
+    sortDirection: "none",
+  });
+  const [appliedFilters, setAppliedFilters] = useState<FilterState>({
+    lower: 0,
+    upper: 40,
+    sortDirection: "none",
+  });
 
   async function loadAnalysis(sync = false) {
     if (typeof sectionId !== "string") return;
@@ -141,27 +155,22 @@ export default function SectionOverallPage() {
   }, [data, theorySubjects]);
 
   const orderedRows = useMemo(() => {
-    if (sortDirection === "none") {
+    if (appliedFilters.sortDirection === "none") {
       return [...rows].sort((a, b) => a.originalIndex - b.originalIndex);
     }
 
     return [...rows].sort((a, b) =>
-      sortDirection === "asc"
-        ? a.average - b.average || a.name.localeCompare(b.name)
-        : b.average - a.average || a.name.localeCompare(b.name)
+      appliedFilters.sortDirection === "asc"
+        ? a.average - b.average || a.name.localeCompare(b.name) || a.originalIndex - b.originalIndex
+        : b.average - a.average || a.name.localeCompare(b.name) || a.originalIndex - b.originalIndex
     );
-  }, [rows, sortDirection]);
+  }, [rows, appliedFilters.sortDirection]);
 
   const filteredRows = useMemo(() => {
-    const lo = Math.max(0, Math.min(40, Math.min(lower, upper)));
-    const hi = Math.max(0, Math.min(40, Math.max(lower, upper)));
-    return orderedRows.filter((row) => row.average >= lo && row.average <= hi);
-  }, [orderedRows, lower, upper]);
-
-  const filteredRowIndexSet = useMemo(
-    () => new Set(filteredRows.map((row) => row.originalIndex)),
-    [filteredRows]
-  );
+    return orderedRows.filter(
+      (row) => row.average >= appliedFilters.lower && row.average <= appliedFilters.upper
+    );
+  }, [orderedRows, appliedFilters.lower, appliedFilters.upper]);
 
   const rankByOriginalIndex = useMemo(() => {
     const ranks = new Map<number, number>();
@@ -189,22 +198,23 @@ export default function SectionOverallPage() {
     .slice(0, 5);
 
   function applyFilters() {
-    const nextLower = Math.max(0, Math.min(40, Math.min(draftLower, draftUpper)));
-    const nextUpper = Math.max(0, Math.min(40, Math.max(draftLower, draftUpper)));
-    setLower(nextLower);
-    setUpper(nextUpper);
-    setDraftLower(nextLower);
-    setDraftUpper(nextUpper);
-    setSortDirection(draftSortDirection);
+    const bounds = normalizeBounds(draftFilters.lower, draftFilters.upper);
+    setAppliedFilters({
+      lower: bounds.lower,
+      upper: bounds.upper,
+      sortDirection: draftFilters.sortDirection,
+    });
+    setDraftFilters((current) => ({
+      ...current,
+      lower: bounds.lower,
+      upper: bounds.upper,
+    }));
   }
 
   function resetFilter() {
-    setDraftLower(0);
-    setDraftUpper(40);
-    setLower(0);
-    setUpper(40);
-    setDraftSortDirection("none");
-    setSortDirection("none");
+    const reset = { lower: 0, upper: 40, sortDirection: "none" as SortDirection };
+    setDraftFilters(reset);
+    setAppliedFilters(reset);
   }
 
   return (
@@ -288,8 +298,14 @@ export default function SectionOverallPage() {
                       type="number"
                       min="0"
                       max="40"
-                      value={draftLower}
-                      onChange={(e) => setDraftLower(Math.min(40, Math.max(0, Number(e.target.value))))}
+                      value={draftFilters.lower}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        setDraftFilters((current) => ({
+                          ...current,
+                          lower: Number.isFinite(value) ? Math.min(40, Math.max(0, value)) : 0,
+                        }));
+                      }}
                     />
                   </label>
                   <label>
@@ -298,15 +314,26 @@ export default function SectionOverallPage() {
                       type="number"
                       min="0"
                       max="40"
-                      value={draftUpper}
-                      onChange={(e) => setDraftUpper(Math.min(40, Math.max(0, Number(e.target.value))))}
+                      value={draftFilters.upper}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        setDraftFilters((current) => ({
+                          ...current,
+                          upper: Number.isFinite(value) ? Math.min(40, Math.max(0, value)) : 40,
+                        }));
+                      }}
                     />
                   </label>
                   <label>
                     <span>Sort</span>
                     <select
-                      value={draftSortDirection}
-                      onChange={(e) => setDraftSortDirection(e.target.value as SortDirection)}
+                      value={draftFilters.sortDirection}
+                      onChange={(e) =>
+                        setDraftFilters((current) => ({
+                          ...current,
+                          sortDirection: e.target.value as SortDirection,
+                        }))
+                      }
                     >
                       <option value="none">No sort</option>
                       <option value="desc">High to Low</option>
@@ -337,84 +364,76 @@ export default function SectionOverallPage() {
                   </div>
                 </div>
 
-                <div className="max-h-[560px] overflow-y-auto overflow-x-hidden">
-                  <table className="w-full table-fixed text-[10px] border-collapse">
-                    <colgroup>
-                      <col className="w-[6%]" />
-                      <col className="w-[20%]" />
-                      {theorySubjects.map((subject) => <col key={subject.id} className="w-[5.5%]" />)}
-                      <col className="w-[8%]" />
-                      <col className="w-[8%]" />
-                      <col className="w-[8%]" />
-                      <col className="w-[11%]" />
-                    </colgroup>
-                    <thead className="sticky top-0 bg-white z-10">
-                      <tr className="border-b border-slate-200 text-slate-500">
-                        <th className="text-center px-1 py-2">S.No.</th>
-                        <th className="text-left px-2 py-2">Student</th>
-                        {theorySubjects.map((subject) => (
-                          <th key={subject.id} className="text-center px-1 py-2" title={subject.name}>
-                            {subject.code || subject.name}
-                          </th>
-                        ))}
-                        <th className="text-center px-1 py-2">Total</th>
-                        <th className="text-center px-1 py-2">Average</th>
-                        <th className="text-center px-1 py-2">%AGE</th>
-                        <th className="text-center px-1 py-2">Grade</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orderedRows.map((row) => {
-                        const visible = filteredRowIndexSet.has(row.originalIndex);
+                <div className="overall-student-table-scroll">
+                  <div className="overall-student-table" role="table" aria-label="Filtered students">
+                    <div className="overall-student-table-row overall-student-table-head" role="row">
+                      <div role="columnheader">S.No.</div>
+                      <div role="columnheader" className="student-cell">Student</div>
+                      {theorySubjects.map((subject) => (
+                        <div key={subject.id} role="columnheader" title={subject.name}>
+                          {subject.code || subject.name}
+                        </div>
+                      ))}
+                      <div role="columnheader">Total</div>
+                      <div role="columnheader">Average</div>
+                      <div role="columnheader">%AGE</div>
+                      <div role="columnheader">Grade</div>
+                    </div>
+
+                    <div className="overall-student-table-body" role="rowgroup">
+                      {filteredRows.map((row) => {
                         const rank = rankByOriginalIndex.get(row.originalIndex) || "";
                         return (
-                          <tr
+                          <div
                             key={`${row.enrollmentNo || "student"}-${row.originalIndex}`}
-                            style={{ display: visible ? "table-row" : "none" }}
-                            className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"
+                            className="overall-student-table-row overall-student-table-data-row"
+                            role="row"
                           >
-                            <td className="text-center px-1 py-2 text-slate-500 tabular-nums">{rank}</td>
-                            <td className="px-2 py-2 font-medium text-slate-800 truncate" title={row.name}>
+                            <div role="cell" className="text-center text-slate-500 tabular-nums">{rank}</div>
+                            <div role="cell" className="student-cell font-medium text-slate-800" title={row.name}>
                               {row.name}
-                            </td>
+                            </div>
                             {row.subjects.map((subject) => (
-                              <td
+                              <div
                                 key={subject.id}
-                                className="text-center px-1 py-2 tabular-nums font-medium"
+                                role="cell"
+                                className="text-center tabular-nums font-medium"
                                 style={{ color: TIER_COLORS[subject.grade] }}
                                 title={`${formatMark(subject.mark)}/${formatMark(subject.max)} · ${subject.grade}`}
                               >
                                 {formatMark(subject.mark)}
-                              </td>
+                              </div>
                             ))}
-                            <td className="text-center px-1 py-2 font-semibold tabular-nums text-slate-900">
+                            <div role="cell" className="text-center font-semibold tabular-nums text-slate-900">
                               {formatMark(row.total)}
-                            </td>
-                            <td
-                              className="text-center px-1 py-2 font-semibold tabular-nums"
+                            </div>
+                            <div
+                              role="cell"
+                              className="text-center font-semibold tabular-nums"
                               style={{ color: TIER_COLORS[row.tier] }}
                               title={`Average out of ${formatMark(row.averageMax)}`}
                             >
                               {formatMark(row.average)}
-                            </td>
-                            <td
-                              className="text-center px-1 py-2 font-semibold tabular-nums"
+                            </div>
+                            <div
+                              role="cell"
+                              className="text-center font-semibold tabular-nums"
                               style={{ color: TIER_COLORS[row.tier] }}
                             >
                               {row.overallPct.toFixed(0)}%
-                            </td>
-                            <td className="text-center px-1 py-2">
+                            </div>
+                            <div role="cell" className="text-center">
                               <span
                                 className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${tierClass(row.tier)}`}
                               >
                                 {row.tier}
                               </span>
-                            </td>
-                          </tr>
+                            </div>
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </div>
+                  </div>
                 </div>
               </section>
 
