@@ -158,10 +158,16 @@ export default function SectionOverallPage() {
     return orderedRows.filter((row) => row.average >= lo && row.average <= hi);
   }, [orderedRows, lower, upper]);
 
-  const filteredEnrollmentSet = useMemo(
-    () => new Set(filteredRows.map((row) => row.enrollmentNo)),
+  const filteredRowIndexSet = useMemo(
+    () => new Set(filteredRows.map((row) => row.originalIndex)),
     [filteredRows]
   );
+
+  const rankByOriginalIndex = useMemo(() => {
+    const ranks = new Map<number, number>();
+    filteredRows.forEach((row, index) => ranks.set(row.originalIndex, index + 1));
+    return ranks;
+  }, [filteredRows]);
 
   const tierCounts = useMemo(
     () =>
@@ -334,17 +340,17 @@ export default function SectionOverallPage() {
                 <div className="max-h-[560px] overflow-y-auto overflow-x-hidden">
                   <table className="w-full table-fixed text-[10px] border-collapse">
                     <colgroup>
-                      {sortDirection !== "none" && <col className="w-[5%]" />}
-                      <col className="w-[18%]" />
-                      {theorySubjects.map((subject) => <col key={subject.id} className="w-[7%]" />)}
-                      <col className="w-[9%]" />
-                      <col className="w-[9%]" />
+                      <col className="w-[6%]" />
+                      <col className="w-[20%]" />
+                      {theorySubjects.map((subject) => <col key={subject.id} className="w-[5.5%]" />)}
                       <col className="w-[8%]" />
-                      <col className="w-[12%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[11%]" />
                     </colgroup>
                     <thead className="sticky top-0 bg-white z-10">
                       <tr className="border-b border-slate-200 text-slate-500">
-                        {sortDirection !== "none" && <th className="text-center px-1 py-2">Rank</th>}
+                        <th className="text-center px-1 py-2">S.No.</th>
                         <th className="text-left px-2 py-2">Student</th>
                         {theorySubjects.map((subject) => (
                           <th key={subject.id} className="text-center px-1 py-2" title={subject.name}>
@@ -358,17 +364,16 @@ export default function SectionOverallPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {orderedRows.map((row, index) => {
-                        const visible = filteredEnrollmentSet.has(row.enrollmentNo);
+                      {orderedRows.map((row) => {
+                        const visible = filteredRowIndexSet.has(row.originalIndex);
+                        const rank = rankByOriginalIndex.get(row.originalIndex) || "";
                         return (
                           <tr
-                            key={row.enrollmentNo}
+                            key={`${row.enrollmentNo || "student"}-${row.originalIndex}`}
                             style={{ display: visible ? "table-row" : "none" }}
                             className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"
                           >
-                            {sortDirection !== "none" && (
-                              <td className="text-center px-1 py-2 text-slate-500 tabular-nums">{index + 1}</td>
-                            )}
+                            <td className="text-center px-1 py-2 text-slate-500 tabular-nums">{rank}</td>
                             <td className="px-2 py-2 font-medium text-slate-800 truncate" title={row.name}>
                               {row.name}
                             </td>
@@ -442,7 +447,7 @@ export default function SectionOverallPage() {
                     <p className="text-[10px] text-slate-500 mt-0.5">Highest overall percentages.</p>
                   </div>
                   {topFive.map((row) => (
-                    <div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3 border-b border-slate-100">
+                    <div key={`${row.enrollmentNo || "student"}-${row.originalIndex}`} className="px-3 py-2.5 flex items-center justify-between gap-3 border-b border-slate-100">
                       <div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div>
                       <div className="text-sm font-medium" style={{ color: TIER_COLORS[row.tier] }}>
                         {row.overallPct.toFixed(1)}%
