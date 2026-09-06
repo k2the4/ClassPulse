@@ -23,16 +23,52 @@
 .at-risk-table>div{min-width:0}
 .at-risk-table>div:first-child{padding:13px 15px;border-bottom:1px solid #eeeeeb}
 .at-risk-table>div:nth-child(2){height:505px;max-height:505px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
-.at-risk-table table{width:100%;min-width:0;max-width:100%;table-layout:fixed;border-collapse:collapse;font-size:10px}
-.at-risk-table th{padding:9px 5px;background:#fafafd;color:#8991a2;font-size:9px;font-weight:800;letter-spacing:.15px;white-space:nowrap;position:sticky;top:0;z-index:2}
-.at-risk-table td{padding:9px 5px;border-top:1px solid #f0efed;color:#4e586d;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.at-risk-table th:nth-child(1),.at-risk-table td:nth-child(1){width:6%;text-align:center}
-.at-risk-table th:nth-child(2),.at-risk-table td:nth-child(2){width:20%;text-align:left}
-.at-risk-table th:nth-child(n+3):nth-child(-n+8),.at-risk-table td:nth-child(n+3):nth-child(-n+8){width:5.5%;text-align:center}
-.at-risk-table th:nth-child(9),.at-risk-table td:nth-child(9){width:8%;text-align:center}
-.at-risk-table th:nth-child(10),.at-risk-table td:nth-child(10){width:8%;text-align:center}
-.at-risk-table th:nth-child(11),.at-risk-table td:nth-child(11){width:8%;text-align:center}
-.at-risk-table th:nth-child(12),.at-risk-table td:nth-child(12){width:11%;text-align:center}
+
+/* Keep the student grid out of native table layout. Native table nodes can be
+   normalized by the browser while React is reconciling filtered/sorted rows. */
+.overall-student-table-scroll{height:505px;max-height:505px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+.overall-student-table{width:100%;min-width:0;font-size:10px}
+.overall-student-table-row{
+  display:grid;
+  grid-template-columns:6fr 20fr repeat(6,5.5fr) 8fr 8fr 8fr 11fr;
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+.overall-student-table-head{
+  position:sticky;
+  top:0;
+  z-index:2;
+  min-height:34px;
+  align-items:center;
+  background:#fafafd;
+  color:#8991a2;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.15px;
+  border-bottom:1px solid #e5e7eb;
+}
+.overall-student-table-head>div,
+.overall-student-table-data-row>div{
+  min-width:0;
+  box-sizing:border-box;
+  padding:9px 5px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.overall-student-table-head>div{text-align:center}
+.overall-student-table-head>.student-cell{text-align:left}
+.overall-student-table-data-row{
+  min-height:37px;
+  align-items:center;
+  color:#4e586d;
+  border-bottom:1px solid #f0efed;
+}
+.overall-student-table-data-row:hover{background:rgba(248,250,252,.7)}
+.overall-student-table-data-row>.student-cell{text-align:left}
+.overall-student-table-data-row:last-child{border-bottom:0}
+
 .at-risk-table .text-sm{font-size:11px}
 .at-risk-table .text-\[10px\]{font-size:10px}
 .at-risk-table .text-\[9px\]{font-size:9px}
@@ -54,6 +90,6 @@
   .at-risk-filter-title{display:block}
   .at-risk-filter-controls{grid-template-columns:1fr}
   .at-risk-layout{grid-template-columns:1fr}
-  .at-risk-table>div:nth-child(2){overflow-x:auto}
-  .at-risk-table table{min-width:760px}
+  .overall-student-table-scroll{overflow-x:auto}
+  .overall-student-table{min-width:760px}
 }
