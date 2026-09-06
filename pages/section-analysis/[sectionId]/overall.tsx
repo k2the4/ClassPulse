@@ -104,8 +104,6 @@ export default function SectionOverallPage() {
     loadAnalysis();
   }, [sectionId]);
 
-  // The API already returns only THEORY subjects. Keep the subject identity from
-  // the database/Google-Sheets analysis instead of hard-coding abbreviations here.
   const theorySubjects = useMemo(() => data?.subjects.slice(0, 6) || [], [data]);
 
   const rows = useMemo<Row[]>(() => {
@@ -119,13 +117,7 @@ export default function SectionOverallPage() {
         const mark = Number(score?.basicInternal || 0);
         const max = Number(score?.basicMax || 0);
         const pct = max > 0 ? (mark / max) * 100 : 0;
-        return {
-          ...subject,
-          mark,
-          max,
-          pct,
-          grade: tierForPct(pct),
-        };
+        return { ...subject, mark, max, pct, grade: tierForPct(pct) };
       });
 
       const total = subjects.reduce((sum, subject) => sum + subject.mark, 0);
@@ -148,21 +140,28 @@ export default function SectionOverallPage() {
     });
   }, [data, theorySubjects]);
 
-  const filteredRows = useMemo(() => {
-    const lo = Math.max(0, Math.min(40, Math.min(lower, upper)));
-    const hi = Math.max(0, Math.min(40, Math.max(lower, upper)));
-    const result = rows.filter((row) => row.average >= lo && row.average <= hi);
-
+  const orderedRows = useMemo(() => {
     if (sortDirection === "none") {
-      return [...result].sort((a, b) => a.originalIndex - b.originalIndex);
+      return [...rows].sort((a, b) => a.originalIndex - b.originalIndex);
     }
 
-    return [...result].sort((a, b) =>
+    return [...rows].sort((a, b) =>
       sortDirection === "asc"
         ? a.average - b.average || a.name.localeCompare(b.name)
         : b.average - a.average || a.name.localeCompare(b.name)
     );
-  }, [rows, lower, upper, sortDirection]);
+  }, [rows, sortDirection]);
+
+  const filteredRows = useMemo(() => {
+    const lo = Math.max(0, Math.min(40, Math.min(lower, upper)));
+    const hi = Math.max(0, Math.min(40, Math.max(lower, upper)));
+    return orderedRows.filter((row) => row.average >= lo && row.average <= hi);
+  }, [orderedRows, lower, upper]);
+
+  const filteredEnrollmentSet = useMemo(
+    () => new Set(filteredRows.map((row) => row.enrollmentNo)),
+    [filteredRows]
+  );
 
   const tierCounts = useMemo(
     () =>
@@ -359,52 +358,56 @@ export default function SectionOverallPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredRows.map((row, index) => (
-                        <tr
-                          key={row.enrollmentNo}
-                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"
-                        >
-                          {sortDirection !== "none" && (
-                            <td className="text-center px-1 py-2 text-slate-500 tabular-nums">{index + 1}</td>
-                          )}
-                          <td className="px-2 py-2 font-medium text-slate-800 truncate" title={row.name}>
-                            {row.name}
-                          </td>
-                          {row.subjects.map((subject) => (
-                            <td
-                              key={subject.id}
-                              className="text-center px-1 py-2 tabular-nums font-medium"
-                              style={{ color: TIER_COLORS[subject.grade] }}
-                              title={`${formatMark(subject.mark)}/${formatMark(subject.max)} · ${subject.grade}`}
-                            >
-                              {formatMark(subject.mark)}
+                      {orderedRows.map((row, index) => {
+                        const visible = filteredEnrollmentSet.has(row.enrollmentNo);
+                        return (
+                          <tr
+                            key={row.enrollmentNo}
+                            style={{ display: visible ? "table-row" : "none" }}
+                            className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"
+                          >
+                            {sortDirection !== "none" && (
+                              <td className="text-center px-1 py-2 text-slate-500 tabular-nums">{index + 1}</td>
+                            )}
+                            <td className="px-2 py-2 font-medium text-slate-800 truncate" title={row.name}>
+                              {row.name}
                             </td>
-                          ))}
-                          <td className="text-center px-1 py-2 font-semibold tabular-nums text-slate-900">
-                            {formatMark(row.total)}
-                          </td>
-                          <td
-                            className="text-center px-1 py-2 font-semibold tabular-nums"
-                            style={{ color: TIER_COLORS[row.tier] }}
-                            title={`Average out of ${formatMark(row.averageMax)}`}
-                          >
-                            {formatMark(row.average)}
-                          </td>
-                          <td
-                            className="text-center px-1 py-2 font-semibold tabular-nums"
-                            style={{ color: TIER_COLORS[row.tier] }}
-                          >
-                            {row.overallPct.toFixed(0)}%
-                          </td>
-                          <td className="text-center px-1 py-2">
-                            <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${tierClass(row.tier)}`}
+                            {row.subjects.map((subject) => (
+                              <td
+                                key={subject.id}
+                                className="text-center px-1 py-2 tabular-nums font-medium"
+                                style={{ color: TIER_COLORS[subject.grade] }}
+                                title={`${formatMark(subject.mark)}/${formatMark(subject.max)} · ${subject.grade}`}
+                              >
+                                {formatMark(subject.mark)}
+                              </td>
+                            ))}
+                            <td className="text-center px-1 py-2 font-semibold tabular-nums text-slate-900">
+                              {formatMark(row.total)}
+                            </td>
+                            <td
+                              className="text-center px-1 py-2 font-semibold tabular-nums"
+                              style={{ color: TIER_COLORS[row.tier] }}
+                              title={`Average out of ${formatMark(row.averageMax)}`}
                             >
-                              {row.tier}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                              {formatMark(row.average)}
+                            </td>
+                            <td
+                              className="text-center px-1 py-2 font-semibold tabular-nums"
+                              style={{ color: TIER_COLORS[row.tier] }}
+                            >
+                              {row.overallPct.toFixed(0)}%
+                            </td>
+                            <td className="text-center px-1 py-2">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold ${tierClass(row.tier)}`}
+                              >
+                                {row.tier}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -413,9 +416,7 @@ export default function SectionOverallPage() {
               <aside className="at-risk-side-stack">
                 <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                   <h3 className="text-sm font-semibold text-slate-900">Distribution</h3>
-                  <p className="mt-0.5 text-[10px] text-slate-500">
-                    Overall performance across the six theory subjects.
-                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">Overall performance across the six theory subjects.</p>
                   <div className="mt-3 space-y-2">
                     {["Excellent", "Good", "Needs Attention", "Critical Risk"].map((tier) => {
                       const count = tierCounts[tier] || 0;
@@ -427,10 +428,7 @@ export default function SectionOverallPage() {
                             <span>{count}</span>
                           </div>
                           <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${width}%`, backgroundColor: TIER_COLORS[tier] }}
-                            />
+                            <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: TIER_COLORS[tier] }} />
                           </div>
                         </div>
                       );
@@ -444,10 +442,7 @@ export default function SectionOverallPage() {
                     <p className="text-[10px] text-slate-500 mt-0.5">Highest overall percentages.</p>
                   </div>
                   {topFive.map((row) => (
-                    <div
-                      key={row.enrollmentNo}
-                      className="px-3 py-2.5 flex items-center justify-between gap-3 border-b border-slate-100"
-                    >
+                    <div key={row.enrollmentNo} className="px-3 py-2.5 flex items-center justify-between gap-3 border-b border-slate-100">
                       <div className="text-[10px] font-semibold text-slate-800 truncate">{row.name}</div>
                       <div className="text-sm font-medium" style={{ color: TIER_COLORS[row.tier] }}>
                         {row.overallPct.toFixed(1)}%
