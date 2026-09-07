@@ -38,3 +38,11 @@
 .class-analysis-overall .overall-student-table-data-row>div:nth-child(2){
   text-align:left!important;
 }
+
+/* Attendance distribution charts: keep the tooltip from intercepting bar clicks. */
+.analysis-chart-panel .recharts-tooltip-wrapper{
+  pointer-events:none!important;
+}
+.analysis-chart-panel .recharts-bar-rectangle{
+  pointer-events:all!important;
+}
