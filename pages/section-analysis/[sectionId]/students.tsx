@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import {
   Award,
   BarChart3,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
@@ -80,7 +81,7 @@ function gradeFromAverage(average: number): Grade {
 function GradePill({ grade, large = false }: { grade: Grade; large?: boolean }) {
   const tone = GRADE_TONE[grade];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border ${tone.border} ${tone.bg} ${tone.text} ${large ? "px-3 py-1.5 text-xs" : "px-2 py-1 text-[9px]"} font-semibold`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border ${tone.border} ${tone.bg} ${tone.text} ${large ? "px-3 py-1.5 text-xs" : "px-2.5 py-1 text-[10px]"} font-semibold`}>
       <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
       {grade}
     </span>
@@ -234,15 +235,13 @@ export default function SectionStudentReportPage() {
   };
 
   return (
-    <div className="min-h-screen max-w-[1900px] mx-auto px-6 lg:px-8 py-6 text-slate-900">
-      <div className="flex items-start justify-between mb-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="text-xl lg:text-2xl font-semibold tracking-tight">Class / Section Analysis</h1>
-            {computedAt && <span className="text-[10px] text-slate-400">• Last synced {new Date(computedAt).toLocaleString()}</span>}
-          </div>
+    <div className="min-h-screen max-w-[1900px] mx-auto px-6 lg:px-8 py-7 text-slate-900">
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-semibold tracking-tight">Class / Section Analysis</h1>
+          {computedAt && <p className="text-xs text-slate-400 mt-1">Last synced {new Date(computedAt).toLocaleString()}</p>}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2">
           <RawDataButton sheetId={sheetId} />
           <button
             onClick={() => loadAnalysis(true)}
@@ -256,38 +255,31 @@ export default function SectionStudentReportPage() {
       </div>
 
       {typeof sectionId === "string" && <AnalysisNav sectionId={sectionId} />}
-      {error && <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {error && <div className="mt-5 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
       {loading && !data && <div className="py-14 text-center text-sm text-slate-500">Loading student report...</div>}
 
       {data && (
         <>
-          <div className="mt-5 mb-5 flex items-end justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-600">Individual academic profile</p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Student Report</h2>
-              <p className="mt-1 text-xs text-slate-500">Detailed internal performance across {Math.min(SUBJECT_COUNT, data.subjects.length)} theory subjects.</p>
-            </div>
-            <div className="hidden sm:flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-2 text-[10px] font-medium text-violet-700">
-              <BarChart3 size={14} /> Internal assessment · 240 marks
-            </div>
+          <div className="mt-5 mb-5">
+            <h2 className="text-xl font-semibold">Student Report</h2>
+            <p className="text-sm text-slate-500 mt-1">Individual performance report across {Math.min(SUBJECT_COUNT, data.subjects.length)} theory subjects.</p>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[275px_minmax(0,1fr)] gap-4 items-start">
+          <div className="grid grid-cols-1 xl:grid-cols-[290px_minmax(0,1fr)] gap-4 items-start">
             <aside className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden xl:sticky xl:top-5">
-              <div className="bg-gradient-to-br from-violet-50 via-white to-white p-4 border-b border-slate-100">
+              <div className="p-4 border-b border-slate-100">
                 <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-violet-600">Class roster</p>
-                    <h3 className="mt-1 font-semibold text-slate-900">Students</h3>
-                  </div>
-                  <span className="rounded-full bg-white border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500">{students.length}</span>
+                  <h3 className="font-semibold">Students</h3>
+                  <span className="text-xs text-slate-400">{students.length}</span>
                 </div>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search name or enrollment no."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                />
+                <div>
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search by name or enrollment no."
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                  />
+                </div>
                 <div className="flex gap-1.5 mt-3 overflow-x-auto pb-1">
                   <FilterPill active={gradeFilter === "All"} onClick={() => setGradeFilter("All")} label={`All ${students.length}`} />
                   {GRADE_ORDER.map((grade) => (
@@ -301,17 +293,17 @@ export default function SectionStudentReportPage() {
                 </div>
               </div>
 
-              <div className="max-h-[560px] overflow-y-auto p-2">
+              <div className="max-h-[650px] overflow-y-auto p-2">
                 {filteredStudents.map((student) => (
                   <button
                     key={student.enrollmentNo}
                     onClick={() => setSelectedEnrollment(student.enrollmentNo)}
-                    className={`w-full rounded-xl px-3 py-2.5 text-left transition ${student.enrollmentNo === selected?.enrollmentNo ? "bg-[#4a32a0] text-white shadow-[0_7px_18px_rgba(74,50,160,.18)]" : "hover:bg-slate-50 text-slate-700"}`}
+                    className={`w-full rounded-xl px-3 py-3 text-left transition ${student.enrollmentNo === selected?.enrollmentNo ? "bg-[#4a32a0] text-white shadow-sm" : "hover:bg-slate-50 text-slate-700"}`}
                   >
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-3">
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11px] font-semibold">{student.name}</span>
-                        <span className={`block text-[9px] mt-0.5 ${student.enrollmentNo === selected?.enrollmentNo ? "text-violet-100" : "text-slate-400"}`}>{student.enrollmentNo}</span>
+                        <span className="block truncate text-xs font-semibold">{student.name}</span>
+                        <span className={`block text-[10px] mt-1 ${student.enrollmentNo === selected?.enrollmentNo ? "text-violet-100" : "text-slate-400"}`}>{student.enrollmentNo}</span>
                       </span>
                       <GradePill grade={student.reportGrade} />
                     </div>
@@ -328,106 +320,85 @@ export default function SectionStudentReportPage() {
 
             {selected && studentStats && (
               <main className="min-w-0 space-y-4">
-                <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <div className="absolute inset-y-0 left-0 w-1 bg-violet-600" />
-                  <div className="p-5 lg:p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-violet-100 text-lg font-bold text-violet-700 ring-4 ring-violet-50">
-                          {selected.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">Student profile</p>
-                          <h3 className="mt-1 text-xl font-semibold tracking-tight truncate">{selected.name}</h3>
-                          <p className="text-[10px] text-slate-400 mt-1 truncate">{selected.enrollmentNo} <span className="mx-1">·</span> {selected.email}</p>
-                        </div>
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 lg:p-6 shadow-sm">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-violet-100 text-lg font-semibold text-violet-700">
+                        {selected.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}
                       </div>
-                      <div className="flex items-center gap-6 lg:gap-8">
-                        <div className="hidden sm:block h-10 w-px bg-slate-100" />
-                        <div className="text-right">
-                          <GradePill grade={studentStats.grade} large />
-                          <p className="text-[9px] text-slate-400 mt-2">Rank by average</p>
-                          <p className="text-sm font-bold text-slate-900">{studentStats.rank} <span className="font-normal text-slate-400">/ {students.length}</span></p>
-                        </div>
+                      <div className="min-w-0">
+                        <h3 className="text-xl font-semibold truncate">{selected.name}</h3>
+                        <p className="text-xs text-slate-400 mt-1 truncate">Student report · {Math.min(SUBJECT_COUNT, selected.subjects.length)} theory subjects</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6 lg:gap-8">
+                      <div className="text-right">
+                        <GradePill grade={studentStats.grade} large />
+                        <p className="text-[10px] text-slate-400 mt-2">Rank by average</p>
+                        <p className="text-sm font-semibold">{studentStats.rank} / {students.length}</p>
                       </div>
                     </div>
                   </div>
                 </section>
 
-                <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <Metric icon={<BarChart3 size={16} />} label="Average" value={`${formatNumber(studentStats.average)} / 40`} sub={`${studentStats.averagePct.toFixed(1)}% overall`} />
-                  <Metric icon={<Award size={16} />} label="Total" value={`${formatNumber(studentStats.total)} / ${TOTAL_MAX}`} sub="6 subjects · 240 max" />
-                  <Metric icon={<TrendingUp size={16} />} label="Highest Subject" value={studentStats.highest ? formatNumber(studentStats.highest.basicInternal) : "—"} sub={studentStats.highest?.code || "—"} />
-                  <Metric icon={<TrendingDown size={16} />} label="Lowest Subject" value={studentStats.lowest ? formatNumber(studentStats.lowest.basicInternal) : "—"} sub={studentStats.lowest?.code || "—"} />
+                <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+                  <Metric icon={<BarChart3 size={17} />} label="Average" value={`${formatNumber(studentStats.average)} / 40`} sub={`${studentStats.averagePct.toFixed(1)}%`} />
+                  <Metric icon={<Award size={17} />} label="Total" value={`${formatNumber(studentStats.total)} / ${TOTAL_MAX}`} sub="6 subjects × 40" />
+                  <Metric icon={<TrendingUp size={17} />} label="Highest Subject" value={studentStats.highest ? formatNumber(studentStats.highest.basicInternal) : "—"} sub={studentStats.highest?.name || "—"} />
+                  <Metric icon={<TrendingDown size={17} />} label="Lowest Subject" value={studentStats.lowest ? formatNumber(studentStats.lowest.basicInternal) : "—"} sub={studentStats.lowest?.name || "—"} />
+                  <Metric icon={<CalendarCheck size={17} />} label="Overall Attendance" value={`${selected.overallAttendance}%`} sub="Current attendance" />
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-white to-violet-50/40">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-violet-500" />
-                        <h3 className="font-semibold text-slate-900">Subject Performance</h3>
-                        <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-semibold text-violet-600">6 Theory Subjects</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">Weighted components and internal marks for each subject.</p>
-                    </div>
-                    <div className="text-[9px] text-slate-400">Each subject · 40 marks</div>
+                  <div className="px-5 py-4 border-b border-slate-100">
+                    <h3 className="font-semibold">Subject Performance <span className="text-xs font-normal text-slate-400">(Theory Subjects)</span></h3>
+                    <p className="text-[10px] text-slate-400 mt-1">Internal marks distribution for each subject. Every subject contributes 40 marks.</p>
                   </div>
-
                   <div className="w-full overflow-hidden">
-                    <table className="w-full table-fixed border-collapse text-[9px]">
+                    <table className="w-full text-[10px] table-fixed border-collapse">
                       <colgroup>
-                        <col className="w-[23%]" />
-                        <col className="w-[8.5%]" />
-                        <col className="w-[8.5%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[9%]" />
+                        <col className="w-[20%]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[11%]" />
+                        <col className="w-[13%]" />
+                        <col className="w-[10%]" />
                       </colgroup>
                       <thead>
-                        <tr className="border-b border-slate-100 bg-slate-50/80 text-[8px] uppercase tracking-[0.05em] text-slate-500">
-                          <th className="px-4 py-3 text-left font-bold">Subject</th>
-                          <th className="px-1.5 py-3 text-center font-bold">Assign.<br />/ 5</th>
-                          <th className="px-1.5 py-3 text-center font-bold">Present.<br />/ 5</th>
-                          <th className="px-1.5 py-3 text-center font-bold">Attend.<br />/ 10</th>
-                          <th className="px-1.5 py-3 text-center font-bold">Midsem 1<br />/ 10</th>
-                          <th className="px-1.5 py-3 text-center font-bold">Midsem 2<br />/ 10</th>
-                          <th className="px-1.5 py-3 text-center font-bold">Basic Internal<br />/ 40</th>
-                          <th className="px-1.5 py-3 text-center font-bold">Moderated<br />/ 40</th>
-                          <th className="px-1.5 py-3 text-center font-bold">Grade</th>
+                        <tr className="border-b border-slate-100 bg-slate-50/60 text-[9px] text-slate-500">
+                          <th className="px-3 py-2.5 text-left font-semibold">Subject</th>
+                          <th className="px-1 py-2.5 text-center font-semibold leading-tight">Assignment<br />/ 5</th>
+                          <th className="px-1 py-2.5 text-center font-semibold leading-tight">Presentation<br />/ 5</th>
+                          <th className="px-1 py-2.5 text-center font-semibold leading-tight">Attendance<br />/ 10</th>
+                          <th className="px-1 py-2.5 text-center font-semibold leading-tight">Midsem 1<br />/ 10</th>
+                          <th className="px-1 py-2.5 text-center font-semibold leading-tight">Midsem 2<br />/ 10</th>
+                          <th className="px-1 py-2.5 text-center font-semibold leading-tight">Basic Internal<br />/ 40</th>
+                          <th className="px-1 py-2.5 text-center font-semibold leading-tight">Moderated Internal<br />/ 40</th>
+                          <th className="px-1 py-2.5 text-center font-semibold">Grade</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {studentStats.subjects.map((subject, index) => (
-                          <tr key={subject.subjectId} className="border-b border-slate-50 last:border-0 hover:bg-violet-50/30">
-                            <td className="px-4 py-3 text-left align-middle">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-100 text-[8px] font-bold text-slate-500">{String(index + 1).padStart(2, "0")}</span>
-                                <div className="min-w-0">
-                                  <div className="font-semibold text-[10px] text-slate-800 leading-tight truncate" title={subject.name}>{subject.name}</div>
-                                  <div className="mt-0.5 text-[8px] text-slate-400">{subject.code}</div>
-                                </div>
-                              </div>
-                            </td>
+                        {studentStats.subjects.map((subject) => (
+                          <tr key={subject.subjectId} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                            <td className="px-3 py-3 font-medium text-slate-800 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">{subject.name}</td>
                             <MarkCell value={subject.assignment} max={5} />
                             <MarkCell value={subject.presentation} max={5} />
                             <MarkCell value={subject.attendanceMark} max={10} />
                             <MarkCell value={subject.midsem1Mark} max={10} />
                             <MarkCell value={subject.midsem2Mark} max={10} />
-                            <td className="px-1 py-3 text-center tabular-nums font-bold text-slate-800">{formatNumber(subject.basicInternal)}<span className="text-[8px] font-normal text-slate-400"> / 40</span></td>
-                            <td className="px-1 py-3 text-center tabular-nums font-bold text-violet-700">{formatNumber(subject.moderatedInternal)}<span className="text-[8px] font-normal text-violet-300"> / 40</span></td>
+                            <td className="px-1 py-3 text-center tabular-nums font-semibold text-slate-800 whitespace-nowrap">{formatNumber(subject.basicInternal)} / 40</td>
+                            <td className="px-1 py-3 text-center tabular-nums font-semibold text-violet-700 whitespace-nowrap">{formatNumber(subject.moderatedInternal)} / 40</td>
                             <td className="px-1 py-3 text-center"><GradePill grade={subject.grade} /></td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-t border-slate-100 bg-slate-50/40 text-[8px] text-slate-400">
-                    <span>Weighted components contribute to the 40-mark basic internal total.</span>
-                    <span className="hidden sm:inline">Moderated Internal shown separately.</span>
+                  <div className="px-5 py-3 border-t border-slate-100 text-[9px] text-slate-400">
+                    Assignment, presentation, attendance, Midsem 1 and Midsem 2 are shown as their weighted contribution to the 40-mark internal total. Moderated Internal is shown separately from the basic internal marks.
                   </div>
                 </section>
               </main>
@@ -444,7 +415,7 @@ function FilterPill({ active, onClick, label }: { active: boolean; onClick: () =
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-medium ${active ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+      className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-medium ${active ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
     >
       {label}
     </button>
@@ -455,23 +426,20 @@ function MarkCell({ value, max }: { value: number; max: number }) {
   return (
     <td className="px-1 py-3 text-center tabular-nums">
       <span className="font-semibold text-slate-800">{formatNumber(value)}</span>
-      <span className="text-[8px] text-slate-400"> / {max}</span>
+      <span className="text-[9px] text-slate-400"> / {max}</span>
     </td>
   );
 }
 
 function Metric({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub: string }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm min-w-0">
-      <div className="absolute inset-x-0 top-0 h-0.5 bg-violet-500/60" />
-      <div className="flex items-center gap-2.5">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600">{icon}</span>
-        <div className="min-w-0">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400 truncate">{label}</p>
-          <p className="text-base font-bold text-slate-900 mt-0.5 truncate">{value}</p>
-        </div>
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm min-w-0 text-center">
+      <div className="flex flex-col items-center justify-center gap-2 text-slate-500">
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-50 text-violet-600">{icon}</span>
+        <span className="text-[10px] font-medium leading-tight">{label}</span>
       </div>
-      <p className="text-[9px] text-slate-400 mt-2 truncate">{sub}</p>
+      <p className="text-lg font-semibold mt-3 truncate">{value}</p>
+      <p className="text-[10px] text-slate-400 mt-1 truncate">{sub}</p>
     </div>
   );
 }
