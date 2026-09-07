@@ -80,7 +80,7 @@ async function refreshLatestSessionMetadata(params: { sheets: ReturnType<typeof 
   await params.sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${params.title}'!B4:E4`, valueInputOption: "RAW", requestBody: { values: [[latestDate, latestSlot, "Session ID", latestKey]] } });
 }
 
-/** Rebuilds a month's LH/LA from Teacher Diary and adds the previous month's cumulative totals. */
+/** Rebuilds the target month's LH/LA from Teacher Diary, using the prior month's cumulative totals, then carries that cumulative baseline into later month tabs. */
 export async function syncMonthlyAttendanceFromTeacherDiary(params: { spreadsheetId: string; subjectCode: string; date: string }): Promise<{ monthTitle: string; presentColumns: number; studentCount: number }> {
   const sheets = getSheetsClient();
   const metadata = await sheets.spreadsheets.get({ spreadsheetId: params.spreadsheetId, fields: "sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))" });
@@ -113,9 +113,6 @@ export async function syncMonthlyAttendanceFromTeacherDiary(params: { spreadshee
     if (/^\d+$/.test(enrollmentNo)) monthEnrollmentRows.set(enrollmentNo, rowIndex);
   }
 
-  // IMPORTANT: the current month's sheet is never used as the cumulative base.
-  // We always read the immediately preceding month so rerunning the agent for
-  // September, October, etc. does not double-count the already-written total.
   const currentInfo = monthTabInfo(monthTitle);
   const previousTotals = new Map<string, { lh: number; la: number }>();
   if (currentInfo) {
@@ -163,15 +160,61 @@ export async function syncMonthlyAttendanceFromTeacherDiary(params: { spreadshee
     }
   }
 
+  const cumulative = new Map<string, { lh: number; la: number }>();
+  for (const [enrollmentNo, previous] of previousTotals.entries()) cumulative.set(enrollmentNo, { lh: previous.lh, la: previous.la });
+  for (const [enrollmentNo, current] of totals.entries()) {
+    const previous = cumulative.get(enrollmentNo) || { lh: 0, la: 0 };
+    cumulative.set(enrollmentNo, { lh: previous.lh + current.lh, la: previous.la + current.la });
+  }
+
   const writeRanges: Array<{ range: string; values: number[][] }> = [];
   for (const [enrollmentNo, rowIndex] of monthEnrollmentRows.entries()) {
-    const current = totals.get(enrollmentNo) || { lh: 0, la: 0 };
-    const previous = previousTotals.get(enrollmentNo) || { lh: 0, la: 0 };
+    const value = cumulative.get(enrollmentNo) || { lh: 0, la: 0 };
     const rowNumber = rowIndex + 1;
-    writeRanges.push({ range: `'${monthTitle}'!${columnName(monthLhCol)}${rowNumber}`, values: [[previous.lh + current.lh]] });
-    writeRanges.push({ range: `'${monthTitle}'!${columnName(monthLhCol + 1)}${rowNumber}`, values: [[previous.la + current.la]] });
+    writeRanges.push({ range: `'${monthTitle}'!${columnName(monthLhCol)}${rowNumber}`, values: [[value.lh]] });
+    writeRanges.push({ range: `'${monthTitle}'!${columnName(monthLhCol + 1)}${rowNumber}`, values: [[value.la]] });
   }
   if (writeRanges.length > 0) await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: writeRanges } });
+
+  // Seed every later month with the latest cumulative baseline. A future month
+  // does not need its own Teacher Diary entry just to display the carried-forward
+  // semester attendance. When that future month gets real sessions, its own sync
+  // recalculates it from the previous month and then propagates the new baseline.
+  if (currentInfo) {
+    const futureSheets = sheetList
+      .map((sheet) => ({ sheet, info: monthTabInfo(sheet.properties?.title || "") }))
+      .filter((item): item is { sheet: typeof sheetList[number]; info: { year: number; month: number } } => {
+        return !!item.sheet.properties?.title && !!item.info && (item.info.year > currentInfo.year || (item.info.year === currentInfo.year && item.info.month > currentInfo.month));
+      })
+      .sort((a, b) => a.info.year - b.info.year || a.info.month - b.info.month);
+
+    for (const { sheet } of futureSheets) {
+      const futureTitle = sheet.properties?.title;
+      if (!futureTitle) continue;
+      const futureResult = await sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${futureTitle}'!A1:AZ500`, valueRenderOption: "FORMATTED_VALUE" });
+      const futureRows = futureResult.data.values || [];
+      const futureHeaderRow = futureRows.findIndex((row) => row.some((_, col) => normalize(row[col]) === "lh" && normalize(row[col + 1]) === "la"));
+      if (futureHeaderRow === -1) continue;
+      const futureSubjectRow = futureHeaderRow - 1, futureParentSubjectRow = futureHeaderRow - 2;
+      let futureLhCol = -1;
+      for (let col = 0; col + 1 < (futureRows[futureHeaderRow]?.length || 0); col++) {
+        if (normalize(futureRows[futureHeaderRow]?.[col]) !== "lh" || normalize(futureRows[futureHeaderRow]?.[col + 1]) !== "la") continue;
+        if (subjectCodesMatch(futureRows[futureSubjectRow]?.[col], params.subjectCode) || subjectCodesMatch(futureRows[futureParentSubjectRow]?.[col], params.subjectCode)) { futureLhCol = col; break; }
+      }
+      if (futureLhCol === -1) continue;
+      const futureWriteRanges: Array<{ range: string; values: number[][] }> = [];
+      for (let rowIndex = futureHeaderRow + 1; rowIndex < futureRows.length; rowIndex++) {
+        const enrollmentNo = cleanEnrollment(futureRows[rowIndex]?.[1]);
+        if (!/^\d+$/.test(enrollmentNo)) continue;
+        const value = cumulative.get(enrollmentNo) || { lh: 0, la: 0 };
+        const rowNumber = rowIndex + 1;
+        futureWriteRanges.push({ range: `'${futureTitle}'!${columnName(futureLhCol)}${rowNumber}`, values: [[value.lh]] });
+        futureWriteRanges.push({ range: `'${futureTitle}'!${columnName(futureLhCol + 1)}${rowNumber}`, values: [[value.la]] });
+      }
+      if (futureWriteRanges.length > 0) await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: futureWriteRanges } });
+    }
+  }
+
   return { monthTitle, presentColumns: writeRanges.length, studentCount: monthEnrollmentRows.size };
 }
 
