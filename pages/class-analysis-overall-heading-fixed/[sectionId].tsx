@@ -133,8 +133,8 @@ function renderTable(rows: Row[]) {
 function renderDistribution(rows: Row[]) {
   const p = panel("Distribution");
   if (!p) return;
-  let content = p.querySelector(".classpulse-distribution-content") as HTMLElement | null;
-  if (!content) { content = document.createElement("div"); content.className = "classpulse-distribution-content"; p.appendChild(content); }
+  p.innerHTML = `<div class="px-3 pt-3 pb-2"><h3 class="text-sm font-semibold text-slate-900">Distribution</h3><p class="text-[10px] text-slate-500 mt-0.5">Overall performance across the six theory subjects.</p></div><div class="classpulse-distribution-content px-3 pb-3"></div>`;
+  const content = p.querySelector(".classpulse-distribution-content") as HTMLElement;
   const counts = rows.reduce((a, r) => { a[r.tier] = (a[r.tier] || 0) + 1; return a; }, {} as Record<string, number>);
   content.innerHTML = TIERS.map((tier) => { const count = counts[tier] || 0; const width = rows.length ? Math.max(2, count / rows.length * 100) : 0; return `<button type="button" class="classpulse-distribution-row" data-tier="${tier}"><div class="flex items-center justify-between text-[11px] text-slate-600"><span>${tier}</span><span>${count}</span></div><div class="mt-2 h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${width}%;background:${COLORS[tier]}"></div></div></button>`; }).join("");
   content.querySelectorAll<HTMLButtonElement>(".classpulse-distribution-row").forEach((row) => row.addEventListener("click", () => {
