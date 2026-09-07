@@ -51,17 +51,14 @@ export default function ClassAttendancePage() {
 
   useEffect(() => {
     if (!sectionId || typeof sectionId !== "string") return;
-
     let saved: { previousMonth?: string; currentMonth?: string; trendCriteria?: number } | null = null;
     try {
       const raw = window.sessionStorage.getItem(`classpulse-attendance-trend:${sectionId}`);
       saved = raw ? JSON.parse(raw) : null;
     } catch {}
-
     const savedPrevious = saved?.previousMonth || "";
     const savedCurrent = saved?.currentMonth || "";
-    const savedCriteria = Number.isFinite(saved?.trendCriteria) ? Number(saved?.trendCriteria) : 5;
-
+    const savedCriteria = typeof saved?.trendCriteria === "number" && Number.isFinite(saved.trendCriteria) ? saved.trendCriteria : 5;
     setPreviousMonth(savedPrevious);
     setCurrentMonth(savedCurrent);
     setTrendCriteria(savedCriteria);
@@ -75,7 +72,6 @@ export default function ClassAttendancePage() {
   const currentAverage = students.length ? round1(students.reduce((sum, s) => sum + s.attendancePct.currMonth, 0) / students.length) : 0;
   const averageChange = round1(currentAverage - previousAverage);
   const highestAttendanceStudent = students.length ? students.reduce((highest, student) => student.attendancePct.currMonth > highest.attendancePct.currMonth ? student : highest, students[0]) : null;
-  const improvingCount = students.filter((s) => s.attendancePct.trend === "Increasing").length;
   const filteredStudents = useMemo(() => students.filter((s) => s.name.toLowerCase().includes(search.toLowerCase())), [students, search]);
   const riskResults = useMemo(() => students.filter((s) => { const attendance = riskMonth === "current" ? s.attendancePct.currMonth : s.attendancePct.prevMonth; return attendance >= lowerBound && attendance <= upperBound && (riskTrendFilter === "All" || s.attendancePct.trend === riskTrendFilter); }), [students, lowerBound, upperBound, riskTrendFilter, riskMonth]);
   const riskEmails = riskResults.map((s) => s.email).filter(Boolean);
@@ -105,4 +101,4 @@ export default function ClassAttendancePage() {
 }
 
 function Metric({ icon, label, value, change, detail }: { icon: ReactNode; label: string; value: string | number; change?: number; detail?: string }) { const changeClass = change !== undefined && change > 0 ? "change-up" : change !== undefined && change < 0 ? "change-down" : ""; return <div className="analysis-metric"><div className="analysis-metric-icon">{icon}</div><div className="analysis-metric-content"><span className="analysis-metric-label">{label}</span><div className="analysis-metric-value-row"><strong>{value}</strong>{change !== undefined && <small className={changeClass}>{change > 0 ? "↑ +" : change < 0 ? "↓ " : ""}{change}%</small>}</div>{detail && <small className="analysis-metric-detail">{detail}</small>}</div></div>; }
-function ChartPanel({ title, subtitle, data, onBarClick }: { title: string; subtitle: string; data: { name: string; count: number; color: string }[]; onBarClick: (entry: { name: string } | undefined) => void }) { return <div className="analysis-panel analysis-chart-panel"><div className="analysis-chart-head"><div><h3>{title}</h3><p>{subtitle}</p></div></div><div style={{ height: 220 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{ top: 18, right: 8, left: -14, bottom: 0 }}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} tick={{ fontSize: 11 }} /><Tooltip cursor={{ fill: "rgba(79,70,229,0.05)" }} /><Bar dataKey="count" radius={[4, 4, 0, 0]} onClick={(_, index) => { if (data[index]?.count > 0) onBarClick(data[index]); }}>{data.map((entry) => <Cell key={entry.name} fill={entry.color} cursor={entry.count > 0 ? "pointer" : "default"} onClick={() => { if (entry.count > 0) onBarClick(entry); }} /></Bar></BarChart></ResponsiveContainer></div></div>; }
+function ChartPanel({ title, subtitle, data, onBarClick }: { title: string; subtitle: string; data: { name: string; count: number; color: string }[]; onBarClick: (entry: { name: string } | undefined) => void }) { return <div className="analysis-panel analysis-chart-panel"><div className="analysis-chart-head"><div><h3>{title}</h3><p>{subtitle}</p></div></div><div style={{ height: 220 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{ top: 18, right: 8, left: -14, bottom: 0 }}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} tick={{ fontSize: 11 }} /><Tooltip cursor={{ fill: "rgba(79,70,229,0.05)" }} /><Bar dataKey="count" radius={[4, 4, 0, 0]} minPointSize={6} onClick={(_, index) => { const entry = data[index]; if (entry?.count > 0) onBarClick(entry); }}>{data.map((entry) => <Cell key={entry.name} fill={entry.color} cursor={entry.count > 0 ? "pointer" : "default"} />)}</Bar></BarChart></ResponsiveContainer></div></div>; }
