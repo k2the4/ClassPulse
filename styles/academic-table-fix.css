@@ -47,7 +47,7 @@
 }
 
 .academic-content-grid {
-  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr) !important;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.85fr) !important;
   gap: 14px !important;
 }
 
@@ -135,7 +135,6 @@
 
 .risk,
 .grade-risk,
-.tier-risk,
 .critical-risk,
 .grade-critical-risk,
 .tier-critical-risk {
