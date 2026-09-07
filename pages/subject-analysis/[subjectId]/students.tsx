@@ -4,7 +4,7 @@ import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, RefreshCw } from "
 
 import SubjectAnalysisNav from "../../../components/SubjectAnalysisNav";
 import { SubjectAnalysis } from "../../../lib/analysis";
-import { RawDataButton, GradeBadge } from "../../../components/AnalysisWidgets";
+import { RawDataButton } from "../../../components/AnalysisWidgets";
 
 function round1(n: number) {
   return Math.round((Number(n) || 0) * 10) / 10;
@@ -14,10 +14,28 @@ function shortMonth(month: string) {
   return month.replace(/\s*20\d{2}/, "");
 }
 
+function statusFor(value: number, max = 40) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  if (pct >= 80) return { label: "Excellent", tone: "bg-emerald-50 text-emerald-700 border-emerald-100", dot: "bg-emerald-500" };
+  if (pct >= 60) return { label: "Good", tone: "bg-blue-50 text-blue-700 border-blue-100", dot: "bg-blue-500" };
+  if (pct >= 40) return { label: "Needs Attention", tone: "bg-amber-50 text-amber-700 border-amber-100", dot: "bg-amber-500" };
+  return { label: "Critical Risk", tone: "bg-red-50 text-red-600 border-red-100", dot: "bg-red-500" };
+}
+
+function weightedMarks(selected: any) {
+  const attendance = round1(((selected?.attendancePct?.currMonth ?? 0) / 100) * 10);
+  const assignment = selected?.assignment?.total > 0
+    ? round1(((selected.assignment.submitted ?? 0) / selected.assignment.total) * 5)
+    : 0;
+  const presentation = round1(((selected?.presentation ?? 0) / 10) * 5);
+  const midsem1 = round1(((selected?.midsem?.first ?? 0) / 30) * 10);
+  const midsem2 = round1(((selected?.midsem?.second ?? 0) / 30) * 10);
+  return { attendance, assignment, presentation, midsem1, midsem2 };
+}
+
 export default function SubjectStudentReportPage() {
   const router = useRouter();
   const { subjectId } = router.query;
-
   const [data, setData] = useState<SubjectAnalysis | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [computedAt, setComputedAt] = useState("");
@@ -25,14 +43,15 @@ export default function SubjectStudentReportPage() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [selectedEnrollment, setSelectedEnrollment] = useState<string>("");
+  const [selectedEnrollment, setSelectedEnrollment] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
 
-  async function loadAnalysis() {
+  async function loadAnalysis(sync = false) {
     if (!subjectId || typeof subjectId !== "string") return;
-    setLoading(true);
+    if (sync) setSyncing(true); else setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/analysis/subject/${subjectId}`);
+      const res = await fetch(`/api/analysis/subject/${subjectId}${sync ? "?sync=1" : ""}`);
       const json = await res.json();
       if (!res.ok) {
         setError(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to load student report");
@@ -41,31 +60,11 @@ export default function SubjectStudentReportPage() {
       setData(json.data);
       setComputedAt(json.computedAt);
       setSheetId(json.sheetId || null);
-      if (json.data?.students?.[0]) setSelectedEnrollment(json.data.students[0].enrollmentNo);
+      if (!selectedEnrollment && json.data?.students?.[0]) setSelectedEnrollment(json.data.students[0].enrollmentNo);
     } catch (e: any) {
       setError(e.message || "Failed to load student report");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function syncAnalysis() {
-    if (!subjectId || typeof subjectId !== "string") return;
-    setSyncing(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/analysis/subject/${subjectId}?sync=1`);
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.detail ? `${json.error}: ${json.detail}` : json.error || "Failed to sync analysis");
-        return;
-      }
-      setData(json.data);
-      setComputedAt(json.computedAt);
-      setSheetId(json.sheetId || null);
-    } catch (e: any) {
-      setError(e.message || "Failed to sync analysis");
-    } finally {
       setSyncing(false);
     }
   }
@@ -76,63 +75,58 @@ export default function SubjectStudentReportPage() {
   }, [subjectId]);
 
   const students = data?.students || [];
+  const selected: any = students.find((s: any) => s.enrollmentNo === selectedEnrollment) || students[0];
+
+  useEffect(() => {
+    if (!selectedEnrollment && students[0]) setSelectedEnrollment(students[0].enrollmentNo);
+  }, [students, selectedEnrollment]);
+
+  const studentsWithStatus = useMemo(() => students.map((student: any) => ({ ...student, reportStatus: statusFor(Number(student.internalMarks?.basic ?? 0)) })), [students]);
+  const statusCounts = useMemo(() => studentsWithStatus.reduce((acc: Record<string, number>, student: any) => {
+    acc[student.reportStatus.label] = (acc[student.reportStatus.label] || 0) + 1;
+    return acc;
+  }, {}), [studentsWithStatus]);
 
   const filteredList = useMemo(() => {
-    if (!search.trim()) return students;
     const q = search.trim().toLowerCase();
-    return students.filter((s: any) => s.name.toLowerCase().includes(q) || s.enrollmentNo.includes(q));
-  }, [students, search]);
-
-  const selected: any = students.find((s: any) => s.enrollmentNo === selectedEnrollment);
-
-  const assessmentRows = selected ? [
-    { label: "Assignment", value: selected.assignment?.submitted ?? 0, max: selected.assignment?.total ?? 0, raw: `${selected.assignment?.submitted ?? 0}/${selected.assignment?.total ?? 0}` },
-    { label: "Presentation", value: selected.presentation ?? 0, max: 10, raw: `${selected.presentation ?? 0}/10` },
-    { label: "Midsem 1", value: selected.midsem?.first ?? 0, max: 30, raw: `${selected.midsem?.first ?? 0}/30` },
-    { label: "Midsem 2", value: selected.midsem?.second ?? 0, max: 30, raw: `${selected.midsem?.second ?? 0}/30` },
-    { label: "Midsem Combined", value: selected.midsem?.combined ?? 0, max: 30, raw: `${selected.midsem?.combined ?? 0}/30` },
-  ] : [];
+    return studentsWithStatus.filter((student: any) => {
+      const matchesSearch = !q || student.name.toLowerCase().includes(q) || student.enrollmentNo.includes(q);
+      const matchesStatus = statusFilter === "All" || student.reportStatus.label === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [studentsWithStatus, search, statusFilter]);
 
   const basicMarks = round1(selected?.internalMarks?.basic ?? 0);
-  const moderatedMarks = Math.ceil(Number(selected?.internalMarks?.moderated ?? 0));
+  const moderatedMarks = round1(selected?.internalMarks?.moderated ?? 0);
   const moderationGain = round1(moderatedMarks - basicMarks);
-  const previousAttendance = round1(selected?.attendancePct?.prevMonth ?? 0);
   const currentAttendance = round1(selected?.attendancePct?.currMonth ?? 0);
+  const previousAttendance = round1(selected?.attendancePct?.prevMonth ?? 0);
   const attendanceChange = round1(currentAttendance - previousAttendance);
   const classAverage = round1(data?.classAverageBasicMarks ?? 0);
+  const weights = weightedMarks(selected);
+  const assessmentTotal = round1(weights.attendance + weights.assignment + weights.presentation + weights.midsem1 + weights.midsem2);
+  const selectedStatus = statusFor(basicMarks);
   const attendanceHistory = selected?.attendanceHistory || [];
 
-  const classRank = useMemo(() => {
-    if (!selected || !students.length) return null;
-    const ordered = [...students].sort((a: any, b: any) => {
-      const scoreA = Number(a.internalMarks?.basic ?? 0);
-      const scoreB = Number(b.internalMarks?.basic ?? 0);
-      return scoreB - scoreA || String(a.name).localeCompare(String(b.name));
+  const chartPoints = useMemo(() => {
+    if (!attendanceHistory.length) return [];
+    const width = 700;
+    const height = 220;
+    const left = 36;
+    const right = 12;
+    const top = 16;
+    const bottom = 28;
+    const innerW = width - left - right;
+    const innerH = height - top - bottom;
+    return attendanceHistory.map((point: any, index: number) => {
+      const x = attendanceHistory.length === 1 ? left + innerW / 2 : left + (index / (attendanceHistory.length - 1)) * innerW;
+      const value = Number(point.percentage) || 0;
+      const y = top + innerH - (value / 100) * innerH;
+      return { x, y, value, month: shortMonth(point.month) };
     });
-    const index = ordered.findIndex((s: any) => s.enrollmentNo === selected.enrollmentNo);
-    return index >= 0 ? index + 1 : null;
-  }, [selected, students]);
+  }, [attendanceHistory]);
 
-  const betterThan = basicMarks > 0 && students.length
-    ? Math.min(100, Math.max(0, Math.round((students.filter((s: any) => Number(s.internalMarks?.basic ?? 0) < basicMarks).length / students.length) * 100)))
-    : null;
-
-  const performanceStatus = (value: number, max: number) => {
-    const pct = max > 0 ? (value / max) * 100 : 0;
-    if (pct >= 80) return { label: "Excellent", tone: "bg-emerald-50 text-emerald-700" };
-    if (pct >= 60) return { label: "Good", tone: "bg-blue-50 text-blue-700" };
-    if (pct >= 40) return { label: "Needs Attention", tone: "bg-amber-50 text-amber-700" };
-    return { label: "Critical", tone: "bg-red-50 text-red-600" };
-  };
-
-  const currentOverallStatus = selected ? performanceStatus(basicMarks, 40) : { label: "—", tone: "bg-gray-100 text-gray-600" };
-
-  const insights = selected ? [
-    currentAttendance < 75 ? { kind: "warning", title: `Attendance is ${currentAttendance}%, below the desired level.`, body: "Try to maintain at least 75% attendance." } : null,
-    selected.assignment?.total > 0 && selected.assignment?.submitted < selected.assignment?.total ? { kind: "critical", title: `Assignment marks are ${selected.assignment.submitted}/${selected.assignment.total}.`, body: "Complete all assignments to avoid losing easy internal marks." } : null,
-    selected.attendancePct?.trend === "Decreasing" ? { kind: "trend", title: "Attendance trend is decreasing.", body: "Consistent attendance can help improve the current position." } : null,
-    (selected.midsem?.first ?? 0) >= 24 || (selected.midsem?.second ?? 0) >= 24 ? { kind: "good", title: "Test performance is strong.", body: "Good performance across the midsemester assessments." } : null,
-  ].filter(Boolean) as { kind: string; title: string; body: string }[] : [];
+  const linePath = chartPoints.map((p: any, i: number) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
 
   return (
     <div className="analysis-layout">
@@ -150,76 +144,84 @@ export default function SubjectStudentReportPage() {
       <main className="analysis-page">
         <header className="analysis-topbar">
           <div className="analysis-title-row"><h1>Subject Analysis</h1>{computedAt && <span className="analysis-sync">• Last synced {new Date(computedAt).toLocaleString()}</span>}</div>
-          <div className="analysis-top-actions"><button className="analysis-primary" onClick={syncAnalysis} disabled={syncing}><RefreshCw size={15} className={syncing ? "animate-spin" : ""} />{syncing ? "Syncing..." : "Sync now"}</button></div>
+          <div className="analysis-top-actions"><button className="analysis-primary" onClick={() => loadAnalysis(true)} disabled={syncing}><RefreshCw size={15} className={syncing ? "animate-spin" : ""} />{syncing ? "Syncing..." : "Sync now"}</button></div>
         </header>
 
         {typeof subjectId === "string" && <SubjectAnalysisNav subjectId={subjectId} />}
-
         {error && <div className="analysis-panel" style={{ padding: 14, marginBottom: 16, color: "#b42318" }}>{error}</div>}
         {loading && !data && <div style={{ padding: 40, color: "#667085", fontSize: 13 }}>Loading student report...</div>}
 
         {data && selected && (
-          <div className="space-y-5">
-            <div className="mb-2">
+          <div className="space-y-4">
+            <div>
               <h2 className="text-xl md:text-2xl font-semibold text-gray-900">Student Performance Report</h2>
               <p className="text-sm text-gray-500 mt-1">A subject-wise report card with attendance, coursework and internal marks.</p>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-5">
-              <section className="bg-white rounded-2xl border border-gray-100 p-5 h-fit xl:sticky xl:top-5">
-                <input type="text" placeholder="Search name or enrollment" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4" />
-                <div className="max-h-[680px] overflow-y-auto space-y-1 pr-1">
-                  {filteredList.map((s: any) => (
-                    <button key={s.enrollmentNo} onClick={() => setSelectedEnrollment(s.enrollmentNo)} className={`w-full text-left px-3 py-3 rounded-xl transition ${s.enrollmentNo === selectedEnrollment ? "bg-gray-900 text-white" : "hover:bg-gray-50 text-gray-700"}`}>
-                      <span className="block text-sm font-medium truncate">{s.name}</span>
-                      <span className={`block text-xs mt-1 ${s.enrollmentNo === selectedEnrollment ? "text-gray-300" : "text-gray-400"}`}>{s.enrollmentNo}</span>
-                    </button>
-                  ))}
-                  {!filteredList.length && <p className="text-sm text-gray-400 text-center py-6">No matches.</p>}
+            <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-4 items-start">
+              <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden xl:sticky xl:top-4">
+                <div className="p-4 pb-3">
+                  <div className="flex items-center justify-between"><h3 className="text-base font-semibold text-gray-900">Students</h3><span className="text-sm text-gray-400">{students.length}</span></div>
+                  <input type="text" placeholder="Search by name or enrollment no." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-3 outline-none focus:border-purple-300" />
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                    {["All", "Excellent", "Good", "Needs Attention", "Critical Risk"].map((filter) => {
+                      const count = filter === "All" ? students.length : statusCounts[filter] || 0;
+                      return <button key={filter} onClick={() => setStatusFilter(filter)} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium ${statusFilter === filter ? "border-purple-200 bg-purple-50 text-purple-700" : "border-gray-200 bg-white text-gray-500"}`}>{filter === "All" ? `All ${count}` : `${filter} ${count}`}</button>;
+                    })}
+                  </div>
+                </div>
+                <div className="max-h-[680px] overflow-y-auto px-2 pb-2">
+                  {filteredList.map((student: any) => {
+                    const active = student.enrollmentNo === selected.enrollmentNo;
+                    return <button key={student.enrollmentNo} onClick={() => setSelectedEnrollment(student.enrollmentNo)} className={`w-full text-left rounded-xl px-3 py-3 mb-1 flex items-center justify-between gap-2 ${active ? "bg-indigo-800 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
+                      <span className="min-w-0"><span className="block text-sm font-semibold truncate">{student.name}</span><span className={`block text-xs mt-1 ${active ? "text-indigo-200" : "text-gray-400"}`}>{student.enrollmentNo}</span></span>
+                      <span className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${active ? "bg-white text-amber-700 border-white" : student.reportStatus.tone}`}><span className={`h-1.5 w-1.5 rounded-full ${student.reportStatus.dot}`} />{student.reportStatus.label}</span>
+                    </button>;
+                  })}
+                  {!filteredList.length && <p className="text-sm text-gray-400 text-center py-8">No matches.</p>}
                 </div>
               </section>
 
-              <section className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                <div className="px-6 py-7 md:px-8 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-gray-400">Subject performance report</p>
-                      <h3 className="text-3xl font-semibold tracking-tight text-gray-900 mt-2">{selected.name}</h3>
-                      <p className="text-sm text-gray-500 mt-2">{selected.enrollmentNo} · {selected.email || "Email not available"}</p>
-                    </div>
-                    <div className="sm:text-right">
-                      <GradeBadge grade={currentOverallStatus.label === "Excellent" ? "Excellent" : selected.midsem?.grade || currentOverallStatus.label} />
-                      <p className="text-xs text-gray-400 mt-2">Based on current subject performance</p>
-                    </div>
-                  </div>
+              <div className="min-w-0 space-y-4">
+                <section className="bg-white rounded-2xl border border-gray-200 px-5 py-5 md:px-7 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0"><div className="h-14 w-14 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-lg font-semibold shrink-0">{String(selected.name).split(" ").map((x: string) => x[0]).slice(0, 2).join("")}</div><div className="min-w-0"><h3 className="text-2xl font-semibold text-gray-900 truncate">{selected.name}</h3><p className="text-sm text-gray-400 mt-1 truncate">{selected.enrollmentNo} · {selected.email || "Email not available"}</p></div></div>
+                  <div className="text-right shrink-0"><span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${selectedStatus.tone}`}><span className={`h-1.5 w-1.5 rounded-full ${selectedStatus.dot}`} />{selectedStatus.label}</span></div>
+                </section>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 min-h-[108px]"><p className="text-xs text-gray-500">Class Average</p><p className="text-2xl font-semibold text-gray-900 mt-2">{classAverage} <span className="text-sm text-gray-400 font-normal">/ 40</span></p><p className="text-[11px] text-gray-400 mt-1">Average marks in class</p></div>
+                  <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 min-h-[108px]"><p className="text-xs text-gray-500">Internal Score (Basic)</p><p className="text-2xl font-semibold text-gray-900 mt-2">{basicMarks} <span className="text-sm text-gray-400 font-normal">/ 40</span></p><p className={`text-[11px] mt-1 font-medium ${basicMarks >= classAverage ? "text-emerald-600" : "text-red-500"}`}>{basicMarks - classAverage >= 0 ? "+" : ""}{round1(basicMarks - classAverage)} vs class avg</p></div>
+                  <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 min-h-[108px]"><p className="text-xs text-gray-500">Moderated Score</p><p className="text-2xl font-semibold text-gray-900 mt-2">{moderatedMarks} <span className="text-sm text-gray-400 font-normal">/ 40</span></p><p className={`text-[11px] mt-1 font-medium ${moderationGain >= 0 ? "text-emerald-600" : "text-red-500"}`}>{moderationGain >= 0 ? "+" : ""}{moderationGain} vs basic</p></div>
+                  <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 min-h-[108px]"><p className="text-xs text-gray-500">Current Attendance</p><p className="text-2xl font-semibold text-gray-900 mt-2">{currentAttendance}%</p><p className={`text-[11px] mt-1 font-medium ${attendanceChange >= 0 ? "text-emerald-600" : "text-red-500"}`}>{attendanceChange >= 0 ? "+" : ""}{attendanceChange}% from previous</p></div>
                 </div>
 
-                <div className="p-6 md:p-8 space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="rounded-2xl border border-gray-100 p-5"><p className="text-xs text-gray-400">Current Attendance</p><p className="text-3xl font-semibold mt-2">{currentAttendance}%</p><p className={`text-xs mt-2 font-medium ${attendanceChange >= 0 ? "text-emerald-600" : "text-red-500"}`}>{attendanceChange > 0 ? "+" : ""}{attendanceChange}% from previous</p><span className={`inline-flex mt-2 text-xs px-2.5 py-1 rounded-full ${selected.attendancePct?.trend === "Decreasing" ? "bg-red-50 text-red-600" : selected.attendancePct?.trend === "Increasing" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{selected.attendancePct?.trend || "Stable"}</span></div>
-                    <div className="rounded-2xl border border-gray-100 p-5"><p className="text-xs text-gray-400">Internal Score (Basic)</p><p className="text-3xl font-semibold mt-2">{basicMarks} <span className="text-base text-gray-400 font-normal">/ 40</span></p><p className={`text-xs mt-2 font-medium ${basicMarks >= classAverage ? "text-emerald-600" : "text-red-500"}`}>{classAverage ? `${basicMarks >= classAverage ? "+" : ""}${round1(basicMarks - classAverage)} vs class avg` : ""}</p></div>
-                    <div className="rounded-2xl border border-gray-100 p-5"><p className="text-xs text-gray-400">Class Rank</p><p className="text-3xl font-semibold mt-2">{classRank ? `#${classRank}` : "—"} <span className="text-base text-gray-400 font-normal">/ {students.length}</span></p><p className="text-xs mt-2 font-medium text-indigo-600">{classRank ? `Top ${Math.max(1, Math.round((classRank / Math.max(1, students.length)) * 100))}% of class` : ""}</p></div>
-                    <div className="rounded-2xl border border-gray-100 p-5"><p className="text-xs text-gray-400">Moderated Score</p><p className="text-3xl font-semibold mt-2">{moderatedMarks} <span className="text-base text-gray-400 font-normal">/ 40</span></p><p className={`text-xs mt-2 font-medium ${moderationGain >= 0 ? "text-emerald-600" : "text-red-500"}`}>{moderationGain >= 0 ? "+" : ""}{moderationGain} after moderation</p></div>
-                  </div>
+                <div className="grid grid-cols-1 lg:grid-cols-[0.92fr_1.08fr] gap-4">
+                  <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100"><h4 className="text-base font-semibold text-gray-900">Assessment Breakdown</h4><p className="text-xs text-gray-400 mt-1">Raw marks and their contribution to the subject internal score.</p></div>
+                    <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr] px-5 py-3 text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100"><span>Component</span><span>Raw Marks</span><span>Marks</span></div>
+                    {[
+                      ["Attendance", `${currentAttendance}%`, `${weights.attendance} / 10`],
+                      ["Assignment", `${selected.assignment?.submitted ?? 0}/${selected.assignment?.total ?? 0}`, `${weights.assignment} / 5`],
+                      ["Presentation", `${selected.presentation ?? 0}/10`, `${weights.presentation} / 5`],
+                      ["Midsem 1", `${selected.midsem?.first ?? 0}/30`, `${weights.midsem1} / 10`],
+                      ["Midsem 2", `${selected.midsem?.second ?? 0}/30`, `${weights.midsem2} / 10`],
+                    ].map((row) => <div key={row[0]} className="grid grid-cols-[1.2fr_0.9fr_0.9fr] px-5 py-3.5 text-sm border-b border-gray-100"><span className="text-gray-600">{row[0]}</span><span className="font-medium text-gray-800">{row[1]}</span><span className="font-semibold text-gray-900">{row[2]}</span></div>)}
+                    <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr] px-5 py-4 bg-gray-50/70 text-sm font-semibold"><span>Total</span><span className="text-gray-500">—</span><span>{assessmentTotal} / 40</span></div>
+                  </section>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    <section className="rounded-2xl border border-gray-100 p-5"><h4 className="text-lg font-semibold text-gray-900">Assessment Breakdown</h4><p className="text-xs text-gray-400 mt-1">Raw marks obtained by the student.</p><div className="mt-4 divide-y divide-gray-100">{assessmentRows.map((row) => { const status = performanceStatus(row.value, row.max); return <div key={row.label} className="flex items-center justify-between gap-3 py-3.5"><span className="text-sm text-gray-600">{row.label}</span><div className="flex items-center gap-3"><span className="font-semibold text-gray-900">{row.raw}</span><span className={`text-[11px] px-2.5 py-1 rounded-full ${status.tone}`}>{status.label}</span></div></div>; })}</div></section>
-                    <section className="rounded-2xl border border-gray-100 p-5"><h4 className="text-lg font-semibold text-gray-900">Performance Insights</h4><div className="mt-4 space-y-4">{insights.length ? insights.map((item) => <div key={item.title} className="flex gap-3"><div className={`mt-0.5 h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-xs ${item.kind === "critical" ? "bg-red-50 text-red-600" : item.kind === "warning" || item.kind === "trend" ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"}`}>•</div><div><p className="text-sm font-medium text-gray-900">{item.title}</p><p className="text-xs text-gray-500 mt-1">{item.body}</p></div></div>) : <p className="text-sm text-gray-500">No immediate performance concerns.</p>}<div className="mt-4 rounded-xl border border-amber-100 bg-amber-50/60 p-4"><p className="text-sm font-medium text-gray-900">Primary focus</p><p className="text-sm text-gray-600 mt-1">{currentAttendance < 75 || (selected.assignment?.total > 0 && selected.assignment?.submitted < selected.assignment?.total) ? "Attendance and assignment completion." : "Maintain consistency across attendance and assessments."}</p></div></div></section>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    <section className="rounded-2xl border border-gray-100 p-5"><h4 className="text-lg font-semibold text-gray-900">Internal Marks Summary</h4><p className="text-xs text-gray-400 mt-1">Basic marks are the weighted total. Moderated marks are rank-adjusted using the subject moderation tiers.</p><div className="mt-5 space-y-5"><div><div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Raw Performance (Basic)</span><span className="font-semibold">{basicMarks} / 40</span></div><div className="h-2.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-gray-500" style={{ width: `${Math.min(100, (basicMarks / 40) * 100)}%` }} /></div></div><div><div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Moderated Performance</span><span className="font-semibold">{moderatedMarks} / 40</span></div><div className="h-2.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-gray-900" style={{ width: `${Math.min(100, (moderatedMarks / 40) * 100)}%` }} /></div></div><div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm"><span className="font-medium text-emerald-700">{moderationGain >= 0 ? "+" : ""}{moderationGain} marks after moderation</span></div></div></section>
-                    <section className="rounded-2xl border border-gray-100 p-5"><h4 className="text-lg font-semibold text-gray-900">Class Comparison</h4><p className="text-xs text-gray-400 mt-1">See how the student compares with the rest of the class.</p><div className="grid grid-cols-3 gap-3 mt-5"><div className="rounded-xl border border-gray-100 p-4 text-center"><p className="text-xs text-gray-400">Your Score</p><p className="text-2xl font-semibold text-blue-600 mt-2">{basicMarks}</p><p className="text-xs text-gray-400">/ 40</p></div><div className="rounded-xl border border-gray-100 p-4 text-center"><p className="text-xs text-gray-400">Class Average</p><p className="text-2xl font-semibold text-gray-900 mt-2">{classAverage}</p><p className="text-xs text-gray-400">/ 40</p></div><div className="rounded-xl border border-gray-100 p-4 text-center"><p className="text-xs text-gray-400">Difference</p><p className={`text-2xl font-semibold mt-2 ${basicMarks >= classAverage ? "text-emerald-600" : "text-red-500"}`}>{basicMarks - classAverage >= 0 ? "+" : ""}{round1(basicMarks - classAverage)}</p><p className="text-xs text-gray-400">vs average</p></div></div><div className="mt-5"><div className="flex justify-between text-xs text-gray-400"><span>0%</span><span className="font-medium text-gray-700">{betterThan !== null ? `Better than ${betterThan}% of class` : ""}</span><span>100%</span></div><div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${betterThan ?? 0}%` }} /></div></div></section>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.7fr)] gap-5">
-                    <section className="rounded-2xl border border-gray-100 p-5"><div><h4 className="text-lg font-semibold text-gray-900">Performance Trend</h4><p className="text-xs text-gray-400 mt-1">Attendance from every available month in the raw sheet.</p></div><div className="mt-5 flex items-end gap-4 h-44"><div className="text-[10px] text-gray-400 h-full flex flex-col justify-between py-1"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div className="relative flex-1 h-full flex items-end gap-2 sm:gap-3 border-l border-b border-gray-200 px-3 pb-1 overflow-x-auto">{attendanceHistory.map((point: any) => { const value = round1(point.percentage ?? 0); const height = value > 0 ? Math.max(6, Math.min(100, value)) : 0; return <div key={point.month} className="min-w-[58px] flex-1 h-full flex flex-col items-center justify-end"><div className="w-full max-w-[55px] rounded-t-lg bg-gray-900/80" style={{ height: `${height}%` }} title={`${point.month}: ${value}%`} /><span className="text-[10px] text-gray-400 mt-2 text-center whitespace-nowrap">{shortMonth(point.month)}</span></div>; })}</div></div><div className="mt-4 rounded-xl bg-blue-50 border border-blue-100 p-3 text-sm text-blue-800">Attendance changed from <span className="font-semibold">{previousAttendance}%</span> to <span className="font-semibold">{currentAttendance}%</span> in the selected comparison.</div></section>
-                    <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5"><h4 className="text-lg font-semibold text-gray-900">What can help?</h4><div className="mt-5 space-y-4 text-sm"><div><p className="font-medium text-gray-900">Attend regularly</p><p className="text-xs text-gray-500 mt-1">Aim to maintain at least 75% attendance.</p></div><div><p className="font-medium text-gray-900">Complete all assignments</p><p className="text-xs text-gray-500 mt-1">Avoid losing easy internal marks.</p></div><div><p className="font-medium text-gray-900">Keep up the good work</p><p className="text-xs text-gray-500 mt-1">Use strong assessment performance to offset weaker areas.</p></div></div></section>
-                  </div>
-
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><span className="font-semibold">Keep it up, {String(selected.name).split(" ")[0]}.</span> Focus on improving attendance and completing coursework to strengthen the overall subject performance.</div>
+                  <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100"><h4 className="text-base font-semibold text-gray-900">Performance Trend</h4><p className="text-xs text-gray-400 mt-1">Attendance from every available month in the raw sheet.</p></div>
+                    <div className="px-4 pt-4">
+                      <svg viewBox="0 0 700 220" className="w-full h-[220px]" role="img" aria-label="Attendance performance trend">
+                        {[0,25,50,75,100].map((tick) => { const y = 16 + (220 - 16 - 28) - (tick / 100) * (220 - 16 - 28); return <g key={tick}><line x1="36" x2="688" y1={y} y2={y} stroke="#e5e7eb" strokeDasharray="4 4" /><text x="2" y={y + 4} fontSize="10" fill="#9ca3af">{tick}%</text></g>; })}
+                        {linePath && <path d={linePath} fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
+                        {chartPoints.map((point: any) => <g key={point.month + point.x}><circle cx={point.x} cy={point.y} r="5" fill="white" stroke="#4f46e5" strokeWidth="3" /><text x={point.x} y={point.y - 10} textAnchor="middle" fontSize="10" fill="#374151" fontWeight="600">{point.value}%</text><text x={point.x} y="214" textAnchor="middle" fontSize="10" fill="#6b7280">{point.month}</text></g>)}
+                      </svg>
+                    </div>
+                    <div className="mx-5 mb-5 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">Attendance changed from {previousAttendance}% to {currentAttendance}% in the selected comparison.</div>
+                  </section>
                 </div>
-              </section>
+              </div>
             </div>
           </div>
         )}
