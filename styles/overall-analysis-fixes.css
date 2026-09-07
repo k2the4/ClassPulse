@@ -12,16 +12,13 @@
 .at-risk-apply{height:36px;padding:0 17px;border:0;border-radius:8px;background:#4d46c9;color:#fff;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 5px 15px rgba(77,70,201,.16);white-space:nowrap}
 .at-risk-apply:hover{background:#4039b4}
 
-/* Clean hierarchy: self-sized filter row, then the two result columns. */
+/* Subject Analysis At-Risk results layout */
 .at-risk-layout{display:grid!important;grid-template-columns:minmax(0,1fr) 340px!important;grid-template-rows:auto auto!important;gap:16px!important;align-items:start!important;margin-top:16px!important;width:100%;min-width:0;height:auto!important;min-height:0!important}
 .at-risk-filter{grid-column:1 / -1!important;grid-row:1!important;width:100%!important}
 .at-risk-table{grid-column:1!important;grid-row:2!important;min-width:0;width:100%;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;align-self:start!important;display:flex;flex-direction:column}
 .at-risk-table>div{min-width:0}
 .at-risk-table>div:first-child{padding:13px 15px;border-bottom:1px solid #eeeeeb;flex:0 0 auto}
-/* Only the table viewport is constrained; the card/header are not. */
 .at-risk-table>div:nth-child(2){height:auto!important;max-height:480px!important;min-height:0!important;flex:0 1 auto!important;overflow-y:auto!important;overflow-x:hidden;scrollbar-width:thin}
-
-/* Student table: explicit fixed columns with a true five-column variant when Moderated is hidden. */
 .at-risk-table table{width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse!important;border-spacing:0!important}
 .at-risk-table table thead tr,.at-risk-table table tbody tr{display:table-row!important;width:100%!important;min-width:0!important}
 .at-risk-table table th,.at-risk-table table td{display:table-cell!important;box-sizing:border-box!important;padding:9px 8px!important;vertical-align:middle!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;line-height:1.35!important}
@@ -43,8 +40,6 @@
 .at-risk-table table tbody tr:last-child td{border-bottom:0}
 .at-risk-table table tbody tr:hover{background:rgba(248,250,252,.7)}
 .at-risk-table table td:nth-child(2),.at-risk-table table td:nth-child(3){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-/* Non-Basic mode renders five real cells. Remove the unused sixth colgroup slot. */
 .at-risk-table table:not(:has(thead th:nth-child(6))) col:nth-child(6){display:none!important;width:0!important}
 .at-risk-table table:not(:has(thead th:nth-child(6))) th:nth-child(1),.at-risk-table table:not(:has(thead th:nth-child(6))) td:nth-child(1){width:8%!important}
 .at-risk-table table:not(:has(thead th:nth-child(6))) th:nth-child(2),.at-risk-table table:not(:has(thead th:nth-child(6))) td:nth-child(2){width:22%!important}
@@ -52,8 +47,6 @@
 .at-risk-table table:not(:has(thead th:nth-child(6))) th:nth-child(4),.at-risk-table table:not(:has(thead th:nth-child(6))) td:nth-child(4){width:15%!important}
 .at-risk-table table:not(:has(thead th:nth-child(6))) th:nth-child(5),.at-risk-table table:not(:has(thead th:nth-child(6))) td:nth-child(5){width:20%!important;overflow:visible;text-overflow:clip}
 .at-risk-table table:not(:has(thead th:nth-child(6))) td:nth-child(5) span{display:inline-flex;max-width:100%;white-space:nowrap;overflow:visible;text-overflow:clip}
-
-/* Div/grid fallback: same rule applies if the table is rendered as rows rather than a native table. */
 .overall-student-table-scroll{height:auto!important;max-height:480px!important;min-height:0!important;flex:0 1 auto!important;overflow-y:auto!important;overflow-x:hidden;scrollbar-width:thin}
 .overall-student-table{width:100%;min-width:0;font-size:10px}
 .overall-student-table-row{display:grid;width:100%;min-width:0;box-sizing:border-box;grid-template-columns:8fr 22fr 35fr 15fr 20fr}
@@ -66,7 +59,6 @@
 .overall-student-table-data-row>div{text-align:center}
 .overall-student-table-data-row>div:nth-child(2),.overall-student-table-data-row>div:nth-child(3){text-align:left}
 .overall-student-table-data-row:last-child{border-bottom:0}
-
 .at-risk-table .text-sm{font-size:11px}
 .at-risk-table .text-\[10px\]{font-size:10px}
 .at-risk-table .text-\[9px\]{font-size:9px}
@@ -85,6 +77,29 @@
 .risk-chart-legend-label{display:flex;align-items:center;gap:6px;min-width:0;color:#4e586d;font-size:9px;font-weight:700;white-space:nowrap}
 .risk-chart-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
 .risk-chart-legend-value{color:#17223b;font-size:9px;font-weight:800;white-space:nowrap}
-@media(max-width:1100px){.at-risk-layout{grid-template-columns:minmax(0,1fr) 300px!important}.at-risk-filter-controls{grid-template-columns:repeat(4,minmax(0,1fr)) auto}}
-@media(max-width:900px){.at-risk-layout{grid-template-columns:1fr!important;grid-template-rows:auto auto auto!important;height:auto!important}.at-risk-filter{grid-column:1!important;grid-row:1!important}.at-risk-table{grid-column:1!important;grid-row:2!important;height:auto!important;max-height:none!important}.at-risk-table>div:nth-child(2){height:auto!important;max-height:480px!important;flex:0 1 auto!important}.at-risk-side-stack{grid-column:1!important;grid-row:3!important;height:auto!important;max-height:none!important}.at-risk-side-stack>section:first-child,.at-risk-side-stack>section:nth-child(2){flex:none!important}.at-risk-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.at-risk-apply{width:100%}}
-@media(max-width:760px){.at-risk-filter{padding:15px}.at-risk-filter-title{display:block}.at-risk-filter-controls{grid-template-columns:1fr}.at-risk-layout{grid-template-columns:1fr!important}.overall-student-table-scroll{max-height:480px!important;overflow-x:auto}.overall-student-table{min-width:760px}.at-risk-table table{min-width:700px!important}}
+
+/* Class Analysis Overall: preserve its original layout independently of Subject Analysis At-Risk. */
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-filter{margin-top:14px!important;padding:17px 18px!important;grid-column:auto!important;grid-row:auto!important;width:auto!important;height:auto!important;min-height:0!important;max-height:none!important;flex:none!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-filter-controls{grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) minmax(180px,1.2fr) auto!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-layout{display:grid!important;grid-template-columns:minmax(0,1.88fr) minmax(280px,.62fr)!important;grid-template-rows:none!important;gap:14px!important;align-items:start!important;margin-top:14px!important;height:auto!important;min-height:0!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table{grid-column:auto!important;grid-row:auto!important;height:auto!important;max-height:none!important;min-height:0!important;display:block!important;align-self:auto!important;overflow:hidden!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table>div:first-child{padding:13px 15px!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table>div:nth-child(2){height:505px!important;max-height:505px!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse!important;font-size:10px!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table th{padding:9px 5px!important;background:#fafafd!important;color:#8991a2!important;font-size:9px!important;font-weight:800!important;letter-spacing:.15px!important;white-space:nowrap!important;position:sticky!important;top:0!important;z-index:2!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table td{padding:9px 5px!important;border-top:1px solid #f0efed!important;border-bottom:0!important;color:#4e586d!important;vertical-align:middle!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table th:nth-child(1),.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table td:nth-child(1){width:6%!important;text-align:center!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table th:nth-child(2),.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table td:nth-child(2){width:20%!important;text-align:left!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table th:nth-child(n+3):nth-child(-n+8),.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table td:nth-child(n+3):nth-child(-n+8){width:5.5%!important;text-align:center!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table th:nth-child(9),.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table td:nth-child(9){width:8%!important;text-align:center!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table th:nth-child(10),.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table td:nth-child(10){width:8%!important;text-align:center!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table th:nth-child(11),.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table td:nth-child(11){width:8%!important;text-align:center!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table th:nth-child(12),.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table td:nth-child(12){width:11%!important;text-align:center!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-side-stack{grid-column:auto!important;grid-row:auto!important;display:flex!important;flex-direction:column!important;gap:14px!important;min-width:0!important;width:auto!important;height:auto!important;max-height:none!important;min-height:0!important;align-self:auto!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-side-stack>section{min-width:0!important;width:auto!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-side-stack>section:first-child{padding:15px!important;flex:none!important;box-sizing:border-box!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-side-stack>section:nth-child(2){overflow:hidden!important;flex:none!important;min-height:0!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-side-stack>section:nth-child(2)>div:first-child{padding:13px 15px!important;border-bottom:1px solid #eeeeeb!important}
+.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-side-stack>section:nth-child(2)>div:not(:first-child){padding:10px 15px!important}
+@media(max-width:1050px){.at-risk-layout{grid-template-columns:1fr}.at-risk-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.at-risk-apply{width:100%}.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-layout{grid-template-columns:1fr!important}.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:760px){.at-risk-filter{padding:15px}.at-risk-filter-title{display:block}.at-risk-filter-controls{grid-template-columns:1fr}.at-risk-layout{grid-template-columns:1fr}.at-risk-table>div:nth-child(2){overflow-x:auto}.at-risk-table table{min-width:760px}.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-filter{padding:15px!important}.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-layout{grid-template-columns:1fr!important}.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-filter-controls{grid-template-columns:1fr!important}.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table>div:nth-child(2){overflow-x:auto!important}.analysis-layout:has(.analysis-side-nav a.is-active[href^="/class-analysis"]) .at-risk-table table{min-width:760px!important}}
