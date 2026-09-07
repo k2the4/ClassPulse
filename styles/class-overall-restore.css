@@ -1,6 +1,6 @@
 /* Class Analysis Overall restoration: keep the original 12-column student table intact. */
 .class-analysis-overall .overall-student-table-row{
-  grid-template-columns:6% 20% repeat(6,5.5%) 8% 8% 8% 11%!important;
+  grid-template-columns:6fr 20fr repeat(6,5.5fr) 8fr 8fr 8fr 11fr!important;
 }
 
 .class-analysis-overall .overall-student-table-head{
