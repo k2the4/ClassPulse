@@ -7,6 +7,7 @@ import "../styles/overall-analysis-fixes.css";
 import "../styles/academic-table-fix.css";
 import "../styles/academic-summary-fix.css";
 import "../styles/at-risk-serial-fix.css";
+import "../styles/class-overall-restore.css";
 
 function AnalysisSidebarRouting() {
   useEffect(() => {
