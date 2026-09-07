@@ -1,0 +1,40 @@
+/* Class Analysis Overall restoration: keep the original 12-column student table intact. */
+.class-analysis-overall .overall-student-table-row{
+  grid-template-columns:6% 20% repeat(6,5.5%) 8% 8% 8% 11%!important;
+}
+
+.class-analysis-overall .overall-student-table-head{
+  min-height:34px!important;
+  height:34px!important;
+}
+
+.class-analysis-overall .overall-student-table-data-row{
+  min-height:37px!important;
+  height:37px!important;
+}
+
+.class-analysis-overall .overall-student-table-head>div,
+.class-analysis-overall .overall-student-table-data-row>div{
+  min-width:0!important;
+  padding:9px 5px!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  box-sizing:border-box!important;
+}
+
+.class-analysis-overall .overall-student-table-scroll{
+  height:505px!important;
+  max-height:505px!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+}
+
+.class-analysis-overall .overall-student-table-data-row>div:nth-child(2),
+.class-analysis-overall .overall-student-table-data-row>div:nth-child(n+3){
+  text-align:center!important;
+}
+
+.class-analysis-overall .overall-student-table-data-row>div:nth-child(2){
+  text-align:left!important;
+}
