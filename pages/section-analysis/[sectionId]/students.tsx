@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import {
   Award,
   BarChart3,
-  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
