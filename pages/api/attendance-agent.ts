@@ -5,7 +5,6 @@ import { prisma } from "../../lib/prisma";
 import { fetchClassRawData } from "../../lib/googleSheetsClass";
 import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
 import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
-import { overwriteTeacherDiarySheets } from "../../lib/ensureTeacherDiarySheets";
 
 const TIME_SLOTS = [
   "8 to 9",
@@ -31,19 +30,15 @@ async function orderStudentsBySheet(sectionId: string, students: Array<{ id: str
   try {
     const link = await prisma.sheetLink.findUnique({ where: { sectionId }, select: { sheetId: true } });
     if (!link?.sheetId) return students;
-
     const raw = await fetchClassRawData(link.sheetId);
     const sheetRank = new Map<string, number>();
     let nextRank = 1;
-
     for (const month of raw.months) {
       for (const row of month.rows) {
         if (!sheetRank.has(row.enrollmentNo)) sheetRank.set(row.enrollmentNo, nextRank++);
       }
     }
-
     if (sheetRank.size === 0) return students;
-
     return [...students].sort((a, b) => {
       const aRank = sheetRank.get(a.enrollmentNo);
       const bRank = sheetRank.get(b.enrollmentNo);
@@ -75,7 +70,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sectionId = typeof req.query.sectionId === "string" ? req.query.sectionId : "";
     const date = validDate(req.query.date) ? req.query.date : new Date().toISOString().slice(0, 10);
     const sessionId = typeof req.query.sessionId === "string" ? req.query.sessionId : "";
-
     if (!sectionId) return res.status(400).json({ error: "sectionId is required" });
 
     const section = await prisma.section.findUnique({
@@ -87,24 +81,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sheetLink: true,
       },
     });
-
     if (!section) return res.status(404).json({ error: "Class not found" });
     if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
 
     const visibleSubjects = role === "ADMIN"
       ? section.subjects
       : section.subjects.filter((subject) => subject.assignments.some((a) => a.teacherId === userId));
-
     if (visibleSubjects.length === 0) return res.status(403).json({ error: "No assigned subjects for this class" });
-
-    // Full overwrite: every theory and lab TD tab gets the complete canonical
-    // Teacher Diary structure, correct metadata and current student roster.
-    await overwriteTeacherDiarySheets({
-      spreadsheetId: section.sheetLink.sheetId,
-      classLabel: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`,
-      students: section.students.map((student) => ({ enrollmentNo: student.enrollmentNo, name: student.name })),
-      subjects: visibleSubjects,
-    });
 
     const orderedStudents = await orderStudentsBySheet(sectionId, section.students);
     const sheetSessions = await readTeacherDiarySessions({
@@ -112,7 +95,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       subjectCodes: visibleSubjects.map((subject) => subject.code),
       date,
     });
-
     const subjectByCode = new Map(visibleSubjects.map((subject) => [subject.code.toLowerCase(), subject]));
     const sessions = sheetSessions
       .map((item) => {
@@ -156,13 +138,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (typeof sectionId !== "string" || typeof sessionId !== "string" || !sessionId) {
       return res.status(400).json({ error: "sectionId and sessionId are required" });
     }
-
     const section = await prisma.section.findUnique({
       where: { id: sectionId },
-      include: {
-        sheetLink: true,
-        subjects: { include: { assignments: true } },
-      },
+      include: { sheetLink: true, subjects: { include: { assignments: true } } },
     });
     if (!section) return res.status(404).json({ error: "Class not found" });
     if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
@@ -189,7 +167,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const message = error instanceof Error ? error.message : "Unknown Google Sheets error";
       return res.status(502).json({ error: `Attendance was not deleted because Teacher Diary could not be updated. ${message}` });
     }
-
     return res.status(200).json({ ok: true, deletedSessionId: sessionId });
   }
 
@@ -199,16 +176,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (typeof sectionId !== "string" || typeof subjectId !== "string" || !validDate(date) || typeof slot !== "string" || !slot.trim()) {
     return res.status(400).json({ error: "sectionId, subjectId, date and slot are required" });
   }
-
   const normalizedSlot = slot.trim();
   if (!TIME_SLOTS.includes(normalizedSlot as (typeof TIME_SLOTS)[number])) {
     return res.status(400).json({ error: "Choose one of the available class time slots" });
   }
-
   if (!Array.isArray(presentStudentIds) || presentStudentIds.some((id) => typeof id !== "string")) {
     return res.status(400).json({ error: "presentStudentIds must be an array" });
   }
-
   if (!(await canManageSubject(userId, role, subjectId))) {
     return res.status(403).json({ error: "You are not assigned to this subject" });
   }
@@ -230,19 +204,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!section) return res.status(404).json({ error: "Class not found" });
   if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
 
-  const fullSubject = await prisma.subject.findUnique({
-    where: { id: subjectId },
-    include: { assignments: { include: { teacher: { select: { name: true } } } } },
-  });
-  if (!fullSubject) return res.status(404).json({ error: "Subject not found" });
-  const roster = await prisma.student.findMany({ where: { sectionId }, select: { enrollmentNo: true, name: true } });
-  await overwriteTeacherDiarySheets({
-    spreadsheetId: section.sheetLink.sheetId,
-    classLabel: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`,
-    students: roster,
-    subjects: [fullSubject],
-  });
-
   const students = await prisma.student.findMany({
     where: { sectionId },
     select: { id: true, enrollmentNo: true },
@@ -252,7 +213,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (presentIds.some((id) => !studentIds.has(id))) return res.status(400).json({ error: "Attendance contains a student outside this class" });
 
   const sessionKey = `ATT-${date.replace(/-/g, "")}-${subject.code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${normalizedSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
-
   try {
     await writeTeacherDiaryAttendance({
       spreadsheetId: section.sheetLink.sheetId,
