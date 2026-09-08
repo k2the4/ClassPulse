@@ -10,7 +10,7 @@
     "prisma:studio": "prisma studio",
     "seed:ece2-students": "ts-node prisma/seed-ece2-sem7-students.ts",
     "auth:sync": "ts-node scripts/sync-supabase-auth.ts",
-    "format:teacher-diaries": "TS_NODE_PROJECT=tsconfig.scripts.json TS_NODE_TRANSPILE_ONLY=true ts-node scripts/format-all-teacher-diaries.ts"
+    "format:teacher-diaries": "ts-node --project tsconfig.scripts.json --transpile-only scripts/format-all-teacher-diaries.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -30,7 +30,6 @@
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "^5.5.3",
-    "wait-on": "^9.0.0"
+    "typescript": "^5.5.3"
   }
 }
