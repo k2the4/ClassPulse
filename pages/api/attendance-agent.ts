@@ -5,7 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { fetchClassRawData } from "../../lib/googleSheetsClass";
 import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
 import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
-import { ensureLabTeacherDiarySheets } from "../../lib/ensureTeacherDiarySheets";
+import { overwriteTeacherDiarySheets } from "../../lib/ensureTeacherDiarySheets";
 
 const TIME_SLOTS = [
   "8 to 9",
@@ -83,7 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       include: {
         class: { include: { department: true } },
         students: { orderBy: [{ enrollmentNo: "asc" }] },
-        subjects: { include: { assignments: true }, orderBy: { name: "asc" } },
+        subjects: { include: { assignments: { include: { teacher: { select: { name: true } } } } }, orderBy: { name: "asc" } },
         sheetLink: true,
       },
     });
@@ -97,11 +97,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (visibleSubjects.length === 0) return res.status(403).json({ error: "No assigned subjects for this class" });
 
-    // Lab Teacher Diary tabs are created from their matching theory tabs on
-    // first access, preserving the existing formatting and student roster.
-    await ensureLabTeacherDiarySheets({
+    // Full overwrite: every theory and lab TD tab gets the complete canonical
+    // Teacher Diary structure, correct metadata and current student roster.
+    await overwriteTeacherDiarySheets({
       spreadsheetId: section.sheetLink.sheetId,
-      subjectCodes: visibleSubjects.map((subject) => subject.code),
+      classLabel: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`,
+      students: section.students.map((student) => ({ enrollmentNo: student.enrollmentNo, name: student.name })),
+      subjects: visibleSubjects,
     });
 
     const orderedStudents = await orderStudentsBySheet(sectionId, section.students);
@@ -168,10 +170,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const visibleSubjects = role === "ADMIN"
       ? section.subjects
       : section.subjects.filter((subject) => subject.assignments.some((a) => a.teacherId === userId));
-    await ensureLabTeacherDiarySheets({
-      spreadsheetId: section.sheetLink.sheetId,
-      subjectCodes: visibleSubjects.map((subject) => subject.code),
-    });
     const sheetSessions = await readTeacherDiarySessions({
       spreadsheetId: section.sheetLink.sheetId,
       subjectCodes: visibleSubjects.map((subject) => subject.code),
@@ -232,9 +230,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!section) return res.status(404).json({ error: "Class not found" });
   if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
 
-  await ensureLabTeacherDiarySheets({
+  const fullSubject = await prisma.subject.findUnique({
+    where: { id: subjectId },
+    include: { assignments: { include: { teacher: { select: { name: true } } } } },
+  });
+  if (!fullSubject) return res.status(404).json({ error: "Subject not found" });
+  const roster = await prisma.student.findMany({ where: { sectionId }, select: { enrollmentNo: true, name: true } });
+  await overwriteTeacherDiarySheets({
     spreadsheetId: section.sheetLink.sheetId,
-    subjectCodes: [subject.code],
+    classLabel: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`,
+    students: roster,
+    subjects: [fullSubject],
   });
 
   const students = await prisma.student.findMany({
