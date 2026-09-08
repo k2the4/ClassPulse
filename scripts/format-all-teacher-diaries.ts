@@ -69,14 +69,20 @@ async function main() {
     || tdSheets.find((sheet) => !normalize(sheet.properties?.title).endsWith("-LAB"));
   if (!template?.properties?.sheetId || !template.properties.title) throw new Error("No Teacher Diary template was found. Expected TD-SL.");
 
+  // Narrow the type after the guard so strict TypeScript does not treat
+  // template.properties as possibly undefined inside later closures.
+  const templateProperties = template.properties;
+  const templateSheetId = templateProperties.sheetId;
+  const templateTitle = templateProperties.title;
+
   const templateValues = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${template.properties.title}'!A1:AZ500`,
+    range: `'${templateTitle}'!A1:AZ500`,
     valueRenderOption: "FORMATTED_VALUE",
   });
   const templateRows = templateValues.data.values || [];
   const studentHeaderRow = findStudentHeader(templateRows);
-  if (studentHeaderRow === -1) throw new Error(`Template ${template.properties.title} does not contain the expected student table.`);
+  if (studentHeaderRow === -1) throw new Error(`Template ${templateTitle} does not contain the expected student table.`);
 
   const subjectByCode = new Map(section.subjects.map((subject) => [normalize(subject.code), subject]));
   const classLabel = `${section.class.department.name}-${section.name} Sem ${section.class.semester}`;
@@ -85,10 +91,10 @@ async function main() {
   // This script is deliberately separate from the Attendance Agent. It runs once
   // and performs the complete TD template replacement for the whole spreadsheet.
   const copyRequests = tdSheets
-    .filter((sheet) => sheet.properties?.sheetId && sheet.properties.sheetId !== template.properties.sheetId)
+    .filter((sheet) => sheet.properties?.sheetId && sheet.properties.sheetId !== templateSheetId)
     .map((sheet) => ({
       copyPaste: {
-        source: { sheetId: template.properties!.sheetId!, startRowIndex: 0, endRowIndex: 500, startColumnIndex: 0, endColumnIndex: 52 },
+        source: { sheetId: templateSheetId, startRowIndex: 0, endRowIndex: 500, startColumnIndex: 0, endColumnIndex: 52 },
         destination: { sheetId: sheet.properties!.sheetId!, startRowIndex: 0, endRowIndex: 500, startColumnIndex: 0, endColumnIndex: 52 },
         pasteType: "PASTE_NORMAL",
         pasteOrientation: "NORMAL",
@@ -136,7 +142,7 @@ async function main() {
     await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: "RAW", data: valueWrites } });
   }
 
-  console.log(`Overwrote ${tdSheets.length} Teacher Diary sheets using ${template.properties.title} as the canonical template.`);
+  console.log(`Overwrote ${tdSheets.length} Teacher Diary sheets using ${templateTitle} as the canonical template.`);
   console.log(tdSheets.map((sheet) => sheet.properties?.title).filter(Boolean).join(", "));
 }
 
