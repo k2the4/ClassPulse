@@ -83,9 +83,9 @@ export async function ensureTeacherDiarySheet(params: {
 
   if (headerRow !== -1) {
     const clearStartRow = Math.max(0, headerRow - 1);
-    const clearStartColumn = 4; // E: first session LH/LA pair
-    const rowCount = Math.max(1, (targetSheetId ? (duplicated?.gridProperties?.rowCount || 500) : 500) - clearStartRow);
-    const columnCount = 48 - clearStartColumn; // E:AZ
+    const clearStartColumn = 4;
+    const rowCount = Math.max(1, (duplicated?.gridProperties?.rowCount || 500) - clearStartRow);
+    const columnCount = 48 - clearStartColumn;
 
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: params.spreadsheetId,
@@ -109,14 +109,69 @@ export async function ensureTeacherDiarySheet(params: {
     });
   }
 
-  // Clear the copied theory sheet's latest-session metadata while retaining
-  // its formatting and the student roster in columns A-D.
   await sheets.spreadsheets.values.clear({
     spreadsheetId: params.spreadsheetId,
     range: `'${targetTitle}'!B4:E4`,
   });
 
   return targetTitle;
+}
+
+/**
+ * Applies the canonical Teacher Diary formatting to every TD-* tab in the
+ * spreadsheet. Values are not copied or changed; only formatting is pasted.
+ * Lab tabs use their matching theory tab as the template. Other theory tabs
+ * use the first available theory Teacher Diary as the canonical layout.
+ */
+export async function formatAllTeacherDiarySheets(params: {
+  spreadsheetId: string;
+}): Promise<void> {
+  const sheets = getSheetsClient();
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId: params.spreadsheetId,
+    fields: "sheets(properties(sheetId,title))",
+  });
+  const sheetList = metadata.data.sheets || [];
+  const teacherDiarySheets = sheetList.filter((sheet) =>
+    normalizeCode(sheet.properties?.title).startsWith("TD-")
+  );
+
+  if (teacherDiarySheets.length < 2) return;
+
+  const theoryTemplate = teacherDiarySheets.find((sheet) =>
+    !normalizeCode(sheet.properties?.title).endsWith("-LAB")
+  );
+  if (!theoryTemplate?.properties?.sheetId) return;
+
+  const requests = teacherDiarySheets
+    .filter((target) => target.properties?.sheetId && target.properties.sheetId !== theoryTemplate.properties?.sheetId)
+    .map((target) => ({
+      copyPaste: {
+        source: {
+          sheetId: theoryTemplate.properties!.sheetId!,
+          startRowIndex: 0,
+          endRowIndex: 500,
+          startColumnIndex: 0,
+          endColumnIndex: 52,
+        },
+        destination: {
+          sheetId: target.properties!.sheetId!,
+          startRowIndex: 0,
+          endRowIndex: 500,
+          startColumnIndex: 0,
+          endColumnIndex: 52,
+        },
+        pasteType: "PASTE_FORMAT",
+        pasteOrientation: "NORMAL",
+      },
+    }));
+
+  if (requests.length > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: params.spreadsheetId,
+      requestBody: { requests },
+    });
+  }
 }
 
 /** Ensures all lab Teacher Diary tabs represented by the current subject list exist. */
@@ -133,5 +188,6 @@ export async function ensureLabTeacherDiarySheets(params: {
     });
     if (title) createdOrExisting.push(title);
   }
+  await formatAllTeacherDiarySheets({ spreadsheetId: params.spreadsheetId });
   return createdOrExisting;
 }
