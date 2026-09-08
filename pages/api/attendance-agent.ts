@@ -5,6 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { fetchClassRawData } from "../../lib/googleSheetsClass";
 import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
 import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
+import { ensureLabTeacherDiarySheets } from "../../lib/ensureTeacherDiarySheets";
 
 const TIME_SLOTS = [
   "8 to 9",
@@ -96,6 +97,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (visibleSubjects.length === 0) return res.status(403).json({ error: "No assigned subjects for this class" });
 
+    // Lab Teacher Diary tabs are created from their matching theory tabs on
+    // first access, preserving the existing formatting and student roster.
+    await ensureLabTeacherDiarySheets({
+      spreadsheetId: section.sheetLink.sheetId,
+      subjectCodes: visibleSubjects.map((subject) => subject.code),
+    });
+
     const orderedStudents = await orderStudentsBySheet(sectionId, section.students);
     const sheetSessions = await readTeacherDiarySessions({
       spreadsheetId: section.sheetLink.sheetId,
@@ -160,6 +168,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const visibleSubjects = role === "ADMIN"
       ? section.subjects
       : section.subjects.filter((subject) => subject.assignments.some((a) => a.teacherId === userId));
+    await ensureLabTeacherDiarySheets({
+      spreadsheetId: section.sheetLink.sheetId,
+      subjectCodes: visibleSubjects.map((subject) => subject.code),
+    });
     const sheetSessions = await readTeacherDiarySessions({
       spreadsheetId: section.sheetLink.sheetId,
       subjectCodes: visibleSubjects.map((subject) => subject.code),
@@ -219,6 +231,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
   if (!section) return res.status(404).json({ error: "Class not found" });
   if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
+
+  await ensureLabTeacherDiarySheets({
+    spreadsheetId: section.sheetLink.sheetId,
+    subjectCodes: [subject.code],
+  });
 
   const students = await prisma.student.findMany({
     where: { sectionId },
