@@ -16,9 +16,7 @@ function loadLocalEnv() {
       const match = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
       if (!match) continue;
       let value = match[2].trim();
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
-      }
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
       if (process.env[match[1]] === undefined) process.env[match[1]] = value;
     }
   }
@@ -55,9 +53,7 @@ async function main() {
     },
   });
 
-  if (!section?.sheetLink?.sheetId) {
-    throw new Error("ECE 2 Sem 7 does not have a linked Google Sheet.");
-  }
+  if (!section?.sheetLink?.sheetId) throw new Error("ECE 2 Sem 7 does not have a linked Google Sheet.");
 
   const sheets = getSheetsClient();
   const spreadsheetId = section.sheetLink.sheetId;
@@ -67,13 +63,11 @@ async function main() {
   });
   const sheetList = metadata.data.sheets || [];
   const tdSheets = sheetList.filter((sheet) => normalize(sheet.properties?.title).startsWith("TD-"));
-
   if (tdSheets.length === 0) throw new Error("No TD-* sheets were found.");
 
-  const template = tdSheets.find((sheet) => normalize(sheet.properties?.title) === "TD-SL") || tdSheets.find((sheet) => !normalize(sheet.properties?.title).endsWith("-LAB"));
-  if (!template?.properties?.sheetId || !template.properties.title) {
-    throw new Error("No Teacher Diary template was found. Expected TD-SL.");
-  }
+  const template = tdSheets.find((sheet) => normalize(sheet.properties?.title) === "TD-SL")
+    || tdSheets.find((sheet) => !normalize(sheet.properties?.title).endsWith("-LAB"));
+  if (!template?.properties?.sheetId || !template.properties.title) throw new Error("No Teacher Diary template was found. Expected TD-SL.");
 
   const templateValues = await sheets.spreadsheets.values.get({
     spreadsheetId,
@@ -88,9 +82,8 @@ async function main() {
   const classLabel = `${section.class.department.name}-${section.name} Sem ${section.class.semester}`;
   const roster = section.students.map((student, index) => [String(index + 1), student.enrollmentNo, student.name]);
 
-  // One Google Sheets batch operation: replace the complete contents + formatting
-  // of every TD tab with the canonical TD-SL template. This is intentionally a
-  // one-time script, not part of the Attendance Agent request path.
+  // This script is deliberately separate from the Attendance Agent. It runs once
+  // and performs the complete TD template replacement for the whole spreadsheet.
   const copyRequests = tdSheets
     .filter((sheet) => sheet.properties?.sheetId && sheet.properties.sheetId !== template.properties.sheetId)
     .map((sheet) => ({
@@ -106,9 +99,16 @@ async function main() {
     await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: copyRequests } });
   }
 
-  const valueWrites: Array<{ range: string; values: string[][] }> = [];
-  const clearRequests: Array<{ range: string }> = [];
+  const clearRanges = tdSheets.flatMap((sheet) => {
+    const title = sheet.properties?.title;
+    if (!title) return [];
+    return [`'${title}'!D3:AZ500`, `'${title}'!A${studentHeaderRow + 2}:C500`];
+  });
+  if (clearRanges.length > 0) {
+    await sheets.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: clearRanges } });
+  }
 
+  const valueWrites: Array<{ range: string; values: string[][] }> = [];
   for (const sheet of tdSheets) {
     const title = sheet.properties?.title;
     if (!title) continue;
@@ -117,45 +117,26 @@ async function main() {
     const subjectName = subject?.name || code.replace(/-/g, " ");
     const teacherName = subject?.assignments?.[0]?.teacher?.name || "";
 
-    valueWrites.push({
-      range: `'${title}'!A1`,
-      values: [[`TEACHER DIARY — ${subjectName}`]],
-    });
-    valueWrites.push({
-      range: `'${title}'!B3`,
-      values: [[classLabel]],
-    });
-    valueWrites.push({
-      range: `'${title}'!E3`,
-      values: [[subjectName]],
-    });
-    valueWrites.push({
-      range: `'${title}'!H3`,
-      values: [[teacherName]],
-    });
-    valueWrites.push({
-      range: `'${title}'!B4:E4`,
-      values: [["", "", "", ""]],
-    });
-
-    // Remove all copied attendance/session values while retaining the complete
-    // formatting, merged cells, dimensions and static student-table structure.
-    clearRequests.push({ range: `'${title}'!E6:AZ500` });
-    clearRequests.push({ range: `'${title}'!A${studentHeaderRow + 2}:C500` });
-    valueWrites.push({
-      range: `'${title}'!A${studentHeaderRow + 2}:C${studentHeaderRow + 1 + roster.length}`,
-      values: roster,
-    });
+    valueWrites.push({ range: `'${title}'!A1`, values: [[`TEACHER DIARY — ${subjectName}`]] });
+    valueWrites.push({ range: `'${title}'!A3:B3`, values: [["Class", classLabel]] });
+    valueWrites.push({ range: `'${title}'!D3:E3`, values: [["Subject", subjectName]] });
+    valueWrites.push({ range: `'${title}'!G3:H3`, values: [["Teacher", teacherName]] });
+    valueWrites.push({ range: `'${title}'!A4`, values: [["Latest Session"]] });
+    valueWrites.push({ range: `'${title}'!D4`, values: [["Session ID"]] });
+    valueWrites.push({ range: `'${title}'!A7:C7`, values: [["S.No", "Enrollment No.", "Student Name"]] });
+    if (roster.length > 0) {
+      valueWrites.push({
+        range: `'${title}'!A${studentHeaderRow + 2}:C${studentHeaderRow + 1 + roster.length}`,
+        values: roster,
+      });
+    }
   }
 
-  if (clearRequests.length > 0) {
-    await sheets.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: clearRequests.map((item) => item.range) } });
-  }
   if (valueWrites.length > 0) {
     await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: "RAW", data: valueWrites } });
   }
 
-  console.log(`Formatted ${tdSheets.length} Teacher Diary sheets in ${spreadsheetId}.`);
+  console.log(`Overwrote ${tdSheets.length} Teacher Diary sheets using ${template.properties.title} as the canonical template.`);
   console.log(tdSheets.map((sheet) => sheet.properties?.title).filter(Boolean).join(", "));
 }
 
