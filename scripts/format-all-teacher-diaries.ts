@@ -69,11 +69,8 @@ async function main() {
     || tdSheets.find((sheet) => !normalize(sheet.properties?.title).endsWith("-LAB"));
   if (!template?.properties?.sheetId || !template.properties.title) throw new Error("No Teacher Diary template was found. Expected TD-SL.");
 
-  // Narrow the type after the guard so strict TypeScript does not treat
-  // template.properties as possibly undefined inside later closures.
-  const templateProperties = template.properties;
-  const templateSheetId = templateProperties.sheetId;
-  const templateTitle = templateProperties.title;
+  const templateSheetId = template.properties.sheetId;
+  const templateTitle = template.properties.title;
 
   const templateValues = await sheets.spreadsheets.values.get({
     spreadsheetId,
