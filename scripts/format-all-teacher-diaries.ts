@@ -47,7 +47,10 @@ async function main() {
     },
     include: {
       class: { include: { department: true } },
-      students: { orderBy: { enrollmentNo: "asc" } },
+      // The database creation order is the canonical roster order for this
+      // class. Do not sort by enrollment number: the required 1-65 sequence is
+      // intentionally not numerical/alphabetical enrollment order.
+      students: { orderBy: { createdAt: "asc" } },
       subjects: { include: { assignments: { include: { teacher: true } } }, orderBy: { code: "asc" } },
       sheetLink: true,
     },
