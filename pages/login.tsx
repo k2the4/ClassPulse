@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/router";
 
 export default function LoginPage() {
@@ -13,24 +13,36 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
     const res = await signIn("credentials", {
       email,
       password,
       redirect: false,
     });
-    setLoading(false);
+
     if (res?.error) {
+      setLoading(false);
       setError("Invalid email or password.");
       return;
     }
-    router.push("/dashboard");
+
+    // The credentials provider returns the user's role in the NextAuth session.
+    // Route administrators to the Admin Portal and faculty to the teacher dashboard.
+    const session = await getSession();
+    setLoading(false);
+
+    if (session?.user && (session.user as any).role === "ADMIN") {
+      router.push("/admin");
+    } else {
+      router.push("/dashboard");
+    }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
         <h1 className="text-xl font-semibold text-gray-900">ClassPulse</h1>
-        <p className="text-sm text-gray-500 mt-1 mb-6">Teacher sign in</p>
+        <p className="text-sm text-gray-500 mt-1 mb-6">Sign in to ClassPulse</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
