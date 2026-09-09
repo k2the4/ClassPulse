@@ -9,6 +9,7 @@ import "../styles/academic-summary-fix.css";
 import "../styles/at-risk-serial-fix.css";
 import "../styles/class-overall-restore.css";
 import "../styles/admin-dashboard.css";
+import "../styles/admin-classes.css";
 
 function AnalysisSidebarRouting() {
   useEffect(() => {
@@ -16,30 +17,15 @@ function AnalysisSidebarRouting() {
       const target = event.target as HTMLElement | null;
       const link = target?.closest(".analysis-side-nav a") as HTMLAnchorElement | null;
       if (!link) return;
-
       const label = link.textContent?.trim();
-      if (label === "Class Analysis") {
-        event.preventDefault();
-        window.location.href = "/class-analysis";
-      } else if (label === "Subject Analysis") {
-        event.preventDefault();
-        window.location.href = "/subject-analysis";
-      }
+      if (label === "Class Analysis") { event.preventDefault(); window.location.href = "/class-analysis"; }
+      else if (label === "Subject Analysis") { event.preventDefault(); window.location.href = "/subject-analysis"; }
     };
-
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, []);
-
   return null;
 }
-
 export default function App({ Component, pageProps }: AppProps) {
-  return (
-    <div className="notranslate" translate="no">
-      <AnalysisSidebarRouting />
-      <GlobalButtonLoading />
-      <Component {...pageProps} />
-    </div>
-  );
+  return <div className="notranslate" translate="no"><AnalysisSidebarRouting /><GlobalButtonLoading /><Component {...pageProps} /></div>;
 }
