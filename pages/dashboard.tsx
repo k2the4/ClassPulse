@@ -5,20 +5,8 @@ import { prisma } from "../lib/prisma";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import {
-  ArrowRight,
-  BarChart3,
-  Bell,
-  BookOpen,
-  CalendarDays,
-  CheckCircle2,
-  Clock3,
-  Database,
-  FileText,
-  HelpCircle,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  UserRoundPlus,
+  ArrowRight, BarChart3, Bell, BookOpen, CalendarDays, CheckCircle2, Clock3, Database,
+  FileText, HelpCircle, LayoutDashboard, LogOut, Menu, UserRoundPlus,
 } from "lucide-react";
 
 interface Props {
@@ -49,15 +37,15 @@ const recentActivity = [
   { icon: CalendarDays, tone: "text-[#4388d8] bg-[#eef7ff]", text: "Timetable updated", time: "Aug 27, 3:45 PM" },
 ];
 
-export default function Dashboard({ teacherName, sections, subjects }: Props) {
+export default function Dashboard({ teacherName }: Props) {
   const initials = teacherName.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
   return (
     <div className="min-h-screen bg-[#fffdf8] text-[#17223b] lg:flex">
       <aside className="hidden w-[220px] shrink-0 border-r border-[#e8e7e3] bg-white lg:flex lg:min-h-screen lg:flex-col lg:fixed lg:inset-y-0 lg:left-0">
         <div className="px-5 pt-6"><Link href="/dashboard" className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#39268f] text-white shadow-[0_10px_25px_rgba(57,38,143,0.2)]"><BarChart3 size={21} strokeWidth={2.2} /></span><span className="text-[20px] font-extrabold tracking-[-0.7px]">ClassPulse</span></Link></div>
         <div className="mx-5 mt-7 flex items-center gap-3 border-b border-[#eeeeeb] pb-6"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#eeeaff] text-sm font-bold text-[#4b36a7]">{initials || "T"}</span><div className="min-w-0"><p className="truncate text-sm font-semibold">{teacherName}</p><p className="text-xs text-[#7a8295]">Faculty</p></div></div>
-        <nav className="mt-5 space-y-1 px-3 text-sm font-medium text-[#626b80]"><Link href="/dashboard" className="flex items-center gap-3 rounded-xl bg-[#eeeaff] px-3 py-3 font-semibold text-[#38258e]"><LayoutDashboard size={18} /> Dashboard</Link><Link href="/attendance-agent" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff] hover:text-[#38258e]"><UserRoundPlus size={18} /> Attendance Agent</Link><Link href="/timetable" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff] hover:text-[#38258e]"><CalendarDays size={18} /> Timetable</Link><Link href="/class-analysis" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff] hover:text-[#38258e]"><BarChart3 size={18} /> Class Analysis</Link><Link href="/subject-analysis" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff] hover:text-[#38258e]"><BookOpen size={18} /> Subject Analysis</Link><Link href="/raw-data" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff] hover:text-[#38258e]"><Database size={18} /> Raw Data</Link><button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-[#f6f4ff] hover:text-[#38258e]"><Bell size={18} /> Notifications</button></nav>
-        <div className="mt-auto px-4 pb-5"><div className="rounded-2xl border border-[#ded8ff] bg-[#faf9ff] p-4"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-[#5842e8]"><HelpCircle size={18} /></span><div><p className="text-xs font-bold">Need Help?</p><p className="mt-1 text-[11px] leading-5 text-[#7a8295]">Visit our help center or contact support.</p></div></div><button type="button" className="mt-3 w-full rounded-lg border border-[#9d91ff] bg-white px-3 py-2 text-xs font-semibold text-[#5842e8]">Help Center <ArrowRight size={13} className="ml-1 inline" /></button></div><button onClick={() => signOut({ callbackUrl: "/login" })} className="mt-5 flex w-full items-center gap-3 border-t border-[#eeeeeb] px-3 pt-5 text-sm font-medium text-[#626b80] hover:text-[#17223b]"><LogOut size={18} /> Sign out</button></div>
+        <nav className="mt-5 space-y-1 px-3 text-sm font-medium text-[#626b80]"><Link href="/dashboard" className="flex items-center gap-3 rounded-xl bg-[#eeeaff] px-3 py-3 font-semibold text-[#38258e]"><LayoutDashboard size={18} /> Dashboard</Link><Link href="/attendance-agent" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff]"><UserRoundPlus size={18} /> Attendance Agent</Link><Link href="/timetable" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff]"><CalendarDays size={18} /> Timetable</Link><Link href="/class-analysis" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff]"><BarChart3 size={18} /> Class Analysis</Link><Link href="/subject-analysis" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff]"><BookOpen size={18} /> Subject Analysis</Link><Link href="/raw-data" className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-[#f6f4ff]"><Database size={18} /> Raw Data</Link><button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-[#f6f4ff]"><Bell size={18} /> Notifications</button></nav>
+        <div className="mt-auto px-4 pb-5"><div className="rounded-2xl border border-[#ded8ff] bg-[#faf9ff] p-4"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-[#5842e8]"><HelpCircle size={18} /></span><div><p className="text-xs font-bold">Need Help?</p><p className="mt-1 text-[11px] leading-5 text-[#7a8295]">Visit our help center or contact support.</p></div></div><button type="button" className="mt-3 w-full rounded-lg border border-[#9d91ff] bg-white px-3 py-2 text-xs font-semibold text-[#5842e8]">Help Center <ArrowRight size={13} className="ml-1 inline" /></button></div><button onClick={() => signOut({ callbackUrl: "/login" })} className="mt-5 flex w-full items-center gap-3 border-t border-[#eeeeeb] px-3 pt-5 text-sm font-medium text-[#626b80]"><LogOut size={18} /> Sign out</button></div>
       </aside>
       <main className="w-full lg:ml-[220px]"><div className="mx-auto max-w-[1500px] px-5 py-6 sm:px-8 lg:px-10 lg:py-8"><header className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-3 lg:hidden"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#39268f] text-white"><BarChart3 size={20} /></span><span className="text-lg font-extrabold">ClassPulse</span></div><h1 className="mt-5 text-[28px] font-extrabold tracking-[-1.2px] sm:text-[32px] lg:mt-0">Welcome back, {teacherName}</h1><p className="mt-1 text-sm text-[#6f7890]">Here&apos;s an overview of your day.</p></div><div className="flex items-center gap-3"><button type="button" className="relative grid h-11 w-11 place-items-center rounded-xl border border-[#e3e3df] bg-white text-[#566078] shadow-sm"><Bell size={19} /><span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[#ef4b4b] text-[10px] font-bold text-white">3</span></button><div className="hidden items-center gap-2 rounded-xl border border-[#e3e3df] bg-white px-4 py-3 text-sm font-medium text-[#3e465b] shadow-sm sm:flex"><CalendarDays size={17} className="text-[#5b4ee6]" />{new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div><button type="button" className="grid h-11 w-11 place-items-center rounded-xl border border-[#e3e3df] bg-white text-[#566078] sm:hidden"><Menu size={19} /></button></div></header>
         <section className="mt-8 rounded-2xl border border-[#e5e4e1] bg-white p-5 shadow-[0_8px_25px_rgba(31,35,49,0.04)] sm:p-6"><div className="mb-5"><h2 className="text-lg font-bold">Quick Actions</h2><p className="mt-1 text-xs text-[#7b8498]">Jump straight into the tools you use most.</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{quickActions.map((action) => { const Icon = action.icon; return <Link key={action.title} href={action.href} className="group flex min-h-[116px] items-center gap-4 rounded-xl border border-[#e6e6e5] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[#d9d2ff] hover:shadow-[0_8px_24px_rgba(57,38,143,0.08)]"><span className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${action.tone}`}><Icon size={23} strokeWidth={2} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-[#17223b]">{action.title}</span><span className="mt-1 block text-xs leading-5 text-[#747d91]">{action.description}</span></span><ArrowRight size={18} className="shrink-0 text-[#626b80] transition group-hover:translate-x-1 group-hover:text-[#4b36a7]" /></Link>; })}</div></section>
@@ -71,8 +59,10 @@ export default function Dashboard({ teacherName, sections, subjects }: Props) {
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getServerSession(ctx.req, ctx.res, authOptions);
   if (!session?.user) return { redirect: { destination: "/login", permanent: false } };
-  const userId = (session.user as any).id; const role = (session.user as any).role;
-  const sections = await prisma.section.findMany({ where: role === "ADMIN" ? undefined : { OR: [{ class: { proctorId: userId } }, { subjects: { some: { assignments: { some: { teacherId: userId } } } } }] }, include: { class: { include: { department: true } } } });
-  const subjects = await prisma.subject.findMany({ where: role === "ADMIN" ? undefined : { assignments: { some: { teacherId: userId } } }, include: { section: { include: { class: true } } } });
-  return { props: { sections: sections.map((s) => ({ id: s.id, label: `${s.class.department.name} — B.Tech ${s.class.department.name}, Sem ${s.class.semester}, Section ${s.name}` })), subjects: subjects.map((s) => ({ id: s.id, label: `${s.code} — ${s.name}` })), teacherName: session.user.name || session.user.email } };
+  const role = (session.user as any).role;
+  if (role === "ADMIN") return { redirect: { destination: "/admin", permanent: false } };
+  const userId = (session.user as any).id;
+  const sections = await prisma.section.findMany({ where: { OR: [{ class: { proctorId: userId } }, { subjects: { some: { assignments: { some: { teacherId: userId } } } } }] }, include: { class: { include: { department: true } } } });
+  const subjects = await prisma.subject.findMany({ where: { assignments: { some: { teacherId: userId } } }, include: { section: { include: { class: true } } } });
+  return { props: { sections: sections.map((s) => ({ id: s.id, label: `${s.class.department.name} — B.Tech ${s.class.department.name}, Sem ${s.class.semester}, Section ${s.name}` })), subjects: subjects.map((s) => ({ id: s.id, label: `${s.code} — ${s.name}` })), teacherName: session.user.name || session.user.email || "Faculty" } };
 };
