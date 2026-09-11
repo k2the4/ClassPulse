@@ -82,6 +82,7 @@ model ClassAccess {
   createdAt DateTime @default(now())
 
   @@unique([teacherId, classId])
+  @@unique([teacherId])
   @@index([classId])
   @@index([teacherId])
 }
