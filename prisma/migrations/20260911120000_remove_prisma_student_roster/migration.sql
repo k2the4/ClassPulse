@@ -1,5 +1,4 @@
 -- Student roster data is maintained in the linked Google Sheets.
--- This migration intentionally performs no schema changes. The legacy Prisma
--- roster tables may not exist in databases created from the current migration
--- history, so deleting from them here breaks Prisma's shadow database.
--- Existing legacy rows are no longer used by the application.
+-- Remove the duplicate Prisma roster so the application has one source of truth.
+DELETE FROM "AttendanceRecord";
+DELETE FROM "Student";
