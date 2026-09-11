@@ -20,24 +20,12 @@ function siteUrl(req: NextApiRequest) {
   return `http://${req.headers.host || "localhost:3000"}`;
 }
 
-async function getDepartments() {
-  return prisma.department.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, collegeId: true },
-  });
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method === "GET") {
-      const departments = await getDepartments();
-      const allowedSemesters = [1, 3, 5, 7];
-      const allowedSections = ["1", "2", "e"];
+      const departments = await prisma.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, collegeId: true } });
       const classes = await prisma.class.findMany({
-        where: {
-          semester: { in: allowedSemesters },
-          sections: { some: { name: { in: allowedSections } } },
-        },
+        where: { semester: { in: [1, 3, 5, 7] }, sections: { some: { name: { in: ["1", "2", "e"] } } } },
         orderBy: [{ semester: "asc" }, { program: "asc" }],
         select: {
           id: true,
@@ -46,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           departmentId: true,
           department: { select: { name: true } },
           sections: {
-            where: { name: { in: allowedSections } },
+            where: { name: { in: ["1", "2", "e"] } },
             orderBy: { name: "asc" },
             select: { id: true, name: true, sheetLink: { select: { sheetId: true, gid: true } } },
           },
@@ -61,53 +49,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const name = text(req.body?.name);
     const email = emailOf(req.body?.email);
     const departmentId = text(req.body?.departmentId);
-
-    if (!name || !email || !departmentId) {
-      return res.status(400).json({ error: "Name, department and email are required." });
-    }
-    if (role !== "STUDENT" && role !== "TEACHER") {
-      return res.status(400).json({ error: "Choose Student or Teacher." });
-    }
+    if (!name || !email || !departmentId) return res.status(400).json({ error: "Name, department and email are required." });
+    if (role !== "STUDENT" && role !== "TEACHER") return res.status(400).json({ error: "Choose Student or Teacher." });
 
     const department = await prisma.department.findUnique({ where: { id: departmentId }, select: { id: true, name: true, collegeId: true } });
     if (!department) return res.status(400).json({ error: "Department not found." });
-
-    const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true, authUserId: true, role: true } });
-    const existingStudent = await prisma.studentAccount.findUnique({ where: { email }, select: { id: true } });
-    if (existingUser || existingStudent) {
-      return res.status(409).json({ error: "An account already exists for this email. Please use Log in or Forgot password." });
-    }
 
     const supabase = getSupabaseAdmin();
     const redirectTo = `${siteUrl(req)}/auth/finish-signup`;
 
     if (role === "STUDENT") {
+      const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+      const existingStudent = await prisma.studentAccount.findUnique({ where: { email }, select: { id: true } });
+      if (existingUser || existingStudent) return res.status(409).json({ error: "An account already exists for this email. Please use Log in or Forgot password." });
+
       const semester = Number(req.body?.semester);
       const sectionName = text(req.body?.section);
-      if (![1, 3, 5, 7].includes(semester) || !["1", "2", "e"].includes(sectionName)) {
-        return res.status(400).json({ error: "Choose a valid semester and section." });
-      }
+      if (![1, 3, 5, 7].includes(semester) || !["1", "2", "e"].includes(sectionName)) return res.status(400).json({ error: "Choose a valid semester and section." });
 
       const section = await prisma.section.findFirst({
-        where: {
-          name: sectionName,
-          class: { departmentId, semester },
-        },
-        select: {
-          id: true,
-          name: true,
-          class: { select: { id: true, program: true, semester: true, departmentId: true } },
-          sheetLink: { select: { sheetId: true, gid: true } },
-        },
+        where: { name: sectionName, class: { departmentId, semester } },
+        select: { id: true, name: true, sheetLink: { select: { sheetId: true, gid: true } } },
       });
       if (!section) return res.status(404).json({ error: "That class or section is not configured yet." });
       if (!section.sheetLink) return res.status(400).json({ error: "This class does not have a linked Google Sheet yet." });
 
       const roster = await fetchClassRoster(section.sheetLink.sheetId, section.sheetLink.gid);
       const student = roster.find((row) => row.email.trim().toLowerCase() === email);
-      if (!student) {
-        return res.status(403).json({ error: "This email was not found in the selected class roster." });
-      }
+      if (!student) return res.status(403).json({ error: "This email was not found in the selected class roster." });
 
       const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
         data: { name: student.name, role: "STUDENT", enrollmentNo: student.enrollmentNo },
@@ -116,20 +85,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (error || !data.user) return res.status(400).json({ error: error?.message || "We could not send the verification email." });
 
       try {
-        await prisma.studentAccount.create({
-          data: {
-            name: student.name,
-            email,
-            enrollmentNo: student.enrollmentNo,
-            collegeId: department.collegeId,
-            authUserId: data.user.id,
-          },
-        });
+        await prisma.studentAccount.create({ data: { name: student.name, email, enrollmentNo: student.enrollmentNo, collegeId: department.collegeId, authUserId: data.user.id } });
       } catch (error) {
         await supabase.auth.admin.deleteUser(data.user.id);
         throw error;
       }
-
       return res.status(201).json({ ok: true, message: "Verification email sent. Open it to finish setting your password." });
     }
 
@@ -137,9 +97,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { role: "TEACHER", email, collegeId: department.collegeId },
       select: { id: true, name: true, email: true, authUserId: true, departmentId: true },
     });
-    if (!teacher || (teacher.departmentId && teacher.departmentId !== department.id)) {
-      return res.status(403).json({ error: "This email is not registered as a teacher for the selected department." });
-    }
+    if (!teacher || (teacher.departmentId && teacher.departmentId !== department.id)) return res.status(403).json({ error: "This email is not registered as a teacher for the selected department." });
     if (teacher.authUserId) return res.status(409).json({ error: "This teacher already has an account. Please use Log in or Forgot password." });
 
     if (!teacher.departmentId) {
@@ -158,7 +116,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await supabase.auth.admin.deleteUser(data.user.id);
       throw error;
     }
-
     return res.status(201).json({ ok: true, message: "Verification email sent. Open it to finish setting your password." });
   } catch (error: any) {
     console.error("Signup API error", error);
