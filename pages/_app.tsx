@@ -10,6 +10,7 @@ import "../styles/at-risk-serial-fix.css";
 import "../styles/class-overall-restore.css";
 import "../styles/admin-dashboard.css";
 import "../styles/admin-classes.css";
+import "../styles/admin-sections.css";
 
 function AnalysisSidebarRouting() {
   useEffect(() => {
