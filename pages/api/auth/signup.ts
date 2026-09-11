@@ -5,11 +5,24 @@ import { fetchClassRoster } from "../../../lib/googleSheetsRoster";
 
 const text = (value: unknown) => String(value ?? "").trim();
 const emailOf = (value: unknown) => text(value).toLowerCase();
+const ALLOWED_SECTIONS = ["1", "2"];
+
+function normalizeSupabaseUrl(raw: string) {
+  const value = raw.trim();
+  if (!value) throw new Error("Supabase server URL is not configured.");
+  try {
+    const parsed = new URL(value);
+    return parsed.origin;
+  } catch {
+    throw new Error("Supabase server URL is invalid. Use the project URL, e.g. https://<project-ref>.supabase.co");
+  }
+}
 
 function getSupabaseAdmin() {
-  const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/$/, "");
+  const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const url = normalizeSupabaseUrl(rawUrl);
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || "").trim();
-  if (!url || !key) throw new Error("Supabase server credentials are not configured.");
+  if (!key) throw new Error("Supabase server credentials are not configured.");
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } });
 }
 
@@ -25,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === "GET") {
       const departments = await prisma.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, collegeId: true } });
       const classes = await prisma.class.findMany({
-        where: { semester: { in: [1, 3, 5, 7] }, sections: { some: { name: { in: ["1", "2", "e"] } } } },
+        where: { semester: { in: [1, 3, 5, 7] }, sections: { some: { name: { in: ALLOWED_SECTIONS } } } },
         orderBy: [{ semester: "asc" }, { program: "asc" }],
         select: {
           id: true,
@@ -33,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           semester: true,
           departmentId: true,
           department: { select: { name: true } },
-          sections: { where: { name: { in: ["1", "2", "e"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } },
+          sections: { where: { name: { in: ALLOWED_SECTIONS } }, orderBy: { name: "asc" }, select: { id: true, name: true } },
         },
       });
       return res.status(200).json({ departments, classes });
@@ -61,7 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const semester = Number(req.body?.semester);
       const sectionName = text(req.body?.section);
-      if (![1, 3, 5, 7].includes(semester) || !["1", "2", "e"].includes(sectionName)) return res.status(400).json({ error: "Choose a valid semester and section." });
+      if (![1, 3, 5, 7].includes(semester) || !ALLOWED_SECTIONS.includes(sectionName)) return res.status(400).json({ error: "Choose a valid semester and section." });
 
       const section = await prisma.section.findFirst({ where: { name: sectionName, class: { departmentId, semester } }, select: { id: true, name: true, sheetLink: { select: { sheetId: true, gid: true } } } });
       if (!section) return res.status(404).json({ error: "That class or section is not configured yet." });
