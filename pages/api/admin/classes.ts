@@ -20,25 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === "POST") {
-      const {
-        action,
-        departmentId,
-        program,
-        academicYear,
-        year,
-        semester,
-        proctorId,
-        classId,
-        subjectId,
-        teacherId,
-        sectionId,
-        subjectName,
-        subjectCode,
-        subjectType,
-        enrollmentNo,
-        studentName,
-        studentEmail,
-      } = req.body || {};
+      const { action, departmentId, program, academicYear, year, semester, proctorId, classId, subjectId, teacherId, sectionId, subjectName, subjectCode, subjectType, enrollmentNo, studentName, studentEmail } = req.body || {};
 
       if (action === "addTeacher") {
         if (!classId || !teacherId) return res.status(400).json({ error: "Class and teacher are required." });
@@ -58,10 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? await prisma.section.findUnique({ where: { id: String(sectionId) }, select: { id: true, classId: true } })
           : await prisma.section.findFirst({ where: { classId: String(classId) }, select: { id: true, classId: true } });
         if (!section || section.classId !== String(classId)) return res.status(404).json({ error: "Section does not belong to this class." });
-        const created = await prisma.subject.create({
-          data: { sectionId: section.id, name: text(subjectName), code: text(subjectCode), type: subjectType === "LAB" ? "LAB" : "THEORY" },
-          select: { id: true },
-        });
+        const created = await prisma.subject.create({ data: { sectionId: section.id, name: text(subjectName), code: text(subjectCode), type: subjectType === "LAB" ? "LAB" : "THEORY" }, select: { id: true } });
         return res.status(201).json({ id: created.id });
       }
 
@@ -87,17 +66,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           : await prisma.section.findFirst({ where: { classId: String(classId) }, include: { sheetLink: true } });
         if (!section || section.classId !== String(classId)) return res.status(404).json({ error: "Section does not belong to this class." });
         if (!section.sheetLink) return res.status(409).json({ error: "No Google Sheet is linked to this section." });
-
         const roster = await fetchClassRoster(section.sheetLink.sheetId, section.sheetLink.gid);
         if (roster.some((student) => student.enrollmentNo === text(enrollmentNo))) return res.status(409).json({ error: "That enrollment number is already in the Google Sheet." });
-
         const student = { enrollmentNo: text(enrollmentNo), name: text(studentName), email: text(studentEmail) };
         await appendClassRosterStudent(section.sheetLink.sheetId, section.sheetLink.gid, student);
-        await prisma.student.upsert({
-          where: { sectionId_enrollmentNo: { sectionId: section.id, enrollmentNo: student.enrollmentNo } },
-          update: { name: student.name, email: student.email },
-          create: { sectionId: section.id, enrollmentNo: student.enrollmentNo, name: student.name, email: student.email },
-        });
         return res.status(201).json({ ok: true });
       }
 
@@ -106,50 +78,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const cleanYear = text(year);
       const sem = Number(semester);
       if (!departmentId || !cleanProgram || !cleanAcademicYear || !cleanYear || !Number.isInteger(sem) || sem < 1 || sem > 8) return res.status(400).json({ error: "Department, class name, academic year, year and a valid semester are required." });
-
       let cleanProctorId: string | null = null;
       if (proctorId) {
         const teacher = await teacherExists(String(proctorId));
         if (!teacher) return res.status(404).json({ error: "Selected proctor is not a teacher." });
         cleanProctorId = teacher.id;
       }
-
-      const created = await prisma.class.create({
-        data: {
-          departmentId: String(departmentId),
-          program: cleanProgram,
-          academicYear: cleanAcademicYear,
-          year: cleanYear,
-          semester: sem,
-          proctorId: cleanProctorId,
-          sections: { create: { name: "A" } },
-        },
-        select: { id: true },
-      });
+      const created = await prisma.class.create({ data: { departmentId: String(departmentId), program: cleanProgram, academicYear: cleanAcademicYear, year: cleanYear, semester: sem, proctorId: cleanProctorId, sections: { create: { name: "A" } } }, select: { id: true } });
       return res.status(201).json({ id: created.id });
     }
 
     const id = text(req.query.id || req.body?.id);
     if (!id) return res.status(400).json({ error: "Class id is required." });
-
     const existing = await prisma.class.findUnique({ where: { id }, include: { sections: { select: { id: true } }, classAccess: { select: { id: true } } } });
     if (!existing) return res.status(404).json({ error: "Class not found." });
 
     if (req.method === "PATCH") {
       const { departmentId, program, academicYear, year, semester, proctorId } = req.body || {};
-      const cleanProgram = text(program);
-      const cleanAcademicYear = text(academicYear);
-      const cleanYear = text(year);
-      const sem = Number(semester);
+      const cleanProgram = text(program); const cleanAcademicYear = text(academicYear); const cleanYear = text(year); const sem = Number(semester);
       if (!departmentId || !cleanProgram || !cleanAcademicYear || !cleanYear || !Number.isInteger(sem) || sem < 1 || sem > 8) return res.status(400).json({ error: "Department, class name, academic year, year and a valid semester are required." });
-
       let cleanProctorId: string | null = null;
       if (proctorId) {
         const teacher = await teacherExists(String(proctorId));
         if (!teacher) return res.status(404).json({ error: "Selected proctor is not a teacher." });
         cleanProctorId = teacher.id;
       }
-
       await prisma.class.update({ where: { id }, data: { departmentId: String(departmentId), program: cleanProgram, academicYear: cleanAcademicYear, year: cleanYear, semester: sem, proctorId: cleanProctorId } });
       return res.status(200).json({ ok: true });
     }
@@ -159,7 +112,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await prisma.class.delete({ where: { id } });
       return res.status(200).json({ ok: true });
     }
-
     return res.status(405).json({ error: "Method not allowed" });
   } catch (error) {
     console.error("Admin class API error", error);
