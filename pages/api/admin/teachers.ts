@@ -1,57 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
+import { createClient } from "@supabase/supabase-js";
 import { authOptions } from "../../../lib/authOptions";
 import { prisma } from "../../../lib/prisma";
-
-const admin = async (req: NextApiRequest, res: NextApiResponse) => {
-  const session = await getServerSession(req, res, authOptions);
-  return !!session?.user && (session.user as any).role === "ADMIN";
-};
-const text = (v: unknown) => String(v ?? "").trim();
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (!(await admin(req, res))) return res.status(403).json({ error: "Admin access required" });
-  try {
-    if (req.method === "POST") {
-      const name = text(req.body?.name);
-      const email = text(req.body?.email).toLowerCase();
-      if (!name || !email) return res.status(400).json({ error: "Name and email are required." });
-      const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, role: true } });
-      if (existing) return res.status(409).json({ error: "A user with this email already exists." });
-      const session = await getServerSession(req, res, authOptions);
-      const collegeId = text((session?.user as any)?.collegeId);
-      if (!collegeId) return res.status(400).json({ error: "Admin college could not be determined." });
-      const teacher = await prisma.user.create({ data: { name, email, role: "TEACHER", collegeId }, select: { id: true, name: true, email: true } });
-      return res.status(201).json(teacher);
-    }
-
-    if (req.method === "PATCH") {
-      const id = text(req.body?.id);
-      const name = text(req.body?.name);
-      const email = text(req.body?.email).toLowerCase();
-      if (!id || !name || !email) return res.status(400).json({ error: "Teacher, name and email are required." });
-      const existing = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
-      if (!existing || existing.role !== "TEACHER") return res.status(404).json({ error: "Teacher not found." });
-      const emailOwner = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-      if (emailOwner && emailOwner.id !== id) return res.status(409).json({ error: "That email is already in use." });
-      const teacher = await prisma.user.update({ where: { id }, data: { name, email }, select: { id: true, name: true, email: true } });
-      return res.status(200).json(teacher);
-    }
-
-    if (req.method === "DELETE") {
-      const id = text(req.query.id);
-      if (!id) return res.status(400).json({ error: "Teacher id is required." });
-      const teacher = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, assignments: { select: { id: true } }, classAccess: { select: { id: true } }, proctorOf: { select: { id: true } } } });
-      if (!teacher || teacher.role !== "TEACHER") return res.status(404).json({ error: "Teacher not found." });
-      if (teacher.assignments.length || teacher.classAccess.length || teacher.proctorOf.length) return res.status(409).json({ error: "Remove this teacher's assignments, class access and proctor roles before deleting." });
-      await prisma.user.delete({ where: { id } });
-      return res.status(200).json({ ok: true });
-    }
-
-    return res.status(405).json({ error: "Method not allowed" });
-  } catch (error: any) {
-    console.error("Admin teacher API error", error);
-    if (error?.code === "P2002") return res.status(409).json({ error: "That email is already in use." });
-    return res.status(500).json({ error: "The teacher operation could not be completed." });
-  }
-}
+const text=(v:unknown)=>String(v??"").trim();
+const isAdmin=async(req:NextApiRequest,res:NextApiResponse)=>{const s=await getServerSession(req,res,authOptions);return !!s?.user&&(s.user as any).role==="ADMIN"};
+const supa=()=>{const url=(process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL||"").trim().replace(/\/$/,"");const key=(process.env.SUPABASE_SERVICE_ROLE_KEY||"").trim();if(!url||!key)throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for teacher account management.");return createClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}})};
+async function authUserByEmail(email:string){const {data,error}=await supa().auth.admin.listUsers({page:1,perPage:1000});if(error)throw error;return data.users.find(u=>u.email?.toLowerCase()===email.toLowerCase())||null;}
+export default async function handler(req:NextApiRequest,res:NextApiResponse){if(!(await isAdmin(req,res)))return res.status(403).json({error:"Admin access required"});try{
+if(req.method==="GET"){const [subjects,classes]=await Promise.all([prisma.subject.findMany({orderBy:[{section:{class:{program:"asc"}}},{name:"asc"}],select:{id:true,name:true,code:true,section:{select:{name:true,class:{select:{id:true,program:true}}}},assignments:{select:{teacherId:true}}}}),prisma.class.findMany({orderBy:{program:"asc"},select:{id:true,program:true,academicYear:true,year:true,semester:true,proctorId:true}})]);return res.status(200).json({subjects,classes});}
+if(req.method==="POST"){const name=text(req.body?.name),email=text(req.body?.email).toLowerCase(),password=text(req.body?.password);if(!name||!email||!password)return res.status(400).json({error:"Name, email and password are required."});if(password.length<6)return res.status(400).json({error:"Password must be at least 6 characters."});if(await prisma.user.findUnique({where:{email},select:{id:true}}))return res.status(409).json({error:"A user with this email already exists."});const s=await getServerSession(req,res,authOptions),collegeId=text((s?.user as any)?.collegeId);if(!collegeId)return res.status(400).json({error:"Admin college could not be determined."});const sb=supa(),{data,error}=await sb.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{name,role:"TEACHER"}});if(error||!data.user)return res.status(400).json({error:error?.message||"Teacher login account could not be created."});try{return res.status(201).json(await prisma.user.create({data:{name,email,role:"TEACHER",collegeId,authUserId:data.user.id},select:{id:true,name:true,email:true}}))}catch(e){await sb.auth.admin.deleteUser(data.user.id);throw e;}}
+if(req.method==="PATCH"){const id=text(req.body?.id),action=text(req.body?.action)||"profile";if(!id)return res.status(400).json({error:"Teacher id is required."});const teacher=await prisma.user.findUnique({where:{id},select:{id:true,name:true,email:true,role:true,authUserId:true}});if(!teacher||teacher.role!=="TEACHER")return res.status(404).json({error:"Teacher not found."});
+if(action==="profile"){const name=text(req.body?.name),email=text(req.body?.email).toLowerCase(),password=text(req.body?.password);if(!name||!email)return res.status(400).json({error:"Name and email are required."});const owner=await prisma.user.findUnique({where:{email},select:{id:true}});if(owner&&owner.id!==id)return res.status(409).json({error:"That email is already in use."});const sb=supa();let authId=teacher.authUserId;const existingAuth=authId?null:await authUserByEmail(teacher.email);if(!authId&&existingAuth)authId=existingAuth.id;if(!authId){if(!password)return res.status(400).json({error:"This teacher has no linked login account. Enter a password to create one."});const r=await sb.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{name,role:"TEACHER"}});if(r.error||!r.data.user)return res.status(400).json({error:r.error?.message||"Teacher login account could not be created."});authId=r.data.user.id;}if(password.length&&password.length<6)return res.status(400).json({error:"Password must be at least 6 characters."});const authUpdate:any={email,user_metadata:{name,role:"TEACHER"}};if(password)authUpdate.password=password;const ur=await sb.auth.admin.updateUserById(authId,authUpdate);if(ur.error)return res.status(400).json({error:ur.error.message});return res.status(200).json(await prisma.user.update({where:{id},data:{name,email,authUserId:authId},select:{id:true,name:true,email:true}}));}
+if(action==="subject"||action==="class"||action==="proctor"){const itemId=text(req.body?.subjectId||req.body?.classId),mode=text(req.body?.mode);if(!itemId||!["add","remove"].includes(mode))return res.status(400).json({error:"Item and action are required."});if(action==="subject"){if(mode==="add"){const current=await prisma.assignment.findUnique({where:{subjectId:itemId},select:{teacherId:true}});if(current&&current.teacherId!==id)return res.status(409).json({error:"That subject is already assigned to another teacher."});await prisma.assignment.upsert({where:{subjectId:itemId},update:{teacherId:id},create:{subjectId:itemId,teacherId:id}})}else await prisma.assignment.deleteMany({where:{subjectId:itemId,teacherId:id}})}else if(action==="class"){if(mode==="add")await prisma.classAccess.upsert({where:{teacherId_classId:{teacherId:id,classId:itemId}},update:{},create:{teacherId:id,classId:itemId}});else await prisma.classAccess.deleteMany({where:{teacherId:id,classId:itemId}})}else{if(mode==="add"){const c=await prisma.class.findUnique({where:{id:itemId},select:{proctorId:true}});if(!c)return res.status(404).json({error:"Class not found."});if(c.proctorId&&c.proctorId!==id)return res.status(409).json({error:"That class already has another proctor."});await prisma.class.update({where:{id:itemId},data:{proctorId:id}})}else await prisma.class.updateMany({where:{id:itemId,proctorId:id},data:{proctorId:null}})}return res.status(200).json({ok:true});}
+return res.status(400).json({error:"Unknown teacher action."});}
+if(req.method==="DELETE"){const id=text(req.query.id),t=await prisma.user.findUnique({where:{id},select:{id:true,role:true,authUserId:true,assignments:{select:{id:true}},classAccess:{select:{id:true}},proctorOf:{select:{id:true}}}});if(!id)return res.status(400).json({error:"Teacher id is required."});if(!t||t.role!=="TEACHER")return res.status(404).json({error:"Teacher not found."});if(t.assignments.length||t.classAccess.length||t.proctorOf.length)return res.status(409).json({error:"Remove assignments, class access and proctor roles before deleting."});if(t.authUserId)await supa().auth.admin.deleteUser(t.authUserId);await prisma.user.delete({where:{id}});return res.status(200).json({ok:true});}
+return res.status(405).json({error:"Method not allowed"});}catch(e:any){console.error("Admin teacher API error",e);if(e?.code==="P2002")return res.status(409).json({error:"That email or relationship is already in use."});return res.status(500).json({error:e?.message||"The teacher operation could not be completed."})}}
