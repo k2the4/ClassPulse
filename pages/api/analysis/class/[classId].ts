@@ -11,7 +11,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const classId = req.query.classId as string;
   const userId = (session.user as any).id;
   const role = (session.user as any).role;
-
   const allowed = await assertTeacherCanViewClass(userId, role, classId);
   if (!allowed) return res.status(403).json({ error: "Not authorized for this class" });
 
@@ -21,44 +20,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sections: {
         include: {
           sheetLink: true,
-          subjects: {
-            include: {
-              snapshots: { orderBy: { computedAt: "desc" }, take: 1 },
-            },
-          },
+          subjects: { include: { snapshots: { orderBy: { computedAt: "desc" }, take: 1 } } },
         },
       },
     },
   });
   if (!cls) return res.status(404).json({ error: "Class not found" });
 
-  const enrollmentNumbers = new Set<string>();
+  const uniqueStudents = new Map<string, { enrollmentNo: string; name: string; email: string }>();
   for (const section of cls.sections) {
     if (!section.sheetLink) continue;
     const roster = await fetchClassRoster(section.sheetLink.sheetId, section.sheetLink.gid);
-    for (const student of roster) {
-      if (student.enrollmentNo) enrollmentNumbers.add(student.enrollmentNo);
-    }
+    for (const student of roster) uniqueStudents.set(student.enrollmentNo, student);
   }
-  const totalStudents = enrollmentNumbers.size;
 
-  const subjects = cls.sections.flatMap((sec) =>
-    sec.subjects.map((subj) => {
-      const snapshot = subj.snapshots[0]?.data as unknown as SubjectAnalysis | undefined;
+  const subjects = cls.sections.flatMap((section) =>
+    section.subjects.map((subject) => {
+      const snapshot = subject.snapshots[0]?.data as unknown as SubjectAnalysis | undefined;
       return {
-        subjectId: subj.id,
-        subjectName: subj.name,
-        section: sec.name,
+        subjectId: subject.id,
+        subjectName: subject.name,
+        section: section.name,
         classAverage: snapshot?.classAverageCurrMonth ?? null,
         passRate: snapshot?.midsemPassRate ?? null,
-        computedAt: subj.snapshots[0]?.computedAt ?? null,
+        computedAt: subject.snapshots[0]?.computedAt ?? null,
       };
-    })
+    }),
   );
 
   return res.status(200).json({
     className: `${cls.program} — ${cls.year}, Sem ${cls.semester}`,
-    totalStudents,
+    totalStudents: uniqueStudents.size,
     subjects,
   });
 }
