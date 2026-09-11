@@ -16,6 +16,7 @@ type SubjectReport = {
 };
 
 type Props = {
+  activeTab: "attendance" | "class" | "subjects";
   classReport: ClassReport | null;
   subjectReports: SubjectReport[];
 };
@@ -27,16 +28,16 @@ const number = (value: unknown) => {
 
 const date = (value: string | null) => value ? new Date(value).toLocaleString() : "";
 
-export default function StudentAnalysisReports({ classReport, subjectReports }: Props) {
-  const publishedSubjects = subjectReports.filter(item => item.data);
+export default function StudentAnalysisReports({ activeTab, classReport, subjectReports }: Props) {
+  if (activeTab === "attendance") return null;
 
-  return (
-    <>
+  if (activeTab === "class") {
+    return (
       <section className="mt-6 rounded-2xl border border-[#e5e4e1] bg-white shadow-[0_8px_25px_rgba(31,35,49,0.04)]">
         <div className="border-b border-[#eeeeeb] px-5 py-5 sm:px-6">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-lg font-bold">Class Report</h2>
+              <h2 className="text-lg font-bold">Class Analysis</h2>
               <p className="mt-1 text-xs text-[#7b8498]">Your student report generated from Class Analysis.</p>
             </div>
             {classReport?.computedAt && <span className="text-[11px] text-[#9aa1b0]">Teacher report · {date(classReport.computedAt)}</span>}
@@ -63,24 +64,30 @@ export default function StudentAnalysisReports({ classReport, subjectReports }: 
           <div className="px-6 py-10 text-center"><p className="text-sm font-semibold">Class report is not available yet.</p><p className="mt-1 text-xs text-[#8a92a3]">Your teacher has not synced the Class Analysis report for this class.</p></div>
         )}
       </section>
+    );
+  }
 
-      <section className="mt-6 rounded-2xl border border-[#e5e4e1] bg-white shadow-[0_8px_25px_rgba(31,35,49,0.04)]">
-        <div className="border-b border-[#eeeeeb] px-5 py-5 sm:px-6">
-          <h2 className="text-lg font-bold">Subject Reports</h2>
-          <p className="mt-1 text-xs text-[#7b8498]">Your student reports generated from Subject Analysis.</p>
-        </div>
-        <div className="divide-y divide-[#eeeeeb]">
-          {publishedSubjects.length ? publishedSubjects.map(item => {
-            const s = item.data;
-            const attendance = s.attendancePct || {};
-            const midsem = s.midsem || {};
-            const assignment = s.assignment || {};
-            return (
-              <div key={item.subject.id} className="p-5 sm:p-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div><p className="text-base font-bold">{item.subject.name}</p><p className="mt-1 text-xs text-[#8a92a3]">{item.subject.code} · {item.subject.type}</p></div>
-                  <div className="text-left sm:text-right"><p className="text-xl font-extrabold">{number(s.internalMarks?.basic)} / 40</p><p className="mt-1 text-xs text-[#8a92a3]">{s.internalMarks?.basic == null ? "" : "Basic internal score"}</p></div>
-                </div>
+  const theoryReports = subjectReports.filter(item => item.subject.type === "THEORY");
+  return (
+    <section className="mt-6 rounded-2xl border border-[#e5e4e1] bg-white shadow-[0_8px_25px_rgba(31,35,49,0.04)]">
+      <div className="border-b border-[#eeeeeb] px-5 py-5 sm:px-6">
+        <h2 className="text-lg font-bold">Subject Analysis</h2>
+        <p className="mt-1 text-xs text-[#7b8498]">Your student reports generated from Subject Analysis for theory subjects.</p>
+      </div>
+      <div className="divide-y divide-[#eeeeeb]">
+        {theoryReports.length ? theoryReports.map(item => {
+          const s = item.data;
+          const attendance = s?.attendancePct || {};
+          const midsem = s?.midsem || {};
+          const assignment = s?.assignment || {};
+          return (
+            <div key={item.subject.id} className="p-5 sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div><p className="text-base font-bold">{item.subject.name}</p><p className="mt-1 text-xs text-[#8a92a3]">{item.subject.code} · Theory</p></div>
+                {s ? <div className="text-left sm:text-right"><p className="text-xl font-extrabold">{number(s.internalMarks?.basic)} / 40</p><p className="mt-1 text-xs text-[#8a92a3]">Basic internal score</p></div> : <span className="rounded-full bg-[#f7f6f2] px-3 py-1.5 text-xs font-semibold text-[#7a8295]">Report not available</span>}
+              </div>
+
+              {s ? <>
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                   <Metric label="Attendance" value={`${number(attendance.currMonth)}%`} />
                   <Metric label="Attendance Trend" value={attendance.trend || "—"} />
@@ -95,12 +102,12 @@ export default function StudentAnalysisReports({ classReport, subjectReports }: 
                   <span>Class average: <strong className="text-[#17223b]">{item.classAverageBasicMarks == null ? "—" : `${number(item.classAverageBasicMarks)} / 40`}</strong></span>
                   {item.computedAt && <span>Teacher report: {date(item.computedAt)}</span>}
                 </div>
-              </div>
-            );
-          }) : <div className="px-6 py-10 text-center"><p className="text-sm font-semibold">Subject reports are not available yet.</p><p className="mt-1 text-xs text-[#8a92a3]">Your teachers have not synced Subject Analysis reports for your subjects.</p></div>}
-        </div>
-      </section>
-    </>
+              </> : <p className="mt-4 text-xs text-[#8a92a3]">Your teacher has not synced a Subject Analysis report for this subject yet.</p>}
+            </div>
+          );
+        }) : <div className="px-6 py-10 text-center"><p className="text-sm font-semibold">No theory subjects are configured for this class.</p></div>}
+      </div>
+    </section>
   );
 }
 
