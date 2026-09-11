@@ -1,1 +1,1 @@
-ALTER TABLE "Class" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+-- This migration is intentionally empty. The Class.updatedAt column was already added by 20260911000000_add_class_updated_at.
