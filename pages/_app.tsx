@@ -11,6 +11,7 @@ import "../styles/class-overall-restore.css";
 import "../styles/admin-dashboard.css";
 import "../styles/admin-classes.css";
 import "../styles/admin-sections.css";
+import "../styles/admin-settings.css";
 
 function AnalysisSidebarRouting() {
   useEffect(() => {
