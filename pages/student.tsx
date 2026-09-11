@@ -11,12 +11,14 @@ type Daily = { id: string; subjectCode: string; subjectName: string; date: strin
 type Report = { code: string; name: string; type: string; attended: number; total: number; missed: number; percentage: number | null };
 type AnalysisReports = { class: any | null; subjects: { subject: { id: string; code: string; name: string; type: string }; computedAt: string | null; data: any; classAverageBasicMarks: number | null }[] };
 type Data = { student: { name: string; email: string; enrollmentNo: string }; class: { program: string; department: string; semester: number; section: string }; summary: { attended: number; total: number; missed: number; percentage: number | null }; daily: Daily[]; report: Report[]; analysisReports: AnalysisReports };
+type Tab = "attendance" | "class" | "subjects";
 
 const today = () => new Date().toLocaleDateString("en-CA");
 const displayDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 export default function StudentPage({ initialDate }: { initialDate: string }) {
   const [date, setDate] = useState(initialDate);
+  const [activeTab, setActiveTab] = useState<Tab>("attendance");
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,6 +39,12 @@ export default function StudentPage({ initialDate }: { initialDate: string }) {
   if (!data) return null;
 
   const pct = data.summary.percentage;
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "attendance", label: "Attendance" },
+    { id: "class", label: "Class Analysis" },
+    { id: "subjects", label: "Subject Analysis" },
+  ];
+
   return (
     <div className="min-h-screen bg-[#fffdf8] text-[#17223b]">
       <header className="border-b border-[#e8e7e3] bg-white">
@@ -58,17 +66,23 @@ export default function StudentPage({ initialDate }: { initialDate: string }) {
           <div className="rounded-2xl border border-[#e5e4e1] bg-white p-5 shadow-[0_8px_25px_rgba(31,35,49,0.04)]"><p className="text-xs font-semibold text-[#7a8295]">Classes missed</p><p className="mt-2 text-3xl font-extrabold text-[#ef4b4b]">{data.summary.missed}</p><p className="mt-1 text-xs text-[#7a8295]">Across all recorded subjects</p></div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-[#e5e4e1] bg-white shadow-[0_8px_25px_rgba(31,35,49,0.04)]">
-          <div className="flex flex-col gap-4 border-b border-[#eeeeeb] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><h2 className="text-lg font-bold">Daily Attendance</h2><p className="mt-1 text-xs text-[#7b8498]">Attendance recorded for {displayDate(date)}.</p></div><label className="flex items-center gap-2 rounded-xl border border-[#e3e3df] bg-white px-3 py-2 text-sm"><CalendarDays size={16} className="text-[#5b4ee6]"/><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label></div>
-          <div className="divide-y divide-[#eeeeeb]">{data.daily.length ? data.daily.map(item => <div key={item.id} className="flex items-center gap-4 px-5 py-4 sm:px-6"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${item.present ? "bg-[#eaf9f1] text-[#159b62]" : "bg-[#fff0ed] text-[#ef4b4b]"}`}>{item.present ? <CheckCircle2 size={19}/> : <XCircle size={19}/>}</span><div className="min-w-0 flex-1"><p className="text-sm font-bold">{item.subjectName}</p><p className="mt-1 text-xs text-[#7a8295]">{item.subjectCode} · {item.slot} · {item.teacherName}</p></div><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${item.present ? "bg-[#eaf9f1] text-[#159b62]" : "bg-[#fff0ed] text-[#d94b3f]"}`}>{item.present ? "Present" : "Absent"}</span></div>) : <div className="px-6 py-10 text-center"><p className="text-sm font-semibold">No attendance recorded for this date.</p><p className="mt-1 text-xs text-[#8a92a3]">Try another date once classes have been marked.</p></div>}</div>
-        </section>
+        <nav className="mt-6 flex overflow-x-auto rounded-2xl border border-[#e5e4e1] bg-white p-1.5 shadow-[0_8px_25px_rgba(31,35,49,0.04)]" aria-label="Student portal sections">
+          {tabs.map(tab => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`min-w-[150px] flex-1 rounded-xl px-4 py-3 text-sm font-bold transition ${activeTab === tab.id ? "bg-[#39268f] text-white" : "text-[#687287] hover:bg-[#f7f6f2]"}`}>{tab.label}</button>)}
+        </nav>
 
-        <section className="mt-6 rounded-2xl border border-[#e5e4e1] bg-white shadow-[0_8px_25px_rgba(31,35,49,0.04)]">
-          <div className="border-b border-[#eeeeeb] px-5 py-5 sm:px-6"><h2 className="text-lg font-bold">Subject Attendance Report</h2><p className="mt-1 text-xs text-[#7b8498]">Your attendance performance for every subject.</p></div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left"><thead><tr className="border-b border-[#eeeeeb] text-xs font-bold uppercase tracking-wide text-[#8a92a3]"><th className="px-5 py-3 sm:px-6">Subject</th><th className="px-5 py-3">Classes</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Missed</th><th className="px-5 py-3">Attendance</th></tr></thead><tbody>{data.report.map(item => <tr key={item.code} className="border-b border-[#f0efed] last:border-0"><td className="px-5 py-4 sm:px-6"><p className="text-sm font-bold">{item.name}</p><p className="mt-1 text-xs text-[#8a92a3]">{item.code} · {item.type}</p></td><td className="px-5 py-4 text-sm">{item.total}</td><td className="px-5 py-4 text-sm font-semibold text-[#159b62]">{item.attended}</td><td className="px-5 py-4 text-sm font-semibold text-[#ef4b4b]">{item.missed}</td><td className="px-5 py-4 text-sm font-extrabold">{item.percentage === null ? "—" : `${item.percentage}%`}</td></tr>)}</tbody></table></div>
-        </section>
+        {activeTab === "attendance" && <>
+          <section className="mt-6 rounded-2xl border border-[#e5e4e1] bg-white shadow-[0_8px_25px_rgba(31,35,49,0.04)]">
+            <div className="flex flex-col gap-4 border-b border-[#eeeeeb] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><h2 className="text-lg font-bold">Daily Attendance</h2><p className="mt-1 text-xs text-[#7b8498]">Attendance recorded for {displayDate(date)}.</p></div><label className="flex items-center gap-2 rounded-xl border border-[#e3e3df] bg-white px-3 py-2 text-sm"><CalendarDays size={16} className="text-[#5b4ee6]"/><input type="date" value={date} onChange={e => setDate(e.target.value)} /></label></div>
+            <div className="divide-y divide-[#eeeeeb]">{data.daily.length ? data.daily.map(item => <div key={item.id} className="flex items-center gap-4 px-5 py-4 sm:px-6"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${item.present ? "bg-[#eaf9f1] text-[#159b62]" : "bg-[#fff0ed] text-[#ef4b4b]"}`}>{item.present ? <CheckCircle2 size={19}/> : <XCircle size={19}/>}</span><div className="min-w-0 flex-1"><p className="text-sm font-bold">{item.subjectName}</p><p className="mt-1 text-xs text-[#7a8295]">{item.subjectCode} · {item.slot} · {item.teacherName}</p></div><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${item.present ? "bg-[#eaf9f1] text-[#159b62]" : "bg-[#fff0ed] text-[#d94b3f]"}`}>{item.present ? "Present" : "Absent"}</span></div>) : <div className="px-6 py-10 text-center"><p className="text-sm font-semibold">No attendance recorded for this date.</p><p className="mt-1 text-xs text-[#8a92a3]">Try another date once classes have been marked.</p></div>}</div>
+          </section>
 
-        <StudentAnalysisReports classReport={data.analysisReports.class} subjectReports={data.analysisReports.subjects} />
+          <section className="mt-6 rounded-2xl border border-[#e5e4e1] bg-white shadow-[0_8px_25px_rgba(31,35,49,0.04)]">
+            <div className="border-b border-[#eeeeeb] px-5 py-5 sm:px-6"><h2 className="text-lg font-bold">Subject Attendance Report</h2><p className="mt-1 text-xs text-[#7b8498]">Your attendance performance for every subject.</p></div>
+            <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left"><thead><tr className="border-b border-[#eeeeeb] text-xs font-bold uppercase tracking-wide text-[#8a92a3]"><th className="px-5 py-3 sm:px-6">Subject</th><th className="px-5 py-3">Classes</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Missed</th><th className="px-5 py-3">Attendance</th></tr></thead><tbody>{data.report.map(item => <tr key={item.code} className="border-b border-[#f0efed] last:border-0"><td className="px-5 py-4 sm:px-6"><p className="text-sm font-bold">{item.name}</p><p className="mt-1 text-xs text-[#8a92a3]">{item.code} · {item.type}</p></td><td className="px-5 py-4 text-sm">{item.total}</td><td className="px-5 py-4 text-sm font-semibold text-[#159b62]">{item.attended}</td><td className="px-5 py-4 text-sm font-semibold text-[#ef4b4b]">{item.missed}</td><td className="px-5 py-4 text-sm font-extrabold">{item.percentage === null ? "—" : `${item.percentage}%`}</td></tr>)}</tbody></table></div>
+          </section>
+        </>}
+
+        <StudentAnalysisReports activeTab={activeTab} classReport={data.analysisReports.class} subjectReports={data.analysisReports.subjects} />
       </main>
     </div>
   );
