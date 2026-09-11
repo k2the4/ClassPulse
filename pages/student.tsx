@@ -5,10 +5,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarDays, CheckCircle2, LogOut, XCircle } from "lucide-react";
 import { authOptions } from "../lib/authOptions";
+import StudentAnalysisReports from "../components/StudentAnalysisReports";
 
 type Daily = { id: string; subjectCode: string; subjectName: string; date: string; slot: string; teacherName: string; present: boolean };
 type Report = { code: string; name: string; type: string; attended: number; total: number; missed: number; percentage: number | null };
-type Data = { student: { name: string; email: string; enrollmentNo: string }; class: { program: string; department: string; semester: number; section: string }; summary: { attended: number; total: number; missed: number; percentage: number | null }; daily: Daily[]; report: Report[] };
+type AnalysisReports = { class: any | null; subjects: { subject: { id: string; code: string; name: string; type: string }; computedAt: string | null; data: any; classAverageBasicMarks: number | null }[] };
+type Data = { student: { name: string; email: string; enrollmentNo: string }; class: { program: string; department: string; semester: number; section: string }; summary: { attended: number; total: number; missed: number; percentage: number | null }; daily: Daily[]; report: Report[]; analysisReports: AnalysisReports };
 
 const today = () => new Date().toLocaleDateString("en-CA");
 const displayDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -65,6 +67,8 @@ export default function StudentPage({ initialDate }: { initialDate: string }) {
           <div className="border-b border-[#eeeeeb] px-5 py-5 sm:px-6"><h2 className="text-lg font-bold">Subject Attendance Report</h2><p className="mt-1 text-xs text-[#7b8498]">Your attendance performance for every subject.</p></div>
           <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left"><thead><tr className="border-b border-[#eeeeeb] text-xs font-bold uppercase tracking-wide text-[#8a92a3]"><th className="px-5 py-3 sm:px-6">Subject</th><th className="px-5 py-3">Classes</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Missed</th><th className="px-5 py-3">Attendance</th></tr></thead><tbody>{data.report.map(item => <tr key={item.code} className="border-b border-[#f0efed] last:border-0"><td className="px-5 py-4 sm:px-6"><p className="text-sm font-bold">{item.name}</p><p className="mt-1 text-xs text-[#8a92a3]">{item.code} · {item.type}</p></td><td className="px-5 py-4 text-sm">{item.total}</td><td className="px-5 py-4 text-sm font-semibold text-[#159b62]">{item.attended}</td><td className="px-5 py-4 text-sm font-semibold text-[#ef4b4b]">{item.missed}</td><td className="px-5 py-4 text-sm font-extrabold">{item.percentage === null ? "—" : `${item.percentage}%`}</td></tr>)}</tbody></table></div>
         </section>
+
+        <StudentAnalysisReports classReport={data.analysisReports.class} subjectReports={data.analysisReports.subjects} />
       </main>
     </div>
   );
