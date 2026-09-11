@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, CheckCircle2, LogOut, User, XCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, LogOut, XCircle } from "lucide-react";
 import { authOptions } from "../lib/authOptions";
 
 type Daily = { id: string; subjectCode: string; subjectName: string; date: string; slot: string; teacherName: string; present: boolean };
@@ -47,15 +47,7 @@ export default function StudentPage({ initialDate }: { initialDate: string }) {
         <section>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6657d9]">Student Portal</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-[-1.2px]">Welcome, {data.student.name.split(" ")[0]}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#737d92]">
-            <span className="font-semibold text-[#17223b]">Class: {data.class.program}</span>
-            <span aria-hidden="true">·</span>
-            <span>{data.class.department} Department</span>
-            <span aria-hidden="true">·</span>
-            <span>Semester {data.class.semester}</span>
-            <span aria-hidden="true">·</span>
-            <span>Section {data.class.section}</span>
-          </div>
+          <p className="mt-1 text-sm text-[#737d92]">{data.class.program} · Sem {data.class.semester}</p>
         </section>
 
         <section className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
