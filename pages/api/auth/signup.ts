@@ -33,11 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           semester: true,
           departmentId: true,
           department: { select: { name: true } },
-          sections: {
-            where: { name: { in: ["1", "2", "e"] } },
-            orderBy: { name: "asc" },
-            select: { id: true, name: true, sheetLink: { select: { sheetId: true, gid: true } } },
-          },
+          sections: { where: { name: { in: ["1", "2", "e"] } }, orderBy: { name: "asc" }, select: { id: true, name: true } },
         },
       });
       return res.status(200).json({ departments, classes });
@@ -67,10 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const sectionName = text(req.body?.section);
       if (![1, 3, 5, 7].includes(semester) || !["1", "2", "e"].includes(sectionName)) return res.status(400).json({ error: "Choose a valid semester and section." });
 
-      const section = await prisma.section.findFirst({
-        where: { name: sectionName, class: { departmentId, semester } },
-        select: { id: true, name: true, sheetLink: { select: { sheetId: true, gid: true } } },
-      });
+      const section = await prisma.section.findFirst({ where: { name: sectionName, class: { departmentId, semester } }, select: { id: true, name: true, sheetLink: { select: { sheetId: true, gid: true } } } });
       if (!section) return res.status(404).json({ error: "That class or section is not configured yet." });
       if (!section.sheetLink) return res.status(400).json({ error: "This class does not have a linked Google Sheet yet." });
 
@@ -78,10 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const student = roster.find((row) => row.email.trim().toLowerCase() === email);
       if (!student) return res.status(403).json({ error: "This email was not found in the selected class roster." });
 
-      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-        data: { name: student.name, role: "STUDENT", enrollmentNo: student.enrollmentNo },
-        redirectTo,
-      });
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { data: { name: student.name, role: "STUDENT", enrollmentNo: student.enrollmentNo }, redirectTo });
       if (error || !data.user) return res.status(400).json({ error: error?.message || "We could not send the verification email." });
 
       try {
@@ -93,21 +83,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(201).json({ ok: true, message: "Verification email sent. Open it to finish setting your password." });
     }
 
-    let teacher = await prisma.user.findFirst({
-      where: { role: "TEACHER", email, collegeId: department.collegeId },
-      select: { id: true, name: true, email: true, authUserId: true, departmentId: true },
-    });
+    let teacher = await prisma.user.findFirst({ where: { role: "TEACHER", email, collegeId: department.collegeId }, select: { id: true, name: true, email: true, authUserId: true, departmentId: true } });
     if (!teacher || (teacher.departmentId && teacher.departmentId !== department.id)) return res.status(403).json({ error: "This email is not registered as a teacher for the selected department." });
     if (teacher.authUserId) return res.status(409).json({ error: "This teacher already has an account. Please use Log in or Forgot password." });
 
-    if (!teacher.departmentId) {
-      teacher = await prisma.user.update({ where: { id: teacher.id }, data: { departmentId: department.id }, select: { id: true, name: true, email: true, authUserId: true, departmentId: true } });
-    }
+    if (!teacher.departmentId) teacher = await prisma.user.update({ where: { id: teacher.id }, data: { departmentId: department.id }, select: { id: true, name: true, email: true, authUserId: true, departmentId: true } });
 
-    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: { name: teacher.name || name, role: "TEACHER", departmentId: department.id },
-      redirectTo,
-    });
+    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { data: { name: teacher.name || name, role: "TEACHER", departmentId: department.id }, redirectTo });
     if (error || !data.user) return res.status(400).json({ error: error?.message || "We could not send the verification email." });
 
     try {
