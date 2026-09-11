@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../../../lib/prisma";
 import { requireSession, assertTeacherCanViewClass } from "../../../../lib/access";
+import { fetchClassRoster } from "../../../../lib/googleSheetsRoster";
 import { SubjectAnalysis } from "../../../../lib/analysis";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -19,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     include: {
       sections: {
         include: {
-          students: true,
+          sheetLink: true,
           subjects: {
             include: {
               snapshots: { orderBy: { computedAt: "desc" }, take: 1 },
@@ -31,7 +32,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
   if (!cls) return res.status(404).json({ error: "Class not found" });
 
-  const totalStudents = cls.sections.reduce((s, sec) => s + sec.students.length, 0);
+  const enrollmentNumbers = new Set<string>();
+  for (const section of cls.sections) {
+    if (!section.sheetLink) continue;
+    const roster = await fetchClassRoster(section.sheetLink.sheetId, section.sheetLink.gid);
+    for (const student of roster) {
+      if (student.enrollmentNo) enrollmentNumbers.add(student.enrollmentNo);
+    }
+  }
+  const totalStudents = enrollmentNumbers.size;
 
   const subjects = cls.sections.flatMap((sec) =>
     sec.subjects.map((subj) => {
