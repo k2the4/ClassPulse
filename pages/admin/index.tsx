@@ -23,7 +23,26 @@ export default function AdminDashboard({adminName,counts,system,activity}:Props)
 }
 
 export const getServerSideProps:GetServerSideProps<Props>=async(ctx)=>{const session=await getServerSession(ctx.req,ctx.res,authOptions);if(!session?.user)return{redirect:{destination:"/login",permanent:false}};if((session.user as any).role!=="ADMIN")return{redirect:{destination:"/dashboard",permanent:false}};
- try{const [students,teachers,classesCount,subjectRows,latestSync,studentsRecent,teachersRecent,subjectsRecent,assignmentsRecent,sheetLinks]=await Promise.all([prisma.student.count(),prisma.user.count({where:{role:"TEACHER"}}),prisma.class.count(),prisma.subject.findMany({select:{name:true}}),prisma.sheetLink.findFirst({orderBy:{lastSyncAt:"desc"},select:{lastSyncAt:true}}),prisma.student.findMany({take:4,orderBy:{createdAt:"desc"},include:{section:{include:{class:{include:{department:true}}}}}),prisma.user.findMany({where:{role:"TEACHER"},take:4,orderBy:{createdAt:"desc"}}),prisma.subject.findMany({take:4,orderBy:{createdAt:"desc"},include:{section:{include:{class:{include:{department:true}}}}}),prisma.assignment.findMany({take:4,orderBy:{createdAt:"desc"},include:{teacher:true,subject:{include:{section:{include:{class:{include:{department:true}}}}}}}),prisma.sheetLink.count()]);
- const uniqueSubjects=new Set(subjectRows.map(x=>x.name.trim().toLowerCase())).size;
- const activity:ActivityRow[]=[...studentsRecent.map(x=>({text:"Student added",detail:`${x.name} → ${x.section.class.department.name} ${x.section.class.semester}`,date:formatDate(x.createdAt),type:"student",timestamp:x.createdAt.getTime()})),...teachersRecent.map(x=>({text:"Teacher added",detail:x.name,date:formatDate(x.createdAt),type:"teacher",timestamp:x.createdAt.getTime()})),...subjectsRecent.map(x=>({text:"Subject added",detail:`${x.name} → ${x.section.class.department.name} ${x.section.class.semester}`,date:formatDate(x.createdAt),type:"subject",timestamp:x.createdAt.getTime()})),...assignmentsRecent.map(x=>({text:"Teacher assigned",detail:`${x.teacher.name} → ${x.subject.name}`,date:formatDate(x.createdAt),type:"assignment",timestamp:x.createdAt.getTime()}))].sort((a,b)=>b.timestamp-a.timestamp).slice(0,6);
- return{props:{adminName:"Admin",counts:{students,teachers,classes:classesCount,subjects:uniqueSubjects},system:{database:true,sheetsLinked:sheetLinks,lastSync:formatDate(latestSync?.lastSyncAt||null)},activity}}}catch{return{props:{adminName:"Admin",counts:{students:0,teachers:0,classes:0,subjects:0},system:{database:false,sheetsLinked:0,lastSync:null},activity:[]}}}};
+ try{
+  const [students,teachers,classesCount,subjectRows,latestSync,studentsRecent,teachersRecent,subjectsRecent,assignmentsRecent,sheetLinks]=await Promise.all([
+   prisma.student.count(),
+   prisma.user.count({where:{role:"TEACHER"}}),
+   prisma.class.count(),
+   prisma.subject.findMany({select:{name:true}}),
+   prisma.sheetLink.findFirst({orderBy:{lastSyncAt:"desc"},select:{lastSyncAt:true}}),
+   prisma.student.findMany({take:4,orderBy:{createdAt:"desc"},include:{section:{include:{class:{include:{department:true}}}}}),
+   prisma.user.findMany({where:{role:"TEACHER"},take:4,orderBy:{createdAt:"desc"}}),
+   prisma.subject.findMany({take:4,orderBy:{createdAt:"desc"},include:{section:{include:{class:{include:{department:true}}}}}),
+   prisma.assignment.findMany({take:4,orderBy:{createdAt:"desc"},include:{teacher:true,subject:true}}),
+   prisma.sheetLink.count()
+  ]);
+  const uniqueSubjects=new Set(subjectRows.map(x=>x.name.trim().toLowerCase())).size;
+  const activity:ActivityRow[]=[
+   ...studentsRecent.map(x=>({text:"Student added",detail:`${x.name} → ${x.section.class.department.name} ${x.section.class.semester}`,date:formatDate(x.createdAt),type:"student",timestamp:x.createdAt.getTime()})),
+   ...teachersRecent.map(x=>({text:"Teacher added",detail:x.name,date:formatDate(x.createdAt),type:"teacher",timestamp:x.createdAt.getTime()})),
+   ...subjectsRecent.map(x=>({text:"Subject added",detail:`${x.name} → ${x.section.class.department.name} ${x.section.class.semester}`,date:formatDate(x.createdAt),type:"subject",timestamp:x.createdAt.getTime()})),
+   ...assignmentsRecent.map(x=>({text:"Teacher assigned",detail:`${x.teacher.name} → ${x.subject.name}`,date:formatDate(x.createdAt),type:"assignment",timestamp:x.createdAt.getTime()}))
+  ].sort((a,b)=>b.timestamp-a.timestamp).slice(0,6);
+  return{props:{adminName:"Admin",counts:{students,teachers,classes:classesCount,subjects:uniqueSubjects},system:{database:true,sheetsLinked:sheetLinks,lastSync:formatDate(latestSync?.lastSyncAt||null)},activity}};
+ }catch{return{props:{adminName:"Admin",counts:{students:0,teachers:0,classes:0,subjects:0},system:{database:false,sheetsLinked:0,lastSync:null},activity:[]}}}
+};
