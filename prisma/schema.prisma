@@ -54,6 +54,18 @@ model User {
   @@index([collegeId])
 }
 
+model StudentAccount {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  enrollmentNo String   @unique
+  collegeId    String
+  authUserId   String   @unique @db.Uuid
+  createdAt    DateTime @default(now())
+
+  @@index([collegeId])
+}
+
 model Class {
   id            String        @id @default(cuid())
   department    Department    @relation(fields: [departmentId], references: [id])
@@ -118,7 +130,7 @@ model Student {
 
 model Subject {
   id                 String              @id @default(cuid())
-  name               String              
+  name               String
   code               String
   type               SubjectType         @default(THEORY)
   section            Section             @relation(fields: [sectionId], references: [id])
@@ -176,11 +188,10 @@ model AttendanceSession {
   subjectId  String
   teacher    User               @relation(fields: [teacherId], references: [id])
   teacherId  String
-  date       DateTime           @db.Date
+  date       DateTime            @db.Date
   slot       String
-  records    AttendanceRecord[]
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
 
   @@unique([sectionId, subjectId, date, slot])
   @@index([teacherId, date])
