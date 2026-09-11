@@ -8,6 +8,8 @@ type Section = { id: string; name: string };
 type ClassOption = { id: string; program: string; semester: number; departmentId: string; department: { name: string }; sections: Section[] };
 type Props = { departments: Department[]; classes: ClassOption[] };
 
+const ALLOWED_SECTIONS = ["1", "2"];
+
 export default function SignupPage({ departments, classes }: Props) {
   const [role, setRole] = useState<"" | "STUDENT" | "TEACHER">("");
   const [departmentId, setDepartmentId] = useState("");
@@ -26,7 +28,7 @@ export default function SignupPage({ departments, classes }: Props) {
     return availableClasses.flatMap((item) => item.sections).filter((item) => {
       if (seen.has(item.name)) return false;
       seen.add(item.name);
-      return ["1", "2", "e"].includes(item.name);
+      return ALLOWED_SECTIONS.includes(item.name);
     });
   }, [availableClasses]);
 
@@ -62,7 +64,7 @@ export default function SignupPage({ departments, classes }: Props) {
             <label className="block text-sm text-gray-600">Department<select required value={departmentId} onChange={(e) => { setDepartmentId(e.target.value); setSemester(""); setSection(""); }} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white"><option value="">Select department</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
             {role === "STUDENT" && <>
               <label className="block text-sm text-gray-600">Semester<select required value={semester} onChange={(e) => { setSemester(e.target.value); setSection(""); }} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white"><option value="">Select semester</option>{semesters.map((value) => <option key={value} value={value}>Semester {value}</option>)}</select></label>
-              <label className="block text-sm text-gray-600">Section<select required value={section} onChange={(e) => setSection(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white"><option value="">Select section</option>{availableSections.map((item) => <option key={item.id} value={item.name}>{item.name.toUpperCase()}</option>)}</select></label>
+              <label className="block text-sm text-gray-600">Section<select required value={section} onChange={(e) => setSection(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white"><option value="">Select section</option>{availableSections.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></label>
             </>}
             <label className="block text-sm text-gray-600">Full name<input required value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm" placeholder="Your full name" /></label>
             <label className="block text-sm text-gray-600">College email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm" placeholder="you@college.edu" /></label>
@@ -80,7 +82,7 @@ export default function SignupPage({ departments, classes }: Props) {
 export const getServerSideProps: GetServerSideProps<Props> = async () => {
   const [departments, classes] = await Promise.all([
     prisma.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, collegeId: true } }),
-    prisma.class.findMany({ where: { semester: { in: [1, 3, 5, 7] }, sections: { some: { name: { in: ["1", "2", "e"] } } } }, orderBy: [{ semester: "asc" }, { program: "asc" }], select: { id: true, program: true, semester: true, departmentId: true, department: { select: { name: true } }, sections: { where: { name: { in: ["1", "2", "e"] } }, select: { id: true, name: true } } } }),
+    prisma.class.findMany({ where: { semester: { in: [1, 3, 5, 7] }, sections: { some: { name: { in: ALLOWED_SECTIONS } } } }, orderBy: [{ semester: "asc" }, { program: "asc" }], select: { id: true, program: true, semester: true, departmentId: true, department: { select: { name: true } }, sections: { where: { name: { in: ALLOWED_SECTIONS } }, select: { id: true, name: true } } } }),
   ]);
   return { props: { departments, classes } };
 };
