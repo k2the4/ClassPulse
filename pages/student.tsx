@@ -44,7 +44,19 @@ export default function StudentPage({ initialDate }: { initialDate: string }) {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-5 py-7 sm:px-8 lg:py-9">
-        <section><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6657d9]">Student Portal</p><h1 className="mt-2 text-3xl font-extrabold tracking-[-1.2px]">Welcome, {data.student.name.split(" ")[0]}</h1><p className="mt-1 text-sm text-[#737d92]">{data.class.program} · {data.class.department} · Semester {data.class.semester} · Section {data.class.section}</p></section>
+        <section>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6657d9]">Student Portal</p>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-[-1.2px]">Welcome, {data.student.name.split(" ")[0]}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#737d92]">
+            <span className="font-semibold text-[#17223b]">Class: {data.class.program}</span>
+            <span aria-hidden="true">·</span>
+            <span>{data.class.department} Department</span>
+            <span aria-hidden="true">·</span>
+            <span>Semester {data.class.semester}</span>
+            <span aria-hidden="true">·</span>
+            <span>Section {data.class.section}</span>
+          </div>
+        </section>
 
         <section className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-[#e5e4e1] bg-white p-5 shadow-[0_8px_25px_rgba(31,35,49,0.04)]"><p className="text-xs font-semibold text-[#7a8295]">Overall attendance</p><p className="mt-2 text-3xl font-extrabold">{pct === null ? "—" : `${pct}%`}</p><p className="mt-1 text-xs text-[#7a8295]">{data.summary.attended} attended of {data.summary.total} classes</p></div>
