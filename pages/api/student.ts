@@ -50,12 +50,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const total = sessions.length;
     const attended = sessions.filter(s => s.presentEnrollmentNos.includes(enrollmentNo)).length;
 
+    const classSnapshot = await prisma.analysisSnapshot.findFirst({
+      where: { sectionId: section.id, subjectId: null, data: { path: ["kind"], equals: "overall" } as any },
+      orderBy: { computedAt: "desc" },
+    });
+    const classData = classSnapshot?.data as any;
+    const classStudent = Array.isArray(classData?.students)
+      ? classData.students.find((student: any) => String(student.enrollmentNo).trim() === enrollmentNo)
+      : null;
+
+    const subjectSnapshots = await prisma.analysisSnapshot.findMany({
+      where: { subjectId: { in: section.subjects.map(subject => subject.id) } },
+      orderBy: { computedAt: "desc" },
+    });
+    const latestSubjectSnapshots = new Map<string, any>();
+    for (const snapshot of subjectSnapshots) {
+      if (snapshot.subjectId && !latestSubjectSnapshots.has(snapshot.subjectId)) latestSubjectSnapshots.set(snapshot.subjectId, snapshot);
+    }
+
+    const subjectReports = section.subjects.map(subject => {
+      const snapshot = latestSubjectSnapshots.get(subject.id);
+      const data = snapshot?.data as any;
+      const student = Array.isArray(data?.students)
+        ? data.students.find((item: any) => String(item.enrollmentNo).trim() === enrollmentNo)
+        : null;
+      return {
+        subject: { id: subject.id, code: subject.code, name: subject.name, type: subject.type },
+        computedAt: snapshot?.computedAt || null,
+        data: student,
+        classAverageBasicMarks: data?.classAverageBasicMarks ?? null,
+      };
+    });
+
     return res.status(200).json({
       student: { name: found.rosterStudent.name, email: found.rosterStudent.email || account.email, enrollmentNo },
       class: { program: section.class.program, department: section.class.department.name, semester: section.class.semester, section: section.name },
       summary: { attended, total, missed: total - attended, percentage: total ? Math.round((attended / total) * 1000) / 10 : null },
       daily: dailySessions,
       report,
+      analysisReports: {
+        class: classStudent ? { computedAt: classSnapshot?.computedAt || null, classAverageOverallPct: classData?.classAverageOverallPct ?? null, student: classStudent } : null,
+        subjects: subjectReports,
+      },
     });
   } catch (error) {
     console.error("Student API error", error);
