@@ -5,7 +5,7 @@ import { fetchClassRoster } from "../../../lib/googleSheetsRoster";
 
 const text = (value: unknown) => String(value ?? "").trim();
 const emailOf = (value: unknown) => text(value).toLowerCase();
-const ALLOWED_SECTIONS = ["1", "2"];
+const ALLOWED_SECTIONS = ["1", "2", "E"];
 
 function normalizeSupabaseUrl(raw: string) {
   const value = raw.trim();
@@ -73,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (existingUser || existingStudent) return res.status(409).json({ error: "An account already exists for this email. Please use Log in or Forgot password." });
 
       const semester = Number(req.body?.semester);
-      const sectionName = text(req.body?.section);
+      const sectionName = text(req.body?.section).toUpperCase();
       if (![1, 3, 5, 7].includes(semester) || !ALLOWED_SECTIONS.includes(sectionName)) return res.status(400).json({ error: "Choose a valid semester and section." });
 
       const section = await prisma.section.findFirst({ where: { name: sectionName, class: { departmentId, semester } }, select: { id: true, name: true, sheetLink: { select: { sheetId: true, gid: true } } } });
