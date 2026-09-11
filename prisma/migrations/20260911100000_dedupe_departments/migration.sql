@@ -1,10 +1,18 @@
--- Keep the oldest department for each college/name pair and move its classes there.
+-- Keep the duplicate department currently used by the most classes.
+-- Ties fall back to the oldest department, then id, so existing class references
+-- are consolidated onto the department that is already in use.
 WITH ranked AS (
   SELECT
-    id,
-    FIRST_VALUE(id) OVER (PARTITION BY "collegeId", "name" ORDER BY "createdAt", id) AS keeper_id,
-    ROW_NUMBER() OVER (PARTITION BY "collegeId", "name" ORDER BY "createdAt", id) AS row_number
-  FROM "Department"
+    d.id,
+    FIRST_VALUE(d.id) OVER (
+      PARTITION BY d."collegeId", d."name"
+      ORDER BY (SELECT COUNT(*) FROM "Class" c WHERE c."departmentId" = d.id) DESC, d."createdAt", d.id
+    ) AS keeper_id,
+    ROW_NUMBER() OVER (
+      PARTITION BY d."collegeId", d."name"
+      ORDER BY (SELECT COUNT(*) FROM "Class" c WHERE c."departmentId" = d.id) DESC, d."createdAt", d.id
+    ) AS row_number
+  FROM "Department" d
 ), duplicates AS (
   SELECT id, keeper_id
   FROM ranked
@@ -18,7 +26,10 @@ WHERE c."departmentId" = d.id;
 WITH ranked AS (
   SELECT
     id,
-    ROW_NUMBER() OVER (PARTITION BY "collegeId", "name" ORDER BY "createdAt", id) AS row_number
+    ROW_NUMBER() OVER (
+      PARTITION BY "collegeId", "name"
+      ORDER BY (SELECT COUNT(*) FROM "Class" c WHERE c."departmentId" = "Department".id) DESC, "createdAt", id
+    ) AS row_number
   FROM "Department"
 )
 DELETE FROM "Department" AS d
