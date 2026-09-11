@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!collegeId) return res.status(400).json({ error: "Admin college could not be determined." });
 
     if (req.method === "GET") {
-      const sections = await prisma.section.findMany({ orderBy: [{ class: { program: "asc" } }, { name: "asc" }], include: { class: true, sheetLink: true } });
+      const sections = await prisma.section.findMany({ where: { class: { department: { collegeId } } }, orderBy: [{ class: { program: "asc" } }, { name: "asc" }], include: { class: true, sheetLink: true } });
       const accounts = await prisma.studentAccount.findMany({ where: { collegeId }, select: { id: true, name: true, email: true, enrollmentNo: true, createdAt: true } });
       const accountByEnrollment = new Map(accounts.map(a => [a.enrollmentNo, a]));
       const students = (await Promise.all(sections.filter(s => s.sheetLink).map(async section => {
@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
     if (await prisma.studentAccount.findUnique({ where: { enrollmentNo } })) return res.status(409).json({ error: "A student account already exists for this enrollment number." });
 
-    const sections = await prisma.section.findMany({ include: { class: true, sheetLink: true } });
+    const sections = await prisma.section.findMany({ where: { class: { department: { collegeId } } }, include: { class: true, sheetLink: true } });
     let match: { name: string; email: string; sectionId: string } | null = null;
     for (const section of sections) {
       if (!section.sheetLink) continue;
