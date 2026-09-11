@@ -8,7 +8,7 @@ type Section = { id: string; name: string };
 type ClassOption = { id: string; program: string; semester: number; departmentId: string; department: { name: string }; sections: Section[] };
 type Props = { departments: Department[]; classes: ClassOption[] };
 
-const ALLOWED_SECTIONS = ["1", "2"];
+const ALLOWED_SECTIONS = ["1", "2", "E"];
 
 export default function SignupPage({ departments, classes }: Props) {
   const [role, setRole] = useState<"" | "STUDENT" | "TEACHER">("");
@@ -26,10 +26,11 @@ export default function SignupPage({ departments, classes }: Props) {
   const availableSections = useMemo(() => {
     const seen = new Set<string>();
     return availableClasses.flatMap((item) => item.sections).filter((item) => {
-      if (seen.has(item.name)) return false;
-      seen.add(item.name);
-      return ALLOWED_SECTIONS.includes(item.name);
-    });
+      const normalized = item.name.trim().toUpperCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return ALLOWED_SECTIONS.includes(normalized);
+    }).sort((a, b) => ALLOWED_SECTIONS.indexOf(a.name.trim().toUpperCase()) - ALLOWED_SECTIONS.indexOf(b.name.trim().toUpperCase()));
   }, [availableClasses]);
 
   function chooseRole(next: "STUDENT" | "TEACHER") {
@@ -64,7 +65,7 @@ export default function SignupPage({ departments, classes }: Props) {
             <label className="block text-sm text-gray-600">Department<select required value={departmentId} onChange={(e) => { setDepartmentId(e.target.value); setSemester(""); setSection(""); }} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white"><option value="">Select department</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
             {role === "STUDENT" && <>
               <label className="block text-sm text-gray-600">Semester<select required value={semester} onChange={(e) => { setSemester(e.target.value); setSection(""); }} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white"><option value="">Select semester</option>{semesters.map((value) => <option key={value} value={value}>Semester {value}</option>)}</select></label>
-              <label className="block text-sm text-gray-600">Section<select required value={section} onChange={(e) => setSection(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white"><option value="">Select section</option>{availableSections.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></label>
+              <label className="block text-sm text-gray-600">Section<select required value={section} onChange={(e) => setSection(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white"><option value="">Select section</option>{availableSections.map((item) => <option key={item.id} value={item.name.trim().toUpperCase()}>{item.name.trim().toUpperCase()}</option>)}</select></label>
             </>}
             <label className="block text-sm text-gray-600">Full name<input required value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm" placeholder="Your full name" /></label>
             <label className="block text-sm text-gray-600">College email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm" placeholder="you@college.edu" /></label>
