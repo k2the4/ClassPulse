@@ -8,7 +8,6 @@
     "start": "next start",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed:ece2-students": "ts-node prisma/seed-ece2-sem7-students.ts",
     "auth:sync": "ts-node scripts/sync-supabase-auth.ts",
     "format:teacher-diaries": "ts-node --project tsconfig.scripts.json --transpile-only scripts/format-all-teacher-diaries.ts"
   },
