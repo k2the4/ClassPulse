@@ -31,6 +31,7 @@ model Department {
   college   College  @relation(fields: [collegeId], references: [id])
   collegeId String
   classes   Class[]
+  users     User[]
   createdAt DateTime @default(now())
 
   @@unique([collegeId, name])
@@ -45,6 +46,8 @@ model User {
   role                 Role                @default(TEACHER)
   college              College             @relation(fields: [collegeId], references: [id])
   collegeId            String
+  department           Department?         @relation(fields: [departmentId], references: [id])
+  departmentId         String?
   assignments          Assignment[]
   proctorOf            Class[]             @relation("Proctor")
   classAccess          ClassAccess[]
@@ -52,6 +55,7 @@ model User {
   createdAt             DateTime            @default(now())
 
   @@index([collegeId])
+  @@index([departmentId])
 }
 
 model StudentAccount {
@@ -116,14 +120,14 @@ model Section {
 }
 
 model Student {
-  id                 String              @id @default(cuid())
+  id                 String             @id @default(cuid())
   enrollmentNo       String
   name               String
   email              String
-  section            Section             @relation(fields: [sectionId], references: [id])
+  section            Section            @relation(fields: [sectionId], references: [id])
   sectionId          String
   attendanceRecords  AttendanceRecord[]
-  createdAt          DateTime            @default(now())
+  createdAt          DateTime           @default(now())
 
   @@unique([sectionId, enrollmentNo])
 }
@@ -188,7 +192,7 @@ model AttendanceSession {
   subjectId  String
   teacher    User               @relation(fields: [teacherId], references: [id])
   teacherId  String
-  date       DateTime            @db.Date
+  date       DateTime           @db.Date
   slot       String
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
