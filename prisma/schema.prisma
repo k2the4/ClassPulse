@@ -66,6 +66,7 @@ model Class {
   sections      Section[]
   classAccess   ClassAccess[]
   createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@index([departmentId])
   @@index([proctorId])
@@ -193,7 +194,6 @@ model AttendanceRecord {
   present   Boolean           @default(false)
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
-
   @@unique([sessionId, studentId])
   @@index([studentId])
 }
