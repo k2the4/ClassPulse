@@ -12,7 +12,7 @@ WITH ranked AS (
       PARTITION BY d."collegeId", d."name"
       ORDER BY (SELECT COUNT(*) FROM "Class" c WHERE c."departmentId" = d.id) DESC, d."createdAt", d.id
     ) AS row_number
-  FROM "Department" d
+  FROM "Department" AS d
 ), duplicates AS (
   SELECT id, keeper_id
   FROM ranked
@@ -25,12 +25,12 @@ WHERE c."departmentId" = d.id;
 
 WITH ranked AS (
   SELECT
-    id,
+    d.id,
     ROW_NUMBER() OVER (
-      PARTITION BY "collegeId", "name"
-      ORDER BY (SELECT COUNT(*) FROM "Class" c WHERE c."departmentId" = "Department".id) DESC, "createdAt", id
+      PARTITION BY d."collegeId", d."name"
+      ORDER BY (SELECT COUNT(*) FROM "Class" c WHERE c."departmentId" = d.id) DESC, d."createdAt", d.id
     ) AS row_number
-  FROM "Department"
+  FROM "Department" AS d
 )
 DELETE FROM "Department" AS d
 USING ranked AS r
