@@ -22,6 +22,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === "POST") {
       const { action, departmentId, program, academicYear, year, semester, proctorId, classId, subjectId, teacherId, sectionId, subjectName, subjectCode, subjectType, enrollmentNo, studentName, studentEmail } = req.body || {};
 
+      if (action === "setProctor") {
+        if (!classId) return res.status(400).json({ error: "Class is required." });
+        const klass = await prisma.class.findUnique({ where: { id: String(classId) }, select: { id: true } });
+        if (!klass) return res.status(404).json({ error: "Class not found." });
+        let cleanProctorId: string | null = null;
+        if (proctorId) {
+          const teacher = await teacherExists(String(proctorId));
+          if (!teacher) return res.status(404).json({ error: "Selected proctor is not a teacher." });
+          cleanProctorId = teacher.id;
+        }
+        await prisma.class.update({ where: { id: klass.id }, data: { proctorId: cleanProctorId } });
+        return res.status(200).json({ ok: true });
+      }
+
       if (action === "addTeacher") {
         if (!classId || !teacherId) return res.status(400).json({ error: "Class and teacher are required." });
         const [klass, teacher] = await Promise.all([
