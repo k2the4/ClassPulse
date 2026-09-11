@@ -55,9 +55,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       orderBy: { computedAt: "desc" },
     });
     const classData = classSnapshot?.data as any;
-    const classStudent = Array.isArray(classData?.students)
-      ? classData.students.find((student: any) => String(student.enrollmentNo).trim() === enrollmentNo)
-      : null;
+    const classStudents = Array.isArray(classData?.students) ? classData.students : [];
+    const rankedClassStudents = [...classStudents].sort((a: any, b: any) => {
+      const aScore = Number(a.overallPct) || 0;
+      const bScore = Number(b.overallPct) || 0;
+      return bScore - aScore || String(a.name || "").localeCompare(String(b.name || ""));
+    });
+    const classStudentIndex = rankedClassStudents.findIndex((student: any) => String(student.enrollmentNo).trim() === enrollmentNo);
+    const classStudent = classStudents.find((student: any) => String(student.enrollmentNo).trim() === enrollmentNo);
 
     const subjectSnapshots = await prisma.analysisSnapshot.findMany({
       where: { subjectId: { in: section.subjects.map(subject => subject.id) } },
@@ -89,7 +94,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       daily: dailySessions,
       report,
       analysisReports: {
-        class: classStudent ? { computedAt: classSnapshot?.computedAt || null, classAverageOverallPct: classData?.classAverageOverallPct ?? null, student: classStudent } : null,
+        class: classStudent ? {
+          computedAt: classSnapshot?.computedAt || null,
+          classAverageOverallPct: classData?.classAverageOverallPct ?? null,
+          rank: classStudentIndex >= 0 ? classStudentIndex + 1 : null,
+          totalStudents: classStudents.length,
+          student: classStudent,
+        } : null,
         subjects: subjectReports,
       },
     });
