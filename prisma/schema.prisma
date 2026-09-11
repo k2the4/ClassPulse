@@ -118,7 +118,7 @@ model Student {
 
 model Subject {
   id                 String              @id @default(cuid())
-  name               String
+  name               String              
   code               String
   type               SubjectType         @default(THEORY)
   section            Section             @relation(fields: [sectionId], references: [id])
@@ -127,7 +127,7 @@ model Subject {
   assignments        Assignment[]
   snapshots          AnalysisSnapshot[]
   attendanceSessions AttendanceSession[]
-  createdAt          DateTime            @default(now())
+  createdAt           DateTime            @default(now())
 
   @@unique([sectionId, code])
 }
@@ -198,4 +198,11 @@ model AttendanceRecord {
   updatedAt DateTime          @updatedAt
   @@unique([sessionId, studentId])
   @@index([studentId])
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
 }
