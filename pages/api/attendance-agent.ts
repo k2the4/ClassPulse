@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../lib/authOptions";
-import { prisma } from "../../lib/prisma";
-import { fetchClassRawData } from "../../lib/googleSheetsClass";
-import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
-import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
+import { authOptions } from "../../../lib/authOptions";
+import { prisma } from "../../../lib/prisma";
+import { fetchClassRoster } from "../../../lib/googleSheetsRoster";
+import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../../lib/googleSheetsAttendance";
+import { readTeacherDiarySessions } from "../../../lib/googleSheetsAttendanceAgent";
 
 const TIME_SLOTS = [
   "8 to 9",
@@ -24,33 +24,6 @@ function validDate(value: unknown): value is string {
 async function canManageSubject(userId: string, role: string, subjectId: string) {
   if (role === "ADMIN") return true;
   return !!(await prisma.assignment.findFirst({ where: { teacherId: userId, subjectId } }));
-}
-
-async function orderStudentsBySheet(sectionId: string, students: Array<{ id: string; enrollmentNo: string; name: string }>) {
-  try {
-    const link = await prisma.sheetLink.findUnique({ where: { sectionId }, select: { sheetId: true } });
-    if (!link?.sheetId) return students;
-    const raw = await fetchClassRawData(link.sheetId);
-    const sheetRank = new Map<string, number>();
-    let nextRank = 1;
-    for (const month of raw.months) {
-      for (const row of month.rows) {
-        if (!sheetRank.has(row.enrollmentNo)) sheetRank.set(row.enrollmentNo, nextRank++);
-      }
-    }
-    if (sheetRank.size === 0) return students;
-    return [...students].sort((a, b) => {
-      const aRank = sheetRank.get(a.enrollmentNo);
-      const bRank = sheetRank.get(b.enrollmentNo);
-      if (aRank !== undefined && bRank !== undefined) return aRank - bRank;
-      if (aRank !== undefined) return -1;
-      if (bRank !== undefined) return 1;
-      return a.enrollmentNo.localeCompare(b.enrollmentNo, undefined, { numeric: true });
-    });
-  } catch (error) {
-    console.error("Could not read Google Sheet student order:", error);
-    return students;
-  }
 }
 
 function sessionSortKey(date: string, slot: string): string {
@@ -76,7 +49,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { id: sectionId },
       include: {
         class: { include: { department: true } },
-        students: { orderBy: [{ enrollmentNo: "asc" }] },
         subjects: { include: { assignments: { include: { teacher: { select: { name: true } } } } }, orderBy: { name: "asc" } },
         sheetLink: true,
       },
@@ -89,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       : section.subjects.filter((subject) => subject.assignments.some((a) => a.teacherId === userId));
     if (visibleSubjects.length === 0) return res.status(403).json({ error: "No assigned subjects for this class" });
 
-    const orderedStudents = await orderStudentsBySheet(sectionId, section.students);
+    const students = await fetchClassRoster(section.sheetLink.sheetId, section.sheetLink.gid);
     const sheetSessions = await readTeacherDiarySessions({
       spreadsheetId: section.sheetLink.sheetId,
       subjectCodes: visibleSubjects.map((subject) => subject.code),
@@ -109,7 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           teacherId: "sheet",
           teacherName: item.teacherName,
           present: item.presentEnrollmentNos.length,
-          total: orderedStudents.length,
+          total: students.length,
           canEdit: true,
         };
       })
@@ -121,14 +93,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!found) return res.status(404).json({ error: "Attendance session not found" });
       const presentEnrollmentNos = new Set(found.presentEnrollmentNos);
       return res.status(200).json({
-        presentStudentIds: orderedStudents.filter((student) => presentEnrollmentNos.has(student.enrollmentNo)).map((student) => student.id),
+        presentStudentIds: students.filter((student) => presentEnrollmentNos.has(student.enrollmentNo)).map((student) => student.enrollmentNo),
       });
     }
 
     return res.status(200).json({
       section: { id: section.id, label: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`, strength: section.strength },
       subjects: visibleSubjects.map((subject) => ({ id: subject.id, name: subject.name, code: subject.code, type: subject.type })),
-      students: orderedStudents.map((student, index) => ({ id: student.id, enrollmentNo: student.enrollmentNo, name: student.name, serialNo: index + 1 })),
+      students: students.map((student, index) => ({ id: student.enrollmentNo, enrollmentNo: student.enrollmentNo, name: student.name, serialNo: index + 1 })),
       sessions,
     });
   }
@@ -197,20 +169,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     where: { id: sectionId },
     select: {
       name: true,
-      sheetLink: { select: { sheetId: true } },
+      sheetLink: { select: { sheetId: true, gid: true } },
       class: { select: { semester: true, department: { select: { name: true } } } },
     },
   });
   if (!section) return res.status(404).json({ error: "Class not found" });
   if (!section.sheetLink?.sheetId) return res.status(400).json({ error: "No Google Sheet is linked to this class" });
 
-  const students = await prisma.student.findMany({
-    where: { sectionId },
-    select: { id: true, enrollmentNo: true },
-  });
-  const studentIds = new Set(students.map((student) => student.id));
+  const students = await fetchClassRoster(section.sheetLink.sheetId, section.sheetLink.gid);
+  const enrollmentNos = new Set(students.map((student) => student.enrollmentNo));
   const presentIds = [...new Set(presentStudentIds as string[])];
-  if (presentIds.some((id) => !studentIds.has(id))) return res.status(400).json({ error: "Attendance contains a student outside this class" });
+  if (presentIds.some((enrollmentNo) => !enrollmentNos.has(enrollmentNo))) {
+    return res.status(400).json({ error: "Attendance contains a student outside this class" });
+  }
 
   const sessionKey = `ATT-${date.replace(/-/g, "")}-${subject.code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${normalizedSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
   try {
@@ -225,7 +196,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sessionKey,
       students: students.map((student) => ({
         enrollmentNo: student.enrollmentNo,
-        present: presentIds.includes(student.id),
+        present: presentIds.includes(student.enrollmentNo),
       })),
     });
   } catch (error) {
