@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 import { fetchClassRoster } from "../../lib/googleSheetsRoster";
-import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
+import { deleteTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
+import { writeTeacherDiaryAttendanceFixed } from "../../lib/googleSheetsAttendanceFixed";
 import { writeLatestTeacherDiarySessionMetadata } from "../../lib/googleSheetsSessionMetadata";
 import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
 
@@ -186,7 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const sessionKey = `ATT-${date.replace(/-/g, "")}-${subject.code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${normalizedSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
   try {
-    await writeTeacherDiaryAttendance({
+    await writeTeacherDiaryAttendanceFixed({
       spreadsheetId: section.sheetLink.sheetId,
       subjectCode: subject.code,
       subjectName: subject.name,
