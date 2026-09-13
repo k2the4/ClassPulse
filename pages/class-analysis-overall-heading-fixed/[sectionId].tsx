@@ -158,7 +158,7 @@ function styles() {
   `; document.head.appendChild(s);
 }
 
-export default function ClassAnalysisOverallHeadingFixed({ sectionId: sectionIdProp }: { sectionId: string }) {
+export default function ClassAnalysisOverallHeadingFixedPage() {
   useEffect(() => {
     styles();
     let disposed = false;
@@ -187,6 +187,5 @@ export default function ClassAnalysisOverallHeadingFixed({ sectionId: sectionIdP
     parse();
     return () => { disposed = true; window.clearInterval(timer); };
   }, []);
-
-  return <SectionOverallPage sectionId={sectionIdProp || sectionId()} />;
+  return <SectionOverallPage />;
 }
