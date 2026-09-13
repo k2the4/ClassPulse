@@ -100,7 +100,7 @@ function installMode(mode: MarkMode, change: (m: MarkMode) => void) {
     select = label.querySelector("select");
     select?.addEventListener("change", () => change(select?.value === "moderated" ? "moderated" : "basic"));
   }
-  if (select.value !== mode) select.value = mode;
+  if (select && select.value !== mode) select.value = mode;
 }
 
 function filterState() {
@@ -154,24 +154,39 @@ function renderTopFive(rows: Row[]) {
 function styles() {
   if (document.getElementById("classpulse-overall-fixes")) return;
   const s = document.createElement("style"); s.id = "classpulse-overall-fixes"; s.textContent = `
-    .classpulse-overall-heading{margin:18px 0 14px}.classpulse-overall-heading h2{margin:0;color:#0f172a;font-size:20px;line-height:1.25;font-weight:600}.classpulse-overall-heading p{margin:5px 0 0;color:#64748b;font-size:12px;line-height:1.5}.classpulse-overall-metrics>.classpulse-overall-metric{min-width:0;min-height:104px}.classpulse-mark-mode-control{min-width:0!important}.classpulse-mark-mode-control select{width:100%}.at-risk-filter-controls{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(120px,1fr)!important;gap:12px!important;align-items:end}.classpulse-distribution-content{margin-top:12px;display:grid;gap:5px}.classpulse-distribution-row{display:block;width:100%;text-align:left;border:0;background:transparent;padding:10px 0;margin:0;cursor:pointer;border-radius:8px}.classpulse-distribution-row:hover{background:#f8fafc}.classpulse-distribution-row:focus-visible{outline:2px solid #4a35b3;outline-offset:2px}@media(max-width:1100px){.classpulse-overall-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}.at-risk-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:700px){.classpulse-overall-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:480px){.classpulse-overall-metrics{grid-template-columns:1fr!important}.at-risk-filter-controls{grid-template-columns:1fr!important}}
+    .classpulse-overall-heading{margin:18px 0 14px}.classpulse-overall-heading h2{margin:0;color:#0f172a;font-size:20px;line-height:1.25;font-weight:600}.classpulse-overall-heading p{margin:5px 0 0;color:#64748b;font-size:12px;line-height:1.5}.classpulse-overall-metrics>.classpulse-overall-metric{min-width:0;min-height:104px}.classpulse-mark-mode-control{min-width:0!important}.classpulse-mark-mode-control select{width:100%}.at-risk-filter-controls{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(120px,1fr)!important;gap:12px!important;align-items:end}.classpulse-distribution-content{display:grid;gap:10px}.classpulse-distribution-row{text-align:left;background:none;border:0;padding:0;cursor:pointer}.classpulse-distribution-row:hover{opacity:.82}@media(max-width:1100px){.classpulse-overall-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}.at-risk-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:640px){.classpulse-overall-metrics{grid-template-columns:1fr!important}.at-risk-filter-controls{grid-template-columns:1fr!important}}
   `; document.head.appendChild(s);
 }
 
-export default function ClassAnalysisOverallHeadingFixedPage() {
+export default function ClassAnalysisOverallHeadingFixed({ sectionId: sectionIdProp }: { sectionId: string }) {
   useEffect(() => {
-    let dead = false, observer: MutationObserver | null = null, scheduled = false, mode: MarkMode = "basic", payload: Payload = {};
+    styles();
+    let disposed = false;
+    let mode: MarkMode = "basic";
+    let payload: Payload | null = null;
     const apply = () => {
-      scheduled = false; if (dead) return; observer?.disconnect(); styles();
-      const subjects = (payload.subjects || []).slice(0, 6); const rows = rowsFor(payload, mode); if (!rows.length) { observer?.observe(document.body,{childList:true,subtree:true}); return; }
-      installMetrics(rows, subjects); installMode(mode, (next) => { mode = next; schedule(); }); renderTable(rows); renderDistribution(rows); renderTopFive(rows);
-      observer?.observe(document.body,{childList:true,subtree:true});
+      if (disposed || !payload) return;
+      const rows = rowsFor(payload, mode);
+      installMode(mode, (next) => { mode = next; apply(); });
+      installMetrics(rows, (payload.subjects || []).slice(0, 6));
+      renderTable(rows);
+      renderDistribution(rows);
+      renderTopFive(rows);
     };
-    const schedule = () => { if (scheduled || dead) return; scheduled = true; requestAnimationFrame(apply); };
-    observer = new MutationObserver(schedule); observer.observe(document.body,{childList:true,subtree:true});
-    const load = async () => { const id = sectionId(); if (!id) return; try { const r = await fetch(`/api/analysis/section/${id}/overall`); if (r.ok) { payload = (await r.json()).data || {}; schedule(); } } catch {} };
-    load(); schedule();
-    return () => { dead = true; observer?.disconnect(); };
+    const parse = () => {
+      const raw = document.querySelector("#__NEXT_DATA__")?.textContent;
+      if (!raw) return false;
+      try {
+        const next = JSON.parse(raw) as { props?: { pageProps?: Payload } };
+        payload = next.props?.pageProps || null;
+        if (payload) { apply(); return true; }
+      } catch {}
+      return false;
+    };
+    const timer = window.setInterval(() => { if (!payload) parse(); else apply(); }, 500);
+    parse();
+    return () => { disposed = true; window.clearInterval(timer); };
   }, []);
-  return <SectionOverallPage />;
+
+  return <SectionOverallPage sectionId={sectionIdProp || sectionId()} />;
 }
