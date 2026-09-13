@@ -3,9 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 import { fetchClassRoster } from "../../lib/googleSheetsRoster";
-import { deleteTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
-import { writeTeacherDiaryAttendanceFixed } from "../../lib/googleSheetsAttendanceFixed";
-import { writeLatestTeacherDiarySessionMetadata } from "../../lib/googleSheetsSessionMetadata";
+import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
 import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
 
 const TIME_SLOTS = [
@@ -187,7 +185,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const sessionKey = `ATT-${date.replace(/-/g, "")}-${subject.code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${normalizedSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
   try {
-    await writeTeacherDiaryAttendanceFixed({
+    await writeTeacherDiaryAttendance({
       spreadsheetId: section.sheetLink.sheetId,
       subjectCode: subject.code,
       subjectName: subject.name,
@@ -200,13 +198,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         enrollmentNo: student.enrollmentNo,
         present: presentIds.includes(student.enrollmentNo),
       })),
-    });
-    await writeLatestTeacherDiarySessionMetadata({
-      spreadsheetId: section.sheetLink.sheetId,
-      subjectCode: subject.code,
-      date,
-      slot: normalizedSlot,
-      sessionKey,
     });
   } catch (error) {
     console.error("Teacher Diary update failed:", error);
