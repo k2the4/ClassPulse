@@ -14,6 +14,8 @@ const defaults = {
   maintenanceMode: false,
 };
 
+type SettingValue = string | number | boolean;
+
 async function isAdmin(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   return !!session?.user && (session.user as any).role === "ADMIN";
@@ -31,7 +33,19 @@ function normalize(input: any) {
   settings.maintenanceMode = Boolean(settings.maintenanceMode);
   if (![settings.attendanceThreshold, settings.atRiskThreshold, settings.syncIntervalHours].every(Number.isFinite)) throw new Error("Numeric settings are invalid.");
   if (settings.atRiskThreshold > settings.attendanceThreshold) throw new Error("At-risk threshold cannot exceed the attendance threshold.");
-  return settings;
+  return settings as typeof defaults;
+}
+
+async function saveSettings(settings: typeof defaults) {
+  await prisma.$transaction(
+    (Object.entries(settings) as Array<[string, SettingValue]>).map(([key, value]) =>
+      prisma.systemSetting.upsert({
+        where: { key },
+        create: { key, value },
+        update: { value },
+      }),
+    ),
+  );
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -46,29 +60,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === "PUT") {
       const settings = normalize(req.body);
-      await prisma.$transaction(
-        Object.entries(settings).map(([key, value]) =>
-          prisma.systemSetting.upsert({
-            where: { key },
-            create: { key, value },
-            update: { value },
-          }),
-        ),
-      );
+      await saveSettings(settings);
       return res.status(200).json(settings);
     }
 
     if (req.method === "POST") {
       const settings = normalize(defaults);
-      await prisma.$transaction(
-        Object.entries(settings).map(([key, value]) =>
-          prisma.systemSetting.upsert({
-            where: { key },
-            create: { key, value },
-            update: { value },
-          }),
-        ),
-      );
+      await saveSettings(settings);
       return res.status(200).json(settings);
     }
 
