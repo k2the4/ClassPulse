@@ -72,14 +72,18 @@ async function refreshLatestSessionMetadata(params: { sheets: ReturnType<typeof 
     if (key && (latestSortKey === null || key > latestSortKey)) { latestSortKey = key; latestColumn = col; }
   }
   if (latestColumn === -1) {
-    await params.sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${params.title}'!B4:E4`, valueInputOption: "RAW", requestBody: { values: [["", "", "", ""]] } });
+    await params.sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `'${params.title}'!B4`, values: [[""]] }, { range: `'${params.title}'!D4`, values: [["Session ID"]] }, { range: `'${params.title}'!E4`, values: [[""]] }] } });
     return;
   }
   const latestHeader = String(rows[sessionInfoRow]?.[latestColumn] || ""), separator = latestHeader.indexOf("|");
   const latestDate = separator === -1 ? latestHeader : latestHeader.slice(0, separator).trim(), latestSlot = separator === -1 ? "" : latestHeader.slice(separator + 1).trim();
   const code = params.title.replace(/^TD-/i, "").trim();
   const latestKey = `ATT-${latestDate.replace(/-/g, "")}-${code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${latestSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
-  await params.sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${params.title}'!B4:E4`, valueInputOption: "RAW", requestBody: { values: [[latestDate, latestSlot, "Session ID", latestKey]] } });
+  await params.sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: [
+    { range: `'${params.title}'!B4`, values: [[`${latestDate} | ${latestSlot}`]] },
+    { range: `'${params.title}'!D4`, values: [["Session ID"]] },
+    { range: `'${params.title}'!E4`, values: [[latestKey]] },
+  ] } });
 }
 
 /** Rebuilds the target month's LH/LA from Teacher Diary, using the prior month's cumulative totals, then carries that cumulative baseline into later month tabs. */
