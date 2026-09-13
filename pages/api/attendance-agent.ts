@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
-import { fetchClassRoster, appendClassRosterStudent } from "../../lib/googleSheetsRoster";
+import { fetchClassRoster, ensureTeacherDiaryRoster } from "../../lib/googleSheetsRoster";
 import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
 import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
 
@@ -185,14 +185,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const sessionKey = `ATT-${date.replace(/-/g, "")}-${subject.code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${normalizedSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
   try {
-    // The linked class roster is the source of truth. If Teacher Diary is stale,
-    // add any roster students that are missing before writing the attendance session.
-    const teacherDiaryStudents = await fetchClassRoster(section.sheetLink.sheetId, section.sheetLink.gid);
-    const teacherDiaryEnrollmentNos = new Set(teacherDiaryStudents.map((student) => student.enrollmentNo));
-    const missingStudents = students.filter((student) => !teacherDiaryEnrollmentNos.has(student.enrollmentNo));
-    for (const student of missingStudents) {
-      await appendClassRosterStudent(section.sheetLink.sheetId, section.sheetLink.gid, student);
-    }
+    // The linked class roster is authoritative. Reconcile it into the subject's
+    // Teacher Diary before writing attendance so stale TD rosters cannot block a save.
+    await ensureTeacherDiaryRoster(section.sheetLink.sheetId, subject.code, students);
 
     await writeTeacherDiaryAttendance({
       spreadsheetId: section.sheetLink.sheetId,
