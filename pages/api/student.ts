@@ -62,30 +62,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return bScore - aScore || String(a.name || "").localeCompare(String(b.name || ""));
     });
     const classStudentIndex = rankedClassStudents.findIndex((student: any) => String(student.enrollmentNo).trim() === enrollmentNo);
-    const classStudent = classStudents.find((student: any) => String(student.enrollmentNo).trim() === enrollmentNo);
+    const rawClassStudent = classStudents.find((student: any) => String(student.enrollmentNo).trim() === enrollmentNo);
 
-    const subjectSnapshots = await prisma.analysisSnapshot.findMany({
-      where: { subjectId: { in: section.subjects.map(subject => subject.id) } },
-      orderBy: { computedAt: "desc" },
-    });
-    const latestSubjectSnapshots = new Map<string, any>();
-    for (const snapshot of subjectSnapshots) {
-      if (snapshot.subjectId && !latestSubjectSnapshots.has(snapshot.subjectId)) latestSubjectSnapshots.set(snapshot.subjectId, snapshot);
+    const subjectRankByKey = new Map<string, number>();
+    const subjects = Array.isArray(rawClassStudent?.subjects) ? rawClassStudent.subjects : [];
+    for (const subject of subjects) {
+      const subjectScores = classStudents.map((student: any) => {
+        const item = Array.isArray(student.subjects) ? student.subjects.find((candidate: any) =>
+          (subject.subjectId && candidate.subjectId === subject.subjectId) || (subject.code && candidate.code === subject.code)
+        ) : null;
+        const score = Number(item?.basicInternal);
+        return { score: Number.isFinite(score) ? score : null, name: String(student.name || "") };
+      }).filter(item => item.score !== null).sort((a, b) => (b.score as number) - (a.score as number) || a.name.localeCompare(b.name));
+      const studentScore = Number(subject.basicInternal);
+      if (!Number.isFinite(studentScore)) continue;
+      const rank = subjectScores.findIndex(item => item.score === studentScore && item.name === String(rawClassStudent?.name || ""));
+      subjectRankByKey.set(subject.subjectId || subject.code, rank >= 0 ? rank + 1 : 0);
     }
-
-    const subjectReports = section.subjects.map(subject => {
-      const snapshot = latestSubjectSnapshots.get(subject.id);
-      const data = snapshot?.data as any;
-      const student = Array.isArray(data?.students)
-        ? data.students.find((item: any) => String(item.enrollmentNo).trim() === enrollmentNo)
-        : null;
-      return {
-        subject: { id: subject.id, code: subject.code, name: subject.name, type: subject.type },
-        computedAt: snapshot?.computedAt || null,
-        data: student,
-        classAverageBasicMarks: data?.classAverageBasicMarks ?? null,
-      };
-    });
+    const classStudent = rawClassStudent ? {
+      ...rawClassStudent,
+      subjects: subjects.map((subject: any) => ({ ...subject, subjectRank: subjectRankByKey.get(subject.subjectId || subject.code) || null })),
+    } : null;
 
     return res.status(200).json({
       student: { name: found.rosterStudent.name, email: found.rosterStudent.email || account.email, enrollmentNo },
@@ -101,7 +98,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           totalStudents: classStudents.length,
           student: classStudent,
         } : null,
-        subjects: subjectReports,
       },
     });
   } catch (error) {
