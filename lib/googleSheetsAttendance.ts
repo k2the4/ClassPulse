@@ -3,6 +3,8 @@ import { getSheetsClient } from "./googleSheetsClient";
 export interface AttendanceSheetStudent {
   enrollmentNo: string;
   present: boolean;
+  name?: string;
+  email?: string;
 }
 
 const TIME_SLOT_ORDER = ["8 to 9", "9 to 10", "10 to 11", "11 to 12", "12.30 to 1.30", "1.30 to 2.30", "2.30 to 3.30", "3.30 to 4.30"] as const;
@@ -176,16 +178,10 @@ export async function syncMonthlyAttendanceFromTeacherDiary(params: { spreadshee
   }
   if (writeRanges.length > 0) await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: writeRanges } });
 
-  // Seed every later month with the latest cumulative baseline. A future month
-  // does not need its own Teacher Diary entry just to display the carried-forward
-  // semester attendance. When that future month gets real sessions, its own sync
-  // recalculates it from the previous month and then propagates the new baseline.
   if (currentInfo) {
     const futureSheets = sheetList
       .map((sheet) => ({ sheet, info: monthTabInfo(sheet.properties?.title || "") }))
-      .filter((item): item is { sheet: typeof sheetList[number]; info: { year: number; month: number } } => {
-        return !!item.sheet.properties?.title && !!item.info && (item.info.year > currentInfo.year || (item.info.year === currentInfo.year && item.info.month > currentInfo.month));
-      })
+      .filter((item): item is { sheet: typeof sheetList[number]; info: { year: number; month: number } } => !!item.sheet.properties?.title && !!item.info && (item.info.year > currentInfo.year || (item.info.year === currentInfo.year && item.info.month > currentInfo.month)))
       .sort((a, b) => a.info.year - b.info.year || a.info.month - b.info.month);
 
     for (const { sheet } of futureSheets) {
@@ -228,21 +224,44 @@ export async function writeTeacherDiaryAttendance(params: { spreadsheetId: strin
   if (!target?.properties?.title || typeof sheetId !== "number") throw new Error(`Teacher Diary sheet TD-${params.subjectCode} was not found in the linked Google Sheet`);
   const title = target.properties.title;
   const rowCount = Math.max(500, target.properties.gridProperties?.rowCount || 500);
-  const result = await sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${title}'!A1:AZ${rowCount}`, valueRenderOption: "FORMATTED_VALUE" });
-  const rows = result.data.values || [], headerRow = findStudentHeader(rows);
+  let result = await sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${title}'!A1:AZ${rowCount}`, valueRenderOption: "FORMATTED_VALUE" });
+  let rows = result.data.values || [], headerRow = findStudentHeader(rows);
   if (headerRow === -1) throw new Error(`TD-${params.subjectCode} does not have the expected S.No / Enrollment No. / Student Name header`);
   const attendanceSubHeaderRow = headerRow + 1, studentStartRow = headerRow + 2;
   const enrollmentRows = new Map<string, number>();
   for (let rowIndex = studentStartRow; rowIndex < rows.length; rowIndex++) { const enrollmentNo = cleanEnrollment(rows[rowIndex]?.[1]); if (enrollmentNo) enrollmentRows.set(enrollmentNo, rowIndex); }
-  const incoming = new Map<string, boolean>();
-  for (const student of params.students) { const enrollmentNo = cleanEnrollment(student.enrollmentNo); if (enrollmentNo) incoming.set(enrollmentNo, student.present); }
+  const incoming = new Map<string, AttendanceSheetStudent>();
+  for (const student of params.students) { const enrollmentNo = cleanEnrollment(student.enrollmentNo); if (enrollmentNo) incoming.set(enrollmentNo, { ...student, enrollmentNo }); }
   if (incoming.size !== params.students.length) throw new Error(`Attendance contains a student with an invalid enrollment number`);
+
+  const missing = [...incoming.entries()].filter(([enrollmentNo]) => !enrollmentRows.has(enrollmentNo));
+  if (missing.length > 0) {
+    let maxSerial = 0;
+    for (let rowIndex = studentStartRow; rowIndex < rows.length; rowIndex++) {
+      const serial = Number(String(rows[rowIndex]?.[0] ?? "").trim());
+      if (Number.isFinite(serial) && serial > maxSerial) maxSerial = serial;
+    }
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: params.spreadsheetId,
+      range: `'${title.replace(/'/g, "''")}'!A:D`,
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: missing.map(([_, student], index) => [maxSerial + index + 1, student.enrollmentNo, student.name || "", student.email || ""]),
+      },
+    });
+    result = await sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${title}'!A1:AZ${rowCount}`, valueRenderOption: "FORMATTED_VALUE" });
+    rows = result.data.values || [];
+    headerRow = findStudentHeader(rows);
+    if (headerRow === -1) throw new Error(`TD-${params.subjectCode} does not have the expected student header`);
+    for (let rowIndex = headerRow + 2; rowIndex < rows.length; rowIndex++) { const enrollmentNo = cleanEnrollment(rows[rowIndex]?.[1]); if (enrollmentNo) enrollmentRows.set(enrollmentNo, rowIndex); }
+  }
   for (const enrollmentNo of incoming.keys()) if (!enrollmentRows.has(enrollmentNo)) throw new Error(`Student ${enrollmentNo} is missing from TD-${params.subjectCode}; attendance was not written`);
   let startColumn = -1, lastSessionEnd = 2, insertionColumn = -1;
   const maxColumns = Math.max(...rows.map((row) => row.length), 4), slotIndex = TIME_SLOT_ORDER.findIndex((item) => normalize(item) === normalize(params.slot)), newSortKey = `${params.date}|${String(slotIndex === -1 ? 999 : slotIndex).padStart(3, "0")}|${normalize(params.slot)}`;
   for (let col = 3; col < maxColumns - 1; col++) {
-    if (sessionHeaderMatches(rows[headerRow]?.[col], params.date, params.slot) && normalize(rows[attendanceSubHeaderRow]?.[col]) === "lh" && normalize(rows[attendanceSubHeaderRow]?.[col + 1]) === "la") { startColumn = col; break; }
-    if (normalize(rows[attendanceSubHeaderRow]?.[col]) === "lh" && normalize(rows[attendanceSubHeaderRow]?.[col + 1]) === "la") { lastSessionEnd = col + 1; const existingSortKey = sessionSortKey(rows[headerRow]?.[col]); if (insertionColumn === -1 && existingSortKey && newSortKey < existingSortKey) insertionColumn = col; }
+    if (sessionHeaderMatches(rows[headerRow]?.[col], params.date, params.slot) && normalize(rows[headerRow + 1]?.[col]) === "lh" && normalize(rows[headerRow + 1]?.[col + 1]) === "la") { startColumn = col; break; }
+    if (normalize(rows[headerRow + 1]?.[col]) === "lh" && normalize(rows[headerRow + 1]?.[col + 1]) === "la") { lastSessionEnd = col + 1; const existingSortKey = sessionSortKey(rows[headerRow]?.[col]); if (insertionColumn === -1 && existingSortKey && newSortKey < existingSortKey) insertionColumn = col; }
   }
   if (startColumn === -1) {
     if (insertionColumn !== -1) { startColumn = insertionColumn; await sheets.spreadsheets.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { requests: [{ insertDimension: { range: { sheetId, dimension: "COLUMNS", startIndex: startColumn, endIndex: startColumn + 3 }, inheritFromBefore: startColumn > 3 } }] } }); }
@@ -253,7 +272,7 @@ export async function writeTeacherDiaryAttendance(params: { spreadsheetId: strin
   const startCol = columnName(startColumn), endCol = columnName(startColumn + 1);
   await sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${title}'!${startCol}6:${endCol}8`, valueInputOption: "RAW", requestBody: { values: [[params.sessionKey, ""], [`${params.date} | ${params.slot}`, ""], ["LH", "LA"]] } });
   const writeRanges: Array<{ range: string; values: number[][] }> = [];
-  for (const [enrollmentNo, rowIndex] of enrollmentRows.entries()) { if (!incoming.has(enrollmentNo)) continue; const rowNumber = rowIndex + 1; writeRanges.push({ range: `'${title}'!${startCol}${rowNumber}`, values: [[1]] }); writeRanges.push({ range: `'${title}'!${endCol}${rowNumber}`, values: [[incoming.get(enrollmentNo) ? 1 : 0]] }); }
+  for (const [enrollmentNo, rowIndex] of enrollmentRows.entries()) { if (!incoming.has(enrollmentNo)) continue; const rowNumber = rowIndex + 1; writeRanges.push({ range: `'${title}'!${startCol}${rowNumber}`, values: [[1]] }); writeRanges.push({ range: `'${title}'!${endCol}${rowNumber}`, values: [[incoming.get(enrollmentNo)?.present ? 1 : 0]] }); }
   await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: writeRanges } });
   await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `'${title}'!A1:H5`, values: [[`TEACHER DIARY — ${params.subjectName}`, "", "", "", "", "", "", ""], ["", "", "", "", "", "", ""], ["Class", params.classLabel, "", "Subject", params.subjectName, "", "Teacher", params.teacherName], ["Latest Session", "", "", "Session ID", "", "", "", ""], ["Attendance is recorded below by date and time slot.", "", "", "", "", "", "", ""]] }] } });
   await refreshLatestSessionMetadata({ sheets, spreadsheetId: params.spreadsheetId, title });
