@@ -19,6 +19,7 @@ export default function AnalysisNav({ sectionId }: Props) {
   const [className, setClassName] = useState("");
 
   useEffect(() => {
+    if (!sectionId) return;
     let cancelled = false;
     fetch(`/api/analysis/section-info/${sectionId}`)
       .then((response) => response.ok ? response.json() : null)
@@ -37,7 +38,7 @@ export default function AnalysisNav({ sectionId }: Props) {
       <nav className="subject-analysis-nav" aria-label="Class analysis sections">
         <div className="subject-analysis-nav__rail">
           {items.map(({ label, icon: Icon, path }) => {
-            const href = `/section-analysis/${sectionId}/${path}`;
+            const href = sectionId ? `/section-analysis/${sectionId}/${path}` : "#";
             const active =
               pathname.endsWith(`/${path}`) ||
               asPath.endsWith(`/${path}`) ||
