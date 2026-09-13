@@ -7,6 +7,8 @@ import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent"
 
 const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
+type SubjectScore = { score: number | null; name: string };
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user || (session.user as any).role !== "STUDENT") return res.status(403).json({ error: "Student access required" });
@@ -67,16 +69,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const subjectRankByKey = new Map<string, number>();
     const subjects = Array.isArray(rawClassStudent?.subjects) ? rawClassStudent.subjects : [];
     for (const subject of subjects) {
-      const subjectScores = classStudents.map((student: any) => {
+      const subjectScores: SubjectScore[] = classStudents.map((student: any) => {
         const item = Array.isArray(student.subjects) ? student.subjects.find((candidate: any) =>
           (subject.subjectId && candidate.subjectId === subject.subjectId) || (subject.code && candidate.code === subject.code)
         ) : null;
         const score = Number(item?.basicInternal);
         return { score: Number.isFinite(score) ? score : null, name: String(student.name || "") };
-      }).filter(item => item.score !== null).sort((a, b) => (b.score as number) - (a.score as number) || a.name.localeCompare(b.name));
+      }).filter((item: SubjectScore) => item.score !== null).sort((a: SubjectScore, b: SubjectScore) => (b.score as number) - (a.score as number) || a.name.localeCompare(b.name));
       const studentScore = Number(subject.basicInternal);
       if (!Number.isFinite(studentScore)) continue;
-      const rank = subjectScores.findIndex(item => item.score === studentScore && item.name === String(rawClassStudent?.name || ""));
+      const rank = subjectScores.findIndex((item: SubjectScore) => item.score === studentScore && item.name === String(rawClassStudent?.name || ""));
       subjectRankByKey.set(subject.subjectId || subject.code, rank >= 0 ? rank + 1 : 0);
     }
     const classStudent = rawClassStudent ? {
