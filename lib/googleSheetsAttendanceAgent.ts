@@ -64,14 +64,13 @@ async function readSubjectSessions(spreadsheetId: string, subjectCode: string, d
   const title = target.properties.title;
   const result = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${title}'!A1:AZ500`, valueRenderOption: "FORMATTED_VALUE" });
   const rows = result.data.values || [];
-  const headerRow = findStudentHeader(rows);
-  if (headerRow === -1) return [];
+  const rosterHeaderRow = findStudentHeader(rows);
+  if (rosterHeaderRow === -1) return [];
 
-  // TD sheets keep LH/LA on the same row as S.No / Enrollment / Student Name.
-  // The row immediately above contains the session date and slot.
-  const attendanceHeaderRow = headerRow;
-  const sessionInfoRow = headerRow - 1;
-  const studentStartRow = headerRow + 1;
+  // TD layout: session date/slot row, then LH/LA row, then the roster header.
+  const attendanceHeaderRow = rosterHeaderRow - 1;
+  const sessionInfoRow = rosterHeaderRow - 2;
+  const studentStartRow = rosterHeaderRow + 1;
   const maxColumns = Math.max(...rows.map((row) => row.length), 4);
   const teacherName = readTeacherName(rows);
   const sessions: TeacherDiarySession[] = [];
