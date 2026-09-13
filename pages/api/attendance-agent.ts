@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../../lib/authOptions";
-import { prisma } from "../../../lib/prisma";
-import { fetchClassRoster } from "../../../lib/googleSheetsRoster";
-import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../../lib/googleSheetsAttendance";
-import { readTeacherDiarySessions } from "../../../lib/googleSheetsAttendanceAgent";
+import { authOptions } from "../../lib/authOptions";
+import { prisma } from "../../lib/prisma";
+import { fetchClassRoster } from "../../lib/googleSheetsRoster";
+import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
+import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
 
 const TIME_SLOTS = [
   "8 to 9",
