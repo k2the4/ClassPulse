@@ -4,6 +4,7 @@ import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 import { fetchClassRoster } from "../../lib/googleSheetsRoster";
 import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
+import { writeLatestTeacherDiarySessionMetadata } from "../../lib/googleSheetsSessionMetadata";
 import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
 
 const TIME_SLOTS = [
@@ -198,6 +199,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         enrollmentNo: student.enrollmentNo,
         present: presentIds.includes(student.enrollmentNo),
       })),
+    });
+    await writeLatestTeacherDiarySessionMetadata({
+      spreadsheetId: section.sheetLink.sheetId,
+      subjectCode: subject.code,
+      date,
+      slot: normalizedSlot,
+      sessionKey,
     });
   } catch (error) {
     console.error("Teacher Diary update failed:", error);
