@@ -54,10 +54,7 @@ function readTeacherName(rows: string[][]): string {
 
 async function readSubjectSessions(spreadsheetId: string, subjectCode: string, date?: string): Promise<TeacherDiarySession[]> {
   const sheets = getSheetsClient();
-  const metadata = await sheets.spreadsheets.get({
-    spreadsheetId,
-    fields: "sheets(properties(title))",
-  });
+  const metadata = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets(properties(title))" });
   const target = (metadata.data.sheets || []).find((sheet) => {
     const title = sheet.properties?.title || "";
     return title.toLowerCase().replace(/\s+/g, "") === `td-${subjectCode}`.toLowerCase().replace(/\s+/g, "");
@@ -65,24 +62,23 @@ async function readSubjectSessions(spreadsheetId: string, subjectCode: string, d
   if (!target?.properties?.title) return [];
 
   const title = target.properties.title;
-  const result = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${title}'!A1:AZ500`,
-    valueRenderOption: "FORMATTED_VALUE",
-  });
+  const result = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${title}'!A1:AZ500`, valueRenderOption: "FORMATTED_VALUE" });
   const rows = result.data.values || [];
   const headerRow = findStudentHeader(rows);
   if (headerRow === -1) return [];
 
-  const subHeaderRow = headerRow + 1;
-  const studentStartRow = headerRow + 2;
+  // TD sheets keep LH/LA on the same row as S.No / Enrollment / Student Name.
+  // The row immediately above contains the session date and slot.
+  const attendanceHeaderRow = headerRow;
+  const sessionInfoRow = headerRow - 1;
+  const studentStartRow = headerRow + 1;
   const maxColumns = Math.max(...rows.map((row) => row.length), 4);
   const teacherName = readTeacherName(rows);
   const sessions: TeacherDiarySession[] = [];
 
   for (let col = 3; col < maxColumns - 1; col++) {
-    if (normalize(rows[subHeaderRow]?.[col]) !== "lh" || normalize(rows[subHeaderRow]?.[col + 1]) !== "la") continue;
-    const header = String(rows[headerRow]?.[col] || "").trim();
+    if (normalize(rows[attendanceHeaderRow]?.[col]) !== "lh" || normalize(rows[attendanceHeaderRow]?.[col + 1]) !== "la") continue;
+    const header = String(rows[sessionInfoRow]?.[col] || "").trim();
     const match = header.match(/^(\d{4}-\d{2}-\d{2})\s*\|\s*(.+)$/);
     if (!match) continue;
     if (date && match[1] !== date) continue;
@@ -95,10 +91,9 @@ async function readSubjectSessions(spreadsheetId: string, subjectCode: string, d
       if (la > 0) presentEnrollmentNos.push(enrollmentNo);
     }
 
-    const sessionKey = String(rows[headerRow - 1]?.[col] || "").trim();
     const fallbackId = `ATT-${match[1].replace(/-/g, "")}-${subjectCode.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${match[2].replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
     sessions.push({
-      id: sessionKey || fallbackId,
+      id: fallbackId,
       subjectCode,
       date: match[1],
       slot: match[2].trim(),
