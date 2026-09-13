@@ -30,7 +30,7 @@ type Student = {
 };
 type OverallData = { subjects: Subject[]; students: Student[]; classAverageOverallPct: number };
 type RowSubject = Subject & { mark: number; max: number; pct: number; grade: string };
-type Row = Student & {
+type Row = Omit<Student, "subjects"> & {
   originalIndex: number;
   subjects: RowSubject[];
   total: number;
