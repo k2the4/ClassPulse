@@ -32,10 +32,12 @@ export async function writeLatestTeacherDiarySessionMetadata(params: {
     requestBody: { values: [[`${params.date} | ${params.slot}`]] },
   });
 
+  // D4:E5 is a merged display cell, so the label and key must be written
+  // together into D4. Writing E4 separately cannot display a second value.
   await sheets.spreadsheets.values.update({
     spreadsheetId: params.spreadsheetId,
     range: `'${title}'!D4`,
     valueInputOption: "RAW",
-    requestBody: { values: [[params.sessionKey]] },
+    requestBody: { values: [[`Session ID: ${params.sessionKey}`]] },
   });
 }
