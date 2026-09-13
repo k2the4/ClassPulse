@@ -227,7 +227,8 @@ export async function writeTeacherDiaryAttendance(params: { spreadsheetId: strin
   const sheetId = target?.properties?.sheetId;
   if (!target?.properties?.title || typeof sheetId !== "number") throw new Error(`Teacher Diary sheet TD-${params.subjectCode} was not found in the linked Google Sheet`);
   const title = target.properties.title;
-  const result = await sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${title}'!A1:AZ500`, valueRenderOption: "FORMATTED_VALUE" });
+  const rowCount = Math.max(500, target.properties.gridProperties?.rowCount || 500);
+  const result = await sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${title}'!A1:AZ${rowCount}`, valueRenderOption: "FORMATTED_VALUE" });
   const rows = result.data.values || [], headerRow = findStudentHeader(rows);
   if (headerRow === -1) throw new Error(`TD-${params.subjectCode} does not have the expected S.No / Enrollment No. / Student Name header`);
   const attendanceSubHeaderRow = headerRow + 1, studentStartRow = headerRow + 2;
@@ -254,7 +255,7 @@ export async function writeTeacherDiaryAttendance(params: { spreadsheetId: strin
   const writeRanges: Array<{ range: string; values: number[][] }> = [];
   for (const [enrollmentNo, rowIndex] of enrollmentRows.entries()) { if (!incoming.has(enrollmentNo)) continue; const rowNumber = rowIndex + 1; writeRanges.push({ range: `'${title}'!${startCol}${rowNumber}`, values: [[1]] }); writeRanges.push({ range: `'${title}'!${endCol}${rowNumber}`, values: [[incoming.get(enrollmentNo) ? 1 : 0]] }); }
   await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: writeRanges } });
-  await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `'${title}'!A1:H5`, values: [[`TEACHER DIARY — ${params.subjectName}`, "", "", "", "", "", "", ""], ["", "", "", "", "", "", "", ""], ["Class", params.classLabel, "", "Subject", params.subjectName, "", "Teacher", params.teacherName], ["Latest Session", "", "", "Session ID", "", "", "", ""], ["Attendance is recorded below by date and time slot.", "", "", "", "", "", "", ""]] }] } });
+  await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `'${title}'!A1:H5`, values: [[`TEACHER DIARY — ${params.subjectName}`, "", "", "", "", "", "", ""], ["", "", "", "", "", "", ""], ["Class", params.classLabel, "", "Subject", params.subjectName, "", "Teacher", params.teacherName], ["Latest Session", "", "", "Session ID", "", "", "", ""], ["Attendance is recorded below by date and time slot.", "", "", "", "", "", "", ""]] }] } });
   await refreshLatestSessionMetadata({ sheets, spreadsheetId: params.spreadsheetId, title });
   await syncMonthlyAttendanceFromTeacherDiary({ spreadsheetId: params.spreadsheetId, subjectCode: params.subjectCode, date: params.date });
   return { sheetTitle: title, startColumn, present: params.students.filter((student) => student.present).length, total: params.students.length };
@@ -269,7 +270,7 @@ export async function deleteTeacherDiaryAttendance(params: { spreadsheetId: stri
   if (!title || typeof sheetId !== "number") throw new Error(`Teacher Diary sheet TD-${params.subjectCode} was not found in the linked Google Sheet`);
   const result = await sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${title}'!A1:AZ500`, valueRenderOption: "FORMATTED_VALUE" });
   const rows = result.data.values || [], headerRow = findStudentHeader(rows);
-  if (headerRow === -1) throw new Error(`TD-${params.subjectCode} does not have the expected S.No / Enrollment No. / Student Name header`);
+  if (headerRow === -1) throw new Error(`TD-${params.subjectCode} does not have the expected student header`);
   const attendanceSubHeaderRow = headerRow + 1, maxColumns = Math.max(...rows.map((row) => row.length), 4);
   let startColumn = -1;
   for (let col = 3; col < maxColumns - 1; col++) if (sessionHeaderMatches(rows[headerRow]?.[col], params.date, params.slot) && normalize(rows[attendanceSubHeaderRow]?.[col]) === "lh" && normalize(rows[attendanceSubHeaderRow]?.[col + 1]) === "la") { startColumn = col; break; }
