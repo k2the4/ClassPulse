@@ -29,7 +29,7 @@ export async function overwriteTeacherDiarySheets(params: {
     spreadsheetId: params.spreadsheetId,
     fields: "sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))",
   });
-  let sheetList = metadata.data.sheets || [];
+  let sheetList: Array<any> = metadata.data.sheets || [];
 
   const source = sheetList.find((sheet) => normalizeCode(sheet.properties?.title) === "TD-SL")
     || sheetList.find((sheet) => /^TD-/i.test(sheet.properties?.title || ""));
@@ -63,7 +63,7 @@ export async function overwriteTeacherDiarySheets(params: {
       });
       const properties = duplicate.data.replies?.[0]?.duplicateSheet?.properties;
       if (!properties?.sheetId) throw new Error(`Could not create ${title}`);
-      target = { properties } as typeof target;
+      target = { properties };
       sheetList = [...sheetList, target];
     }
   }
