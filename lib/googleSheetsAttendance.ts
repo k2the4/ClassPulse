@@ -64,19 +64,21 @@ async function refreshLatestSessionMetadata(params: { sheets: ReturnType<typeof 
   const result = await params.sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${params.title}'!A1:AZ500`, valueRenderOption: "FORMATTED_VALUE" });
   const rows = result.data.values || [], headerRow = findStudentHeader(rows);
   if (headerRow === -1) throw new Error(`TD-${params.title.replace(/^TD-/i, "")} does not have the expected student header`);
-  const attendanceHeaderRow = headerRow, maxColumns = Math.max(...rows.map((row) => row.length), 4);
+  const attendanceHeaderRow = headerRow, sessionInfoRow = headerRow - 1, maxColumns = Math.max(...rows.map((row) => row.length), 4);
   let latestColumn = -1, latestSortKey: string | null = null;
   for (let col = 3; col < maxColumns - 1; col++) {
     if (normalize(rows[attendanceHeaderRow]?.[col]) !== "lh" || normalize(rows[attendanceHeaderRow]?.[col + 1]) !== "la") continue;
-    const key = sessionSortKey(rows[attendanceHeaderRow]?.[col]);
+    const key = sessionSortKey(rows[sessionInfoRow]?.[col]);
     if (key && (latestSortKey === null || key > latestSortKey)) { latestSortKey = key; latestColumn = col; }
   }
   if (latestColumn === -1) {
     await params.sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${params.title}'!B4:E4`, valueInputOption: "RAW", requestBody: { values: [["", "", "", ""]] } });
     return;
   }
-  const latestHeader = String(rows[headerRow]?.[latestColumn] || ""), latestKey = String(rows[headerRow - 1]?.[latestColumn] || ""), separator = latestHeader.indexOf("|");
+  const latestHeader = String(rows[sessionInfoRow]?.[latestColumn] || ""), separator = latestHeader.indexOf("|");
   const latestDate = separator === -1 ? latestHeader : latestHeader.slice(0, separator).trim(), latestSlot = separator === -1 ? "" : latestHeader.slice(separator + 1).trim();
+  const code = params.title.replace(/^TD-/i, "").trim();
+  const latestKey = `ATT-${latestDate.replace(/-/g, "")}-${code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${latestSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
   await params.sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${params.title}'!B4:E4`, valueInputOption: "RAW", requestBody: { values: [[latestDate, latestSlot, "Session ID", latestKey]] } });
 }
 
@@ -234,26 +236,34 @@ export async function writeTeacherDiaryAttendance(params: { spreadsheetId: strin
   for (const student of params.students) { const enrollmentNo = cleanEnrollment(student.enrollmentNo); if (enrollmentNo) incoming.set(enrollmentNo, student.present); }
   if (incoming.size !== params.students.length) throw new Error(`Attendance contains a student with an invalid enrollment number`);
   for (const enrollmentNo of incoming.keys()) if (!enrollmentRows.has(enrollmentNo)) throw new Error(`Student ${enrollmentNo} is missing from TD-${params.subjectCode}; attendance was not written`);
+
   let startColumn = -1, lastSessionEnd = 2, insertionColumn = -1;
   const maxColumns = Math.max(...rows.map((row) => row.length), 4), slotIndex = TIME_SLOT_ORDER.findIndex((item) => normalize(item) === normalize(params.slot)), newSortKey = `${params.date}|${String(slotIndex === -1 ? 999 : slotIndex).padStart(3, "0")}|${normalize(params.slot)}`;
   for (let col = 3; col < maxColumns - 1; col++) {
-    if (sessionHeaderMatches(rows[attendanceHeaderRow]?.[col], params.date, params.slot) && normalize(rows[attendanceHeaderRow]?.[col]) === normalize("${params.date} | LH")) { startColumn = col; break; }
-    if (normalize(rows[attendanceHeaderRow]?.[col]) === "lh" && normalize(rows[attendanceHeaderRow]?.[col + 1]) === "la") { lastSessionEnd = col + 1; const existingSortKey = sessionSortKey(rows[attendanceHeaderRow - 1]?.[col]); if (insertionColumn === -1 && existingSortKey && newSortKey < existingSortKey) insertionColumn = col; }
-  }
-  if (startColumn === -1) {
-    for (let col = 3; col < maxColumns - 1; col++) {
-      if (sessionHeaderMatches(rows[attendanceHeaderRow - 1]?.[col], params.date, params.slot) && normalize(rows[attendanceHeaderRow]?.[col]) === "lh" && normalize(rows[attendanceHeaderRow]?.[col + 1]) === "la") { startColumn = col; break; }
+    if (normalize(rows[attendanceHeaderRow]?.[col]) === "lh" && normalize(rows[attendanceHeaderRow]?.[col + 1]) === "la") {
+      lastSessionEnd = col + 1;
+      const existingHeader = rows[attendanceHeaderRow - 1]?.[col];
+      if (sessionHeaderMatches(existingHeader, params.date, params.slot)) { startColumn = col; break; }
+      const existingSortKey = sessionSortKey(existingHeader);
+      if (insertionColumn === -1 && existingSortKey && newSortKey < existingSortKey) insertionColumn = col;
     }
   }
   if (startColumn === -1) {
-    if (insertionColumn !== -1) { startColumn = insertionColumn; await sheets.spreadsheets.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { requests: [{ insertDimension: { range: { sheetId, dimension: "COLUMNS", startIndex: startColumn, endIndex: startColumn + 3 }, inheritFromBefore: startColumn > 3 } }] } }); }
-    else startColumn = lastSessionEnd === 2 ? 3 : lastSessionEnd + 2;
+    if (insertionColumn !== -1) {
+      startColumn = insertionColumn;
+      await sheets.spreadsheets.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { requests: [{ insertDimension: { range: { sheetId, dimension: "COLUMNS", startIndex: startColumn, endIndex: startColumn + 3 }, inheritFromBefore: startColumn > 3 } }] } });
+    } else startColumn = lastSessionEnd === 2 ? 3 : lastSessionEnd + 2;
   }
   const requiredColumnCount = startColumn + 2, currentColumnCount = target.properties.gridProperties?.columnCount || 26;
   if (requiredColumnCount > currentColumnCount) await sheets.spreadsheets.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { requests: [{ appendDimension: { sheetId, dimension: "COLUMNS", length: requiredColumnCount - currentColumnCount } }] } });
   const startCol = columnName(startColumn), endCol = columnName(startColumn + 1);
-  await sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${title}'!${startCol}${headerRow}:${endCol}${headerRow}`, valueInputOption: "RAW", requestBody: { values: [["LH", "LA"]] } });
+
+  // Teacher Diary keeps the roster header and LH/LA on the same row. The row
+  // immediately above carries the session date/slot. Never write attendance
+  // headers into the first student row.
   await sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${title}'!${startCol}${headerRow - 1}:${endCol}${headerRow - 1}`, valueInputOption: "RAW", requestBody: { values: [[`${params.date} | ${params.slot}`, ""]] } });
+  await sheets.spreadsheets.values.update({ spreadsheetId: params.spreadsheetId, range: `'${title}'!${startCol}${headerRow}:${endCol}${headerRow}`, valueInputOption: "RAW", requestBody: { values: [["LH", "LA"]] } });
+
   const writeRanges: Array<{ range: string; values: number[][] }> = [];
   for (const [enrollmentNo, rowIndex] of enrollmentRows.entries()) { if (!incoming.has(enrollmentNo)) continue; const rowNumber = rowIndex + 1; writeRanges.push({ range: `'${title}'!${startCol}${rowNumber}`, values: [[1]] }); writeRanges.push({ range: `'${title}'!${endCol}${rowNumber}`, values: [[incoming.get(enrollmentNo) ? 1 : 0]] }); }
   await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { valueInputOption: "RAW", data: writeRanges } });
@@ -273,9 +283,9 @@ export async function deleteTeacherDiaryAttendance(params: { spreadsheetId: stri
   const result = await sheets.spreadsheets.values.get({ spreadsheetId: params.spreadsheetId, range: `'${title}'!A1:AZ500`, valueRenderOption: "FORMATTED_VALUE" });
   const rows = result.data.values || [], headerRow = findStudentHeader(rows);
   if (headerRow === -1) throw new Error(`TD-${params.subjectCode} does not have the expected student header`);
-  const attendanceHeaderRow = headerRow, maxColumns = Math.max(...rows.map((row) => row.length), 4);
+  const maxColumns = Math.max(...rows.map((row) => row.length), 4);
   let startColumn = -1;
-  for (let col = 3; col < maxColumns - 1; col++) if (sessionHeaderMatches(rows[attendanceHeaderRow - 1]?.[col], params.date, params.slot) && normalize(rows[attendanceHeaderRow]?.[col]) === "lh" && normalize(rows[attendanceHeaderRow]?.[col + 1]) === "la") { startColumn = col; break; }
+  for (let col = 3; col < maxColumns - 1; col++) if (sessionHeaderMatches(rows[headerRow - 1]?.[col], params.date, params.slot) && normalize(rows[headerRow]?.[col]) === "lh" && normalize(rows[headerRow]?.[col + 1]) === "la") { startColumn = col; break; }
   if (startColumn !== -1) await sheets.spreadsheets.batchUpdate({ spreadsheetId: params.spreadsheetId, requestBody: { requests: [{ deleteDimension: { range: { sheetId, dimension: "COLUMNS", startIndex: startColumn, endIndex: startColumn + 2 } } }] } });
   await refreshLatestSessionMetadata({ sheets, spreadsheetId: params.spreadsheetId, title });
   await syncMonthlyAttendanceFromTeacherDiary({ spreadsheetId: params.spreadsheetId, subjectCode: params.subjectCode, date: params.date });
