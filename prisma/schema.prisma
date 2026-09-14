@@ -12,6 +12,11 @@ enum Role {
   TEACHER
 }
 
+enum SubjectType {
+  THEORY
+  LAB
+}
+
 model College {
   id          String       @id @default(cuid())
   name        String
@@ -22,84 +27,127 @@ model College {
 
 model Department {
   id        String   @id @default(cuid())
-  name      String // e.g. "ECE"
+  name      String
   college   College  @relation(fields: [collegeId], references: [id])
   collegeId String
   classes   Class[]
+  users     User[]
   createdAt DateTime @default(now())
+
+  @@unique([collegeId, name])
+  @@index([collegeId])
 }
 
 model User {
-  id           String       @id @default(cuid())
-  name         String
-  email        String       @unique
-  passwordHash String
-  role         Role         @default(TEACHER)
-  college      College      @relation(fields: [collegeId], references: [id])
-  collegeId    String
-  assignments  Assignment[] // subjects this teacher teaches
-  proctorOf    Class[]      @relation("Proctor")
-  createdAt    DateTime     @default(now())
+  id                   String              @id @default(cuid())
+  name                 String
+  email                String              @unique
+  authUserId            String?             @unique @db.Uuid
+  role                 Role                @default(TEACHER)
+  college              College             @relation(fields: [collegeId], references: [id])
+  collegeId            String
+  department           Department?         @relation(fields: [departmentId], references: [id])
+  departmentId         String?
+  assignments          Assignment[]
+  proctorOf            Class[]             @relation("Proctor")
+  classAccess          ClassAccess[]
+  attendanceSessions   AttendanceSession[]
+  createdAt             DateTime            @default(now())
+
+  @@index([collegeId])
+  @@index([departmentId])
 }
 
-// e.g. "B.Tech ECE, 4th Year, Semester 7"
+model StudentAccount {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  enrollmentNo String   @unique
+  collegeId    String
+  authUserId   String   @unique @db.Uuid
+  createdAt    DateTime @default(now())
+
+  @@index([collegeId])
+}
+
 model Class {
-  id            String     @id @default(cuid())
-  department    Department @relation(fields: [departmentId], references: [id])
+  id            String        @id @default(cuid())
+  department    Department    @relation(fields: [departmentId], references: [id])
   departmentId  String
-  program       String // "B.Tech ECE"
-  academicYear  String // "2026-27"
-  year          String // "4th Year"
-  semester      Int // 7
-  proctor       User?      @relation("Proctor", fields: [proctorId], references: [id])
+  program       String
+  academicYear  String
+  year          String
+  semester      Int
+  proctor       User?         @relation("Proctor", fields: [proctorId], references: [id])
   proctorId     String?
   sections      Section[]
-  createdAt     DateTime   @default(now())
+  classAccess   ClassAccess[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([departmentId])
+  @@index([proctorId])
+}
+
+model ClassAccess {
+  id        String   @id @default(cuid())
+  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId String
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId   String
+  createdAt DateTime @default(now())
+
+  @@unique([teacherId, classId])
+  @@unique([teacherId])
+  @@index([classId])
+  @@index([teacherId])
 }
 
 model Section {
-  id        String    @id @default(cuid())
-  name      String // "A"
-  class     Class     @relation(fields: [classId], references: [id])
-  classId   String
-  strength  Int       @default(0)
-  students  Student[]
-  subjects  Subject[]
-  sheetLink SheetLink?
-  snapshots AnalysisSnapshot[]
-  createdAt DateTime  @default(now())
+  id                 String              @id @default(cuid())
+  name               String
+  class              Class               @relation(fields: [classId], references: [id])
+  classId            String
+  strength           Int                 @default(0)
+  students           Student[]
+  subjects           Subject[]
+  sheetLink          SheetLink?
+  snapshots          AnalysisSnapshot[]
+  attendanceSessions AttendanceSession[]
+  createdAt          DateTime            @default(now())
 
   @@unique([classId, name])
 }
 
 model Student {
-  id             String   @id @default(cuid())
-  enrollmentNo   String
-  name           String
-  email          String
-  section        Section  @relation(fields: [sectionId], references: [id])
-  sectionId      String
-  createdAt      DateTime @default(now())
+  id                 String             @id @default(cuid())
+  enrollmentNo       String
+  name               String
+  email              String
+  section            Section            @relation(fields: [sectionId], references: [id])
+  sectionId          String
+  attendanceRecords  AttendanceRecord[]
+  createdAt          DateTime           @default(now())
 
   @@unique([sectionId, enrollmentNo])
 }
 
-// e.g. "Data Analysis" / "DA 338 T", scoped to one section
 model Subject {
-  id           String       @id @default(cuid())
-  name         String
-  code         String
-  section      Section      @relation(fields: [sectionId], references: [id])
-  sectionId    String
-  sheetLink    SheetLink?
-  assignments  Assignment[]
-  snapshots    AnalysisSnapshot[]
-  createdAt    DateTime     @default(now())
+  id                 String              @id @default(cuid())
+  name               String
+  code               String
+  type               SubjectType         @default(THEORY)
+  section            Section             @relation(fields: [sectionId], references: [id])
+  sectionId          String
+  sheetLink          SheetLink?
+  assignments        Assignment[]
+  snapshots          AnalysisSnapshot[]
+  attendanceSessions AttendanceSession[]
+  createdAt           DateTime            @default(now())
 
   @@unique([sectionId, code])
 }
 
-// which teacher(s) can view/manage a subject
 model Assignment {
   id        String   @id @default(cuid())
   teacher   User     @relation(fields: [teacherId], references: [id])
@@ -109,38 +157,68 @@ model Assignment {
   createdAt DateTime @default(now())
 
   @@unique([teacherId, subjectId])
+  @@unique([subjectId])
 }
 
 model SheetLink {
   id         String   @id @default(cuid())
-
-  // Either a combined section sheet...
   section    Section? @relation(fields: [sectionId], references: [id])
   sectionId  String?  @unique
-
-  // ...or an individual subject sheet
   subject    Subject? @relation(fields: [subjectId], references: [id])
   subjectId  String?  @unique
-
   sheetId    String
   gid        String?
   lastSyncAt DateTime?
 }
 
-// cached, computed analysis for a subject OR a section — refreshed via sync,
-// read by dashboards. Exactly one of subjectId/sectionId should be set.
 model AnalysisSnapshot {
   id         String   @id @default(cuid())
-
   subject    Subject? @relation(fields: [subjectId], references: [id])
   subjectId  String?
-
   section    Section? @relation(fields: [sectionId], references: [id])
   sectionId  String?
-
   computedAt DateTime @default(now())
-  data       Json // SubjectAnalysis shape (lib/analysis.ts) or ClassAnalysis shape (lib/analysisClass.ts)
+  data       Json
 
   @@index([subjectId, computedAt])
   @@index([sectionId, computedAt])
+}
+
+model AttendanceSession {
+  id                 String             @id @default(cuid())
+  section            Section            @relation(fields: [sectionId], references: [id])
+  sectionId          String
+  subject            Subject            @relation(fields: [subjectId], references: [id])
+  subjectId          String
+  teacher            User               @relation(fields: [teacherId], references: [id])
+  teacherId          String
+  date               DateTime           @db.Date
+  slot               String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  attendanceRecords  AttendanceRecord[]
+
+  @@unique([sectionId, subjectId, date, slot])
+  @@index([teacherId, date])
+  @@index([subjectId])
+}
+
+model AttendanceRecord {
+  id        String            @id @default(cuid())
+  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String
+  student   Student           @relation(fields: [studentId], references: [id])
+  studentId String
+  present   Boolean           @default(false)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
 }

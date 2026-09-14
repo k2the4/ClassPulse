@@ -1,2 +1,0 @@
-import { createServerClient } from '@supabase/ssr'; import { NextResponse } from 'next/server'; import { cookies } from 'next/headers';
-export async function POST(request:Request){const response=NextResponse.redirect(new URL('/',request.url));const store=cookies();const db=createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,{cookies:{getAll:()=>store.getAll(),setAll:(items)=>items.forEach(({name,value,options})=>response.cookies.set(name,value,options))}});await db.auth.signOut();return response;}

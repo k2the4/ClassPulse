@@ -1,85 +1,69 @@
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import Link from "next/link";
+import { GetServerSideProps } from "next";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../../lib/authOptions";
+import { prisma } from "../../lib/prisma";
 
-interface ClassAnalysisResponse {
-  className: string;
-  totalStudents: number;
-  subjects: {
-    subjectId: string;
-    subjectName: string;
-    section: string;
-    classAverage: number | null;
-    passRate: number | null;
-    computedAt: string | null;
-  }[];
-}
+// Class Analysis is a class-level entry point into the existing section-based
+// analysis UI. Teachers may enter a class only through an explicit ClassAccess
+// record; teaching a subject or being listed as a proctor does not grant access.
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  const classId = typeof ctx.params?.classId === "string" ? ctx.params.classId : "";
 
-export default function ClassAnalysisPage() {
-  const router = useRouter();
-  const { classId } = router.query;
-  const [data, setData] = useState<ClassAnalysisResponse | null>(null);
-  const [error, setError] = useState("");
+  const session = await getServerSession(ctx.req, ctx.res, authOptions);
+  if (!session?.user) {
+    return { redirect: { destination: "/login", permanent: false } };
+  }
 
-  useEffect(() => {
-    if (!classId) return;
-    fetch(`/api/analysis/class/${classId}`)
-      .then(async (res) => {
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error);
-        setData(json);
-      })
-      .catch((e) => setError(e.message));
-  }, [classId]);
+  if (!classId) {
+    return { notFound: true };
+  }
 
-  return (
-    <div className="min-h-screen max-w-5xl mx-auto px-6 py-10">
-      <h1 className="text-lg font-semibold text-gray-900 mb-1">Class Analysis</h1>
-      {data && <p className="text-sm text-gray-500 mb-6">{data.className} · {data.totalStudents} students</p>}
+  const userId = (session.user as any).id as string;
+  const role = (session.user as any).role as string;
 
-      {error && (
-        <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg p-4 mb-6">
-          {error}
-        </div>
-      )}
+  if (role === "ADMIN") {
+    const section = await prisma.section.findFirst({
+      where: { classId },
+      orderBy: { name: "asc" },
+      select: { id: true },
+    });
 
-      {data && (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-400 border-b border-gray-100">
-                <th className="py-3 px-4">Subject</th>
-                <th className="py-3 px-4">Class Average</th>
-                <th className="py-3 px-4">Pass Rate</th>
-                <th className="py-3 px-4">Last Synced</th>
-                <th className="py-3 px-4"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.subjects.map((s) => (
-                <tr key={s.subjectId} className="border-b border-gray-50">
-                  <td className="py-3 px-4 text-gray-900">{s.subjectName}</td>
-                  <td className="py-3 px-4">
-                    {s.classAverage !== null ? `${s.classAverage}%` : "—"}
-                  </td>
-                  <td className="py-3 px-4">{s.passRate !== null ? `${s.passRate}%` : "—"}</td>
-                  <td className="py-3 px-4 text-gray-400">
-                    {s.computedAt ? new Date(s.computedAt).toLocaleDateString() : "Never"}
-                  </td>
-                  <td className="py-3 px-4">
-                    <Link
-                      href={`/subject-analysis/${s.subjectId}`}
-                      className="text-gray-900 underline"
-                    >
-                      View →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
+    if (!section) return { notFound: true };
+
+    return {
+      redirect: {
+        destination: `/section-analysis/${section.id}/attendance`,
+        permanent: false,
+      },
+    };
+  }
+
+  const classAccess = await prisma.classAccess.findUnique({
+    where: { teacherId_classId: { teacherId: userId, classId } },
+  });
+
+  if (!classAccess) {
+    return { notFound: true };
+  }
+
+  const section = await prisma.section.findFirst({
+    where: { classId },
+    orderBy: { name: "asc" },
+    select: { id: true },
+  });
+
+  if (!section) {
+    return { notFound: true };
+  }
+
+  return {
+    redirect: {
+      destination: `/section-analysis/${section.id}/attendance`,
+      permanent: false,
+    },
+  };
+};
+
+export default function ClassAnalysisRedirect() {
+  return null;
 }

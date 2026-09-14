@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../../../lib/prisma";
 import { requireSession, assertTeacherCanViewClass } from "../../../../lib/access";
+import { fetchClassRoster } from "../../../../lib/googleSheetsRoster";
 import { SubjectAnalysis } from "../../../../lib/analysis";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -10,56 +11,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const classId = req.query.classId as string;
   const userId = (session.user as any).id;
   const role = (session.user as any).role;
-
   const allowed = await assertTeacherCanViewClass(userId, role, classId);
   if (!allowed) return res.status(403).json({ error: "Not authorized for this class" });
 
   const cls = await prisma.class.findUnique({
     where: { id: classId },
     include: {
-      department: true,
       sections: {
         include: {
-          students: true,
-          subjects: {
-            include: {
-              snapshots: { orderBy: { computedAt: "desc" }, take: 1 },
-            },
-          },
+          sheetLink: true,
+          subjects: { include: { snapshots: { orderBy: { computedAt: "desc" }, take: 1 } } },
         },
       },
     },
   });
   if (!cls) return res.status(404).json({ error: "Class not found" });
 
-  const totalStudents = cls.sections.reduce((s, sec) => s + sec.students.length, 0);
+  const uniqueStudents = new Map<string, { enrollmentNo: string; name: string; email: string }>();
+  for (const section of cls.sections) {
+    if (!section.sheetLink) continue;
+    const roster = await fetchClassRoster(section.sheetLink.sheetId, section.sheetLink.gid);
+    for (const student of roster) uniqueStudents.set(student.enrollmentNo, student);
+  }
 
-  const subjects = cls.sections.flatMap((sec) =>
-    sec.subjects.map((subj) => {
-      const snapshot = subj.snapshots[0]?.data as unknown as SubjectAnalysis | undefined;
+  const subjects = cls.sections.flatMap((section) =>
+    section.subjects.map((subject) => {
+      const snapshot = subject.snapshots[0]?.data as unknown as SubjectAnalysis | undefined;
       return {
-        subjectId: subj.id,
-        subjectName: subj.name,
+        subjectId: subject.id,
+        subjectName: subject.name,
+        section: section.name,
         classAverage: snapshot?.classAverageCurrMonth ?? null,
         passRate: snapshot?.midsemPassRate ?? null,
-        computedAt: subj.snapshots[0]?.computedAt ?? null,
+        computedAt: subject.snapshots[0]?.computedAt ?? null,
       };
-    })
+    }),
   );
 
-  // Teacher-facing identity is Department + class number + Semester.
-  // Until the existing proof-of-concept database row is updated from its
-  // legacy "A" section name to "2", treat ECE Sem 7 / A as ECE 2 Sem 7.
-  const rawClassNumber = cls.sections.length === 1 ? cls.sections[0].name : "";
-  const classNumber =
-    cls.department.name === "ECE" && cls.semester === 7 && rawClassNumber === "A"
-      ? "2"
-      : rawClassNumber;
-  const className = `${cls.department.name}${classNumber} Sem ${cls.semester}`;
-
   return res.status(200).json({
-    className,
-    totalStudents,
+    className: `${cls.program} — ${cls.year}, Sem ${cls.semester}`,
+    totalStudents: uniqueStudents.size,
     subjects,
   });
 }

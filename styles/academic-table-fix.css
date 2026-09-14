@@ -1,0 +1,201 @@
+/* Academic page content alignment */
+.analysis-main {
+  box-sizing: border-box;
+  width: calc(100% - 220px);
+  margin-left: 220px;
+  min-width: 0;
+  padding: 28px 42px 50px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.analysis-main::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 620px;
+  height: 300px;
+  pointer-events: none;
+  background: radial-gradient(circle at 70% 20%, rgba(111,91,231,.13), transparent 48%), linear-gradient(145deg, transparent 35%, rgba(111,91,231,.055) 75%, transparent);
+  opacity: .8;
+}
+
+/* Academic currently uses the same navigation markup as the shared analysis shell.
+   Keep its legacy class names visually identical to the shared sidebar. */
+.analysis-sidebar .active {
+  background: #eeeaff;
+  color: #38258e;
+}
+.analysis-brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #39268f;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 25px rgba(57,38,143,.18);
+  flex: none;
+}
+.analysis-sidebar-footer {
+  margin-top: auto;
+  border-top: 1px solid #eeeeeb;
+  padding: 18px 10px 2px;
+  color: #8991a2;
+  font-size: 11px;
+}
+
+.academic-content-grid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.85fr) !important;
+  gap: 14px !important;
+}
+
+.academic-content-grid .analysis-table-panel {
+  min-width: 0;
+  padding: 15px;
+}
+
+.academic-content-grid .analysis-table-panel > .overflow-auto {
+  overflow-x: hidden;
+}
+
+.academic-content-grid .analysis-table-panel table {
+  width: 100%;
+  min-width: 0 !important;
+  table-layout: fixed;
+}
+
+/* Keep S.No. compact instead of giving the first column a quarter of the table. */
+.academic-content-grid .academic-sno-col {
+  width: 7% !important;
+}
+
+.academic-content-grid .academic-enrollment-col {
+  width: 18% !important;
+}
+
+.academic-content-grid .academic-name-col {
+  width: 30% !important;
+}
+
+.academic-content-grid .academic-marks-col {
+  width: 14% !important;
+}
+
+.academic-content-grid .academic-status-col {
+  width: 17% !important;
+}
+
+.academic-content-grid .academic-rank-col {
+  width: 14% !important;
+}
+
+.academic-content-grid .analysis-table th,
+.academic-content-grid .analysis-table td {
+  padding: 8px 7px;
+}
+
+.academic-content-grid .academic-table-wrap {
+  height: 570px;
+  max-height: 570px;
+}
+
+/* ClassPulse grade color standard: Excellent = blue, Good = green. */
+:root {
+  --grade-excellent: #4d75d0;
+  --grade-good: #15966a;
+  --grade-needs-attention: #f59e0b;
+  --grade-critical-risk: #ef4444;
+}
+
+.excellent,
+.grade-excellent,
+.tier-excellent {
+  color: var(--grade-excellent) !important;
+  border-color: var(--grade-excellent) !important;
+}
+
+.good,
+.grade-good,
+.tier-good {
+  color: var(--grade-good) !important;
+  border-color: var(--grade-good) !important;
+}
+
+.attention,
+.grade-attention,
+.tier-attention,
+.needs-attention,
+.grade-needs-attention,
+.tier-needs-attention {
+  color: var(--grade-needs-attention) !important;
+  border-color: var(--grade-needs-attention) !important;
+}
+
+.risk,
+.grade-risk,
+.critical-risk,
+.grade-critical-risk,
+.tier-critical-risk {
+  color: var(--grade-critical-risk) !important;
+  border-color: var(--grade-critical-risk) !important;
+}
+
+/* Academic tier cards: force the semantic colors even when the component has inline styles. */
+.academic-tier-grid .academic-tier-card:nth-child(1),
+.academic-tier-grid .academic-tier-card:nth-child(1) span,
+.academic-tier-grid .academic-tier-card:nth-child(1) strong {
+  color: var(--grade-excellent) !important;
+  border-color: var(--grade-excellent) !important;
+}
+
+.academic-tier-grid .academic-tier-card:nth-child(2),
+.academic-tier-grid .academic-tier-card:nth-child(2) span,
+.academic-tier-grid .academic-tier-card:nth-child(2) strong {
+  color: var(--grade-good) !important;
+  border-color: var(--grade-good) !important;
+}
+
+.academic-tier-grid .academic-tier-card:nth-child(3),
+.academic-tier-grid .academic-tier-card:nth-child(3) span,
+.academic-tier-grid .academic-tier-card:nth-child(3) strong {
+  color: var(--grade-needs-attention) !important;
+  border-color: var(--grade-needs-attention) !important;
+}
+
+.academic-tier-grid .academic-tier-card:nth-child(4),
+.academic-tier-grid .academic-tier-card:nth-child(4) span,
+.academic-tier-grid .academic-tier-card:nth-child(4) strong {
+  color: var(--grade-critical-risk) !important;
+  border-color: var(--grade-critical-risk) !important;
+}
+
+/* Keep chart colors consistent with the same four-tier mapping. */
+.recharts-pie-sector[fill="#15966a"] {
+  fill: var(--grade-excellent) !important;
+}
+
+.recharts-pie-sector[fill="#4d75d0"] {
+  fill: var(--grade-good) !important;
+}
+
+@media (max-width: 1100px) {
+  .analysis-main {
+    width: calc(100% - 220px);
+    margin-left: 220px;
+    padding: 24px;
+  }
+
+  .academic-content-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .analysis-main {
+    width: 100%;
+    margin-left: 0;
+    padding: 18px;
+  }
+}

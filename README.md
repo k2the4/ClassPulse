@@ -1,95 +1,116 @@
 # ClassPulse — Attendance & Academic Analytics Platform
 
-A college-wide web app version of the "CLASSPULSE" Google Sheet: teachers log in,
-pick a class or subject, and see the same analysis (attendance trends, midsem
-performance, KPI cards, top/bottom performers, report cards) — but live,
-multi-user, and backed by a real database.
+ClassPulse is a college-wide attendance and academic analytics application for teachers. The application reads its structured academic data from one PostgreSQL database and uses Google Sheets only as the raw attendance/marks source where configured.
 
 ## Architecture
 
-```
-College
- └─ Department (e.g. ECE)
-     └─ Class (e.g. B.Tech ECE, 4th Year, Sem 7)
-         └─ Section (e.g. A)
-             ├─ Student (enrollment no, name, email)
-             └─ Subject (e.g. Data Analysis — DA 338 T)
-                 ├─ TeacherAssignment (which teacher owns this subject/section)
-                 ├─ SheetLink (the Google Sheet holding raw marks/attendance)
-                 └─ AnalysisSnapshot (cached computed analysis, refreshed on demand)
+```text
+Supabase
+├─ Auth
+│  └─ email/password credentials
+└─ PostgreSQL
+   └─ ClassPulse application tables
+      └─ accessed by the Next.js backend through Prisma
+
+Google Sheets
+└─ raw attendance / marks source for analysis syncs
 ```
 
-**Why cache analysis instead of recomputing from Sheets on every page load?**
-Google Sheets API has per-minute quotas (default 60 read requests/min/user).
-At college scale (many teachers loading dashboards concurrently) hitting the
-Sheets API on every request will throttle fast. Pattern used here:
-- A "Sync now" button / cron job pulls the sheet, computes analysis, stores it
-  in Postgres (`AnalysisSnapshot`) with a `computedAt` timestamp.
-- Dashboard pages read from the DB (fast, no quota risk) and show
-  "Last synced: X min ago" with a manual refresh option.
-- This still satisfies "live data" — it's live on-demand, not a hardcoded
-  snapshot baked into the app.
+There is one application database: the PostgreSQL database belonging to the ClassPulse Supabase project. Prisma is the ORM used by the Next.js backend to access that database. Supabase Auth is the single authority for user passwords and identities.
+
+The current Pages Router still uses NextAuth as a session bridge around the Supabase credential check. NextAuth does not store passwords or application user records; Supabase Auth owns credentials, while Prisma owns the ClassPulse user/profile and academic data.
+
+## Data model
+
+```text
+College
+ └─ Department
+     └─ Class
+         └─ Section
+             ├─ Student
+             └─ Subject
+                 ├─ Assignment → User
+                 ├─ SheetLink
+                 └─ AnalysisSnapshot
+
+User
+ ├─ Assignment
+ ├─ ClassAccess
+ ├─ Proctored classes
+ └─ AttendanceSession
+```
+
+A subject assignment identifies the single teacher responsible for a class/section subject. ClassAccess is separate and grants whole-class visibility. This allows multiple teachers to have access to the same class while keeping each exact class+subject assignment unique.
 
 ## Stack
 
-- **Frontend/Backend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, Recharts
-- **Auth**: NextAuth.js (Credentials provider — bcrypt-hashed passwords), JWT sessions
-- **Database**: PostgreSQL + Prisma ORM
-- **Google Sheets access**: `googleapis` with a **service account** (share each
-  subject sheet with the service account's email, read-only)
-- **Deployment target**: Vercel (app) + Neon/Supabase/RDS (Postgres)
+- Next.js 14 / TypeScript
+- Tailwind CSS / Recharts
+- Supabase Auth
+- Supabase PostgreSQL
+- Prisma ORM
+- Google Sheets API via a service account
 
-## Auth & roles
+## Authentication
 
-- `ADMIN` — college/department admin: creates classes, sections, subjects, assigns teachers
-- `TEACHER` — logs in, sees only classes/subjects assigned to them
-- Passwords stored as bcrypt hashes. Sessions are JWT, httpOnly cookies.
-- (Recommended next step once this is running: switch admin-created accounts
-  to invite-based signup + SSO via your college's Google Workspace, using
-  NextAuth's Google provider restricted to your college domain.)
+Teacher and admin accounts exist in both systems for different purposes:
 
-## Setup
+- Supabase Auth stores the actual email/password credential.
+- Prisma `User` stores the ClassPulse application profile, role, college and authorization relationships.
+- `User.authUserId` links the Prisma user to the corresponding Supabase Auth user.
+- Password hashes are not stored in Prisma.
+
+To provision the current Prisma users in Supabase Auth, configure `SUPABASE_SERVICE_ROLE_KEY` and run:
 
 ```bash
-cp .env.example .env        # fill in DATABASE_URL, NEXTAUTH_SECRET, Google service account
 npm install
-npx prisma migrate dev --name init
-npx prisma db seed          # optional: creates a demo admin + demo class
+npx prisma generate
+npx prisma migrate deploy
+npm run auth:sync
+```
+
+The sync utility creates missing Supabase Auth users, confirms their emails, sets the configured demo password, and links their Supabase Auth IDs back to Prisma. Set `CLASS_PULSE_DEFAULT_PASSWORD` before running it if you do not want the demo default.
+
+## Environment
+
+Copy `.env.example` to `.env.local` and configure:
+
+```text
+DATABASE_URL
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SERVICE_ROLE_KEY
+NEXTAUTH_SECRET
+GOOGLE_SA_EMAIL
+GOOGLE_SA_PRIVATE_KEY
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only and must never be exposed to client code.
+
+## Prisma
+
+Prisma migrations are the source of truth for the ClassPulse application schema. Run migrations with:
+
+```bash
+npx prisma migrate deploy
+```
+
+For local development:
+
+```bash
 npm run dev
 ```
 
-## Google Sheets service account (needed for live sync)
+Prisma Studio:
 
-1. In Google Cloud Console: create a project → enable "Google Sheets API".
-2. Create a Service Account → generate a JSON key.
-3. Put `client_email` and `private_key` from that JSON into `.env`
-   (`GOOGLE_SA_EMAIL`, `GOOGLE_SA_PRIVATE_KEY`).
-4. For every subject sheet, share it (Viewer access) with the service
-   account's email — same as sharing with a person.
-5. Store each sheet's ID (from its URL) in the `SheetLink` table when a
-   teacher/admin adds a subject.
+```bash
+npm run prisma:studio
+```
 
-## What's included in this scaffold
+## Google Sheets
 
-- Prisma schema for the full data model (multi-college, multi-department ready)
-- NextAuth credentials auth with bcrypt
-- Google Sheets fetch + parser (`lib/googleSheets.ts`)
-- Analysis engine (`lib/analysis.ts`) — ports the sheet's logic: attendance
-  trend classification, KPI cards, tiering, top/bottom performer lists
-- API routes for class analysis and subject analysis (read from cache, or
-  trigger a live resync)
-- Login page + dashboard (choose Class Analysis vs Subject Analysis) +
-  class/subject analysis pages with charts
+The Google Sheets service account is used only when a ClassPulse `SheetLink` is configured for a section or subject. Share the relevant sheet with the service account email and store its sheet ID in PostgreSQL through Prisma-backed application functionality.
 
-## What you still need to do to go to production
+## Important rule
 
-1. Run `npx prisma migrate dev` against a real Postgres instance.
-2. Add your college's actual class/section/subject/teacher data (via a seed
-   script or a simple admin UI you build on top of the `Admin*` API routes).
-3. Share each Google Sheet with the service account.
-4. Set a strong `NEXTAUTH_SECRET`, deploy behind HTTPS (Vercel handles this).
-5. Decide on a sync strategy: manual "Sync now" button (included), and/or a
-   scheduled job (Vercel Cron / GitHub Action) hitting `/api/analysis/sync`
-   every N minutes for active subjects.
-6. Add row-level access control checks (included in API routes as
-   `assertTeacherOwnsSubject`) — extend for admin/department-head roles.
+Do not add a second application database or a second password store. New teachers, classes, subjects, assignments, class access, students, attendance sessions and analysis snapshots belong in the Prisma schema/database. Authentication belongs in Supabase Auth.
