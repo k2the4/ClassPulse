@@ -45,9 +45,13 @@ function sessionSortKey(session: TeacherDiarySession): string {
 }
 
 function readTeacherName(rows: string[][]): string {
-  const row = rows[2] || [];
-  for (let i = 0; i < row.length - 1; i++) {
-    if (normalize(row[i]) === "teacher") return String(row[i + 1] || "Teacher").trim() || "Teacher";
+  // Teacher identity is fixed in row 2 so inserting attendance columns can
+  // never move or duplicate it. Keep row-3 support for already-created sheets.
+  for (const rowIndex of [1, 2]) {
+    const row = rows[rowIndex] || [];
+    for (let i = 0; i < row.length - 1; i++) {
+      if (normalize(row[i]) === "teacher") return String(row[i + 1] || "Teacher").trim() || "Teacher";
+    }
   }
   return "Teacher";
 }
