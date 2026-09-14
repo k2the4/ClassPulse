@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/authOptions";
 import { prisma } from "../../lib/prisma";
 import { fetchClassRoster } from "../../lib/googleSheetsRoster";
-import { deleteTeacherDiaryAttendance, writeTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
+import { deleteTeacherDiaryAttendance } from "../../lib/googleSheetsAttendance";
+import { writeTeacherDiaryAttendanceSafe } from "../../lib/googleSheetsAttendanceSafe";
 import { readTeacherDiarySessions } from "../../lib/googleSheetsAttendanceAgent";
 
 const TIME_SLOTS = [
@@ -185,15 +186,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const sessionKey = `ATT-${date.replace(/-/g, "")}-${subject.code.replace(/[^a-z0-9]/gi, "").toUpperCase()}-${normalizedSlot.replace(/[^a-z0-9]+/gi, "-").toUpperCase()}`;
   try {
-    await writeTeacherDiaryAttendance({
+    await writeTeacherDiaryAttendanceSafe({
       spreadsheetId: section.sheetLink.sheetId,
       subjectCode: subject.code,
-      subjectName: subject.name,
-      classLabel: `${section.class.department.name}-${section.name} Sem ${section.class.semester}`,
-      teacherName,
       date,
       slot: normalizedSlot,
-      sessionKey,
       students: students.map((student) => ({
         enrollmentNo: student.enrollmentNo,
         present: presentIds.includes(student.enrollmentNo),
