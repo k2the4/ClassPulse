@@ -173,18 +173,29 @@ export default function ClassAnalysisOverallHeadingFixedPage() {
       renderDistribution(rows);
       renderTopFive(rows);
     };
-    const parse = () => {
-      const raw = document.querySelector("#__NEXT_DATA__")?.textContent;
-      if (!raw) return false;
+    let loadingPayload = false;
+    const loadPayload = async () => {
+      if (loadingPayload || payload || disposed) return;
+      const match = window.location.pathname.match(/\\/class-analysis-overall-heading-fixed\\/([^/]+)/)
+        || window.location.pathname.match(/\\/section-analysis\\/([^/]+)\\/overall/);
+      const id = match?.[1];
+      if (!id) return;
+      loadingPayload = true;
       try {
-        const next = JSON.parse(raw) as { props?: { pageProps?: Payload } };
-        payload = next.props?.pageProps || null;
-        if (payload) { apply(); return true; }
-      } catch {}
-      return false;
+        // This page fetches data client-side; the marks are not in __NEXT_DATA__.
+        const response = await fetch(`/api/analysis/section/${encodeURIComponent(id)}/overall`);
+        if (!response.ok) return;
+        const body = await response.json();
+        payload = body?.data && Array.isArray(body.data.students) && Array.isArray(body.data.subjects) ? body.data : null;
+        if (payload) apply();
+      } catch (error) {
+        console.error('Unable to load overall metrics:', error);
+      } finally {
+        loadingPayload = false;
+      }
     };
-    const timer = window.setInterval(() => { if (!payload) parse(); else apply(); }, 500);
-    parse();
+    const timer = window.setInterval(() => { if (!payload) void loadPayload(); else apply(); }, 1000);
+    void loadPayload();
     return () => { disposed = true; window.clearInterval(timer); };
   }, []);
   return <SectionOverallPage />;
