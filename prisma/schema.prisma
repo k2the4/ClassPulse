@@ -52,6 +52,7 @@ model User {
   proctorOf            Class[]             @relation("Proctor")
   classAccess          ClassAccess[]
   attendanceSessions   AttendanceSession[]
+  timetableEntries     TimetableEntry[]
   createdAt             DateTime            @default(now())
 
   @@index([collegeId])
@@ -114,6 +115,7 @@ model Section {
   sheetLink          SheetLink?
   snapshots          AnalysisSnapshot[]
   attendanceSessions AttendanceSession[]
+  timetableEntries    TimetableEntry[]
   createdAt          DateTime            @default(now())
 
   @@unique([classId, name])
@@ -141,6 +143,7 @@ model Subject {
   sectionId          String
   sheetLink          SheetLink?
   assignments        Assignment[]
+  timetableEntries   TimetableEntry[]
   snapshots          AnalysisSnapshot[]
   attendanceSessions AttendanceSession[]
   createdAt           DateTime            @default(now())
@@ -214,6 +217,27 @@ model AttendanceRecord {
   updatedAt DateTime          @updatedAt
   @@unique([sessionId, studentId])
   @@index([studentId])
+}
+
+model TimetableEntry {
+  id        String   @id @default(cuid())
+  section   Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId String
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId String
+  teacher   User?    @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  teacherId String?
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  room      String?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sectionId, dayOfWeek, startTime])
+  @@index([teacherId, dayOfWeek, startTime])
+  @@index([subjectId])
 }
 
 model SystemSetting {
