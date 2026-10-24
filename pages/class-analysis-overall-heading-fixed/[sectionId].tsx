@@ -176,8 +176,8 @@ export default function ClassAnalysisOverallHeadingFixedPage() {
     let loadingPayload = false;
     const loadPayload = async () => {
       if (loadingPayload || payload || disposed) return;
-      const match = window.location.pathname.match(/\\/class-analysis-overall-heading-fixed\\/([^/]+)/)
-        || window.location.pathname.match(/\\/section-analysis\\/([^/]+)\\/overall/);
+      const match = window.location.pathname.match(/\/class-analysis-overall-heading-fixed\/([^/]+)/)
+        || window.location.pathname.match(/\/section-analysis\/([^/]+)\/overall/);
       const id = match?.[1];
       if (!id) return;
       loadingPayload = true;
