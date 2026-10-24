@@ -60,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const id = text(body.id);
       const sectionId = text(body.sectionId);
       const subjectId = text(body.subjectId);
-      const teacherId = text(body.teacherId) || null;
+      let teacherId = text(body.teacherId) || null;
       const dayOfWeek = Number(body.dayOfWeek);
       const startTime = text(body.startTime);
       const endTime = text(body.endTime);
@@ -71,6 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       const subject = await prisma.subject.findFirst({ where: { id: subjectId, sectionId }, include: { assignments: { select: { teacherId: true } } } });
       if (!subject) return res.status(400).json({ error: "The selected subject does not belong to this section." });
+      if (!teacherId && subject.assignments.length === 1) teacherId = subject.assignments[0].teacherId;
       if (teacherId && !subject.assignments.some((assignment: any) => assignment.teacherId === teacherId)) return res.status(400).json({ error: "The selected teacher is not assigned to this subject." });
       const conflicts = await prisma.timetableEntry.findMany({
         where: { dayOfWeek, ...(id ? { id: { not: id } } : {}), OR: [{ sectionId }, ...(teacherId ? [{ teacherId }] : [])] },
