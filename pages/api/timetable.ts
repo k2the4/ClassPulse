@@ -29,8 +29,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
         }),
         prisma.section.findMany({
-          where: isAdmin ? {} : { OR: [{ subjects: { some: { assignments: { some: { teacherId: user.id } } } }, { class: { classAccess: { some: { teacherId: user.id } } } }] },
-          include: { class: { include: { department: true } }, subjects: { include: { assignments: { include: { teacher: { select: { id: true, name: true } } } } }, orderBy: { name: "asc" } },
+          where: isAdmin
+            ? {}
+            : {
+                OR: [
+                  { subjects: { some: { assignments: { some: { teacherId: user.id } } } } },
+                  { class: { classAccess: { some: { teacherId: user.id } } } },
+                ],
+              },
+          include: {
+            class: { include: { department: true } },
+            subjects: {
+              include: {
+                assignments: {
+                  include: { teacher: { select: { id: true, name: true } } },
+                },
+              },
+              orderBy: { name: "asc" },
+            },
+          },
           orderBy: [{ class: { semester: "asc" } }, { name: "asc" }],
         }),
       ]);
