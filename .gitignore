@@ -6,6 +6,11 @@ out/
 .env.local
 .env.*.local
 
+# Google service-account credentials are local-only secrets.
+google-service-account.json
+**/google-service-account.json
+*service-account*.json
+
 classpulse-sync-89da9fe3c9a8.json
 
 npm-debug.log*
